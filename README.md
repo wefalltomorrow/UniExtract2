@@ -86,7 +86,7 @@ To create the full release package, run:
 .\scripts\package-release.ps1
 ```
 
-The packaging script uses the gvp9000 v3.0.4 full bundle as the current helper-binary base, then overlays this fork's compiled executables, definitions, languages, documentation and metadata. The GitHub Actions workflow performs the same build on Windows Server 2022.
+The packaging script uses the gvp9000 v3.0.4 full bundle as the current helper-binary base, then overlays this fork's compiled executables, definitions, languages, documentation and metadata. The GitHub Actions workflow performs the same build on Windows Server 2022 and runs a basic ZIP extraction smoke test against the packaged build.
 
 ## Contributing
 

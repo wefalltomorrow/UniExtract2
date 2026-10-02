@@ -5,6 +5,9 @@ Game Extractor is a low-priority fallback and is only tried after existing dedic
 Added Game Extractor to the Plugin Manager; the public Basic package installs under bin\GameExtractor and is not bundled with the normal release.
 Game Extractor results require both its "Finished extracting files" marker and real extracted output before UniExtract accepts the run as successful.
 Documented the Basic-vs-Full licensing boundary and intentionally excluded files from the paid Full Version.
+Added optional vgmstream integration for streamed game audio that normal archive/media routes do not handle.
+vgmstream uses a metadata-only JSON probe before decoding, exports every subsong to WAV once without game loop repetition, and is available through /type=vgmstream.
+The Plugin Manager points at current upstream vgmstream Windows builds rather than reusing Game Extractor's older bundled copy.
 
 v3.1.1 (2026/10/02) - wefalltomorrow fork
 

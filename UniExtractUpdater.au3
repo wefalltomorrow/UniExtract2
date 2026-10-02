@@ -2,7 +2,7 @@
 #AutoIt3Wrapper_Icon=support\Icons\uniextract_exe.ico
 #AutoIt3Wrapper_Outfile=UniExtractUpdater_NoAdmin.exe
 #AutoIt3Wrapper_Res_Description=Update utility for Universal Extractor
-#AutoIt3Wrapper_Res_Fileversion=2.7.0.0
+#AutoIt3Wrapper_Res_Fileversion=3.1.0.0
 #AutoIt3Wrapper_Run_Au3Stripper=y
 #Au3Stripper_Parameters=/mo
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
@@ -24,8 +24,9 @@
 #include <Inet.au3>
 
 Const $sUpdaterTitle = "Universal Extractor Updater"
-Const $sMainUpdateURL = "https://gvp9000.github.io/UniExtract2/updates/data/UniExtract.exe"
-Const $sMainNighlyUpdateURL = "https://gvp9000.github.io/UniExtract2/updates/nightly/UniExtract.exe"
+Const $sMainUpdateURL = "https://github.com/wefalltomorrow/UniExtract2/releases/latest/download/UniExtract.exe"
+Const $sMainNighlyUpdateURL = "https://github.com/wefalltomorrow/UniExtract2/releases/download/nightly/UniExtract.exe"
+; FFmpeg is still sourced from the maintained helper bundle until this fork publishes equivalent assets.
 Const $sFFmpegUpdateURL_x86 = "https://github.com/gvp9000/UniExtract2/releases/latest/download/ffmpeg_x86.exe"
 Const $sFFmpegUpdateURL_x64 = "https://github.com/gvp9000/UniExtract2/releases/latest/download/ffmpeg_x64.exe"
 Const $sFFmpegLicenseURL = "https://ffmpeg.org/legal.html"

@@ -105,10 +105,19 @@ foreach ($Target in $Targets) {
 }
 
 $ExpectedVersion = ((Get-Content -LiteralPath (Join-Path $RepoRoot 'VERSION') -Raw).Trim() + '.0')
-$MainVersion = (Get-Item -LiteralPath (Join-Path $RepoRoot 'UniExtract.exe')).VersionInfo.FileVersion
 
-if ($MainVersion -and $MainVersion -ne $ExpectedVersion) {
-    throw "UniExtract.exe reports FileVersion '$MainVersion'; expected '$ExpectedVersion'."
+foreach ($Target in $Targets) {
+    $OutputPath = Join-Path $RepoRoot $Target.Output
+    $BuiltVersion = (Get-Item -LiteralPath $OutputPath).VersionInfo.FileVersion
+
+    if (-not $BuiltVersion) {
+        throw "$($Target.Output) does not report a FileVersion."
+    }
+
+    if ($BuiltVersion -ne $ExpectedVersion) {
+        throw "$($Target.Output) reports FileVersion '$BuiltVersion'; expected '$ExpectedVersion'."
+    }
 }
 
+Write-Host "All executables report FileVersion $ExpectedVersion."
 Write-Host 'Build completed successfully.'

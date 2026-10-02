@@ -11209,6 +11209,10 @@ Func GUI_Plugins_Install($aPluginInfo, $sPath)
 	Cout("Plugin file selected: " & $sPath)
 	If $aPluginInfo[6] = "" Then $aPluginInfo[6] = $bindir
 
+	; A plugin may use its own subdirectory instead of the already-existing bin directory.
+	; Create it before permission checks and before using it as the extractor working directory.
+	If StringRight($aPluginInfo[6], 1) = "\" And Not FileExists($aPluginInfo[6]) Then DirCreate($aPluginInfo[6])
+
 	; Check permissions
 	If Not CanAccess($aPluginInfo[6]) Then
 		If IsAdmin() Then Return MsgBox($iTopmost + $MB_ICONERROR, $title, t('ACCESS_DENIED'))

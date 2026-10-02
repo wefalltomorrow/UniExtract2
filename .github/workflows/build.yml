@@ -69,8 +69,13 @@ jobs:
             "dist/SHA256SUMS.txt"
           )
 
-          gh release view $tag --repo "${{ github.repository }}" *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $previousErrorActionPreference = $ErrorActionPreference
+          $ErrorActionPreference = 'SilentlyContinue'
+          gh release view $tag --repo "${{ github.repository }}" 2>$null | Out-Null
+          $releaseExists = $LASTEXITCODE -eq 0
+          $ErrorActionPreference = $previousErrorActionPreference
+
+          if ($releaseExists) {
             gh release upload $tag @assets --clobber --repo "${{ github.repository }}"
             gh release edit $tag --title "Universal Extractor 2 v$version" --notes-file $notes --latest --repo "${{ github.repository }}"
           } else {

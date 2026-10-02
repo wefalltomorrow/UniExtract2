@@ -1,32 +1,41 @@
-﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=.\Support\Icons\uniextract_exe.ico
 #AutoIt3Wrapper_Outfile=.\UniExtract.exe
 #AutoIt3Wrapper_Res_Description=Universal Extractor
-#AutoIt3Wrapper_Res_Fileversion=2.0.0
+#AutoIt3Wrapper_Res_ProductName=Universal Extractor
+#AutoIt3Wrapper_Res_Fileversion=3.1.0.0
+#AutoIt3Wrapper_Res_ProductVersion=%fileversion%
+#AutoIt3Wrapper_Res_CompanyName=wefalltomorrow
+#AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_LegalCopyright=GNU General Public License v2
-#AutoIt3Wrapper_Res_Field=Author|Jared Breland, Bioruebe
-#AutoIt3Wrapper_Res_Field=Homepage|https://bioruebe.com/dev/uniextract/
+#AutoIt3Wrapper_Res_Field=Author|Jared Breland, Bioruebe, gvp9000, wefalltomorrow
+#AutoIt3Wrapper_Res_Field=Homepage|https://github.com/wefalltomorrow/UniExtract2
 #AutoIt3Wrapper_Res_Field=Timestamp|%date%
 #AutoIt3Wrapper_Res_HiDpi=y
 #AutoIt3Wrapper_Run_AU3Check=n
 #AutoIt3Wrapper_AU3Check_Stop_OnWarning=y
 #AutoIt3Wrapper_AU3Check_Parameters=-w 4 -w 5
 #AutoIt3Wrapper_Run_Au3Stripper=n
+#AutoIt3Wrapper_UseX64=n
 #Au3Stripper_Parameters=/mo
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
 ; ----------------------------------------------------------------------------
 ;
-; Universal Extractor v2.0.0
-; Author:	Jared Breland <jbreland@legroom.net>, Version 2.0.0 by Bioruebe
-; Homepage:	http://www.legroom.net/mysoft
-; Language:	AutoIt v3.3.14.2
-; License:	GNU General Public License v2 (http://www.gnu.org/copyleft/gpl.html)
+; Universal Extractor 2
+; Originally by Jared Breland <jbreland@legroom.net>
+; Version 2.x by Bioruebe
+; Continued by gvp9000 and community contributors
+; Maintained in this fork by wefalltomorrow
+; Homepage: https://github.com/wefalltomorrow/UniExtract2
+; Language: AutoIt v3.3.18.0
+; License: GNU General Public License v2 (https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 ;
-; Very Basic Script Function:
-;	Use Unix File Tool and TrID to determine filetype
-;	Use Exeinfo PE and PEiD to identify executable filetypes
-;	Extract known archive types
+; Basic Script Function:
+;   Detect file types using Detect It Easy, Exeinfo PE, PEiD, TrID, and file/magic where available.
+;   Route archives, installers, self-extractors, disk images, game/resource packages, and databases
+;   to the most appropriate bundled extractor.
+;   Preserve batch/silent extraction behavior with fallback chains and detailed logging.
 ;
 ; ----------------------------------------------------------------------------
 
@@ -65,21 +74,36 @@
 #include "HexDump.au3"
 #include "Pie.au3"
 
+Func _GetUniExtractVersion()
+	If @Compiled Then
+		Local $sCompiledVersion = FileGetVersion(@ScriptFullPath, "FileVersion")
+		If Not @error And $sCompiledVersion <> "" Then Return $sCompiledVersion
+	EndIf
+
+	Local $aVersion = StringRegExp(FileRead(@ScriptFullPath, 4096), "(?im)^\s*#AutoIt3Wrapper_Res_Fileversion\s*=\s*([^\r\n;]+)", 1)
+	If Not @error And UBound($aVersion) > 0 Then Return StringStripWS($aVersion[0], 3)
+
+	Return "0.0.0"
+EndFunc
+
 Const $name = "Universal Extractor"
-Const $sVersion = "2.0.0 RC 4"
-Const $sVersionId = "2R4"
-Const $sCodename = "in memoriam"
+Const $sVersion = _GetUniExtractVersion()
+Const $sVersionId = $sVersion
+Const $sCodename = "New Start"
 Const $title = $name & " " & $sVersion
 Const $sUrlWebsiteOriginal = "https://www.legroom.net/software/uniextract"
-Const $sUrlWebsite = "https://bioruebe.com/dev/uniextract"
-Const $sUrlGithub = "https://github.com/Bioruebe/UniExtract2"
-Const $sUrlUpdateStable = "https://update.bioruebe.com/uniextract/data/"
-Const $sUrlUpdateNightly = "https://update.bioruebe.com/uniextract/nightly/"
-Const $sUrlGetUrl = "https://update.bioruebe.com/uniextract/geturl.php?q="
-Const $sUrlFeedback = "https://support.bioruebe.com/uniextract/upload.php"
-Const $sUrlStats = "https://stat.bioruebe.com/uniextract/stats.php?a="
-Const $sUrlPrivacyPolicy = "https://bioruebe.com/dev/uniextract/privacypolicy"
-Const $sUrlCommandLineHelp = "https://github.com/Bioruebe/UniExtract2/blob/master/docs/COMMAND-LINE.md"
+Const $sUrlWebsite = "https://github.com/wefalltomorrow/UniExtract2"
+Const $sUrlGithub = "https://github.com/wefalltomorrow/UniExtract2"
+; Keep using the actively maintained gvp9000 helper feed until this fork publishes its own helper bundle.
+; Main executable updates from that feed are disabled below so they cannot overwrite this fork.
+Const $sUrlUpdateStable = "https://gvp9000.github.io/UniExtract2/updates/data/"
+Const $sUrlUpdateNightly = "https://gvp9000.github.io/UniExtract2/updates/nightly/"
+Const $bForkMainUpdateEnabled = False
+Const $sUrlGetUrl = "" ; Disabled in this fork
+Const $sUrlFeedback = "" ; Disabled in this fork
+Const $sUrlStats = "" ; Disabled in this fork
+Const $sUrlPrivacyPolicy = "" ; Disabled in this fork
+Const $sUrlCommandLineHelp = "https://github.com/wefalltomorrow/UniExtract2/blob/master/docs/COMMAND-LINE.md"
 Const $bindir = @ScriptDir & "\bin\"
 Const $langdir = @ScriptDir & "\lang\"
 Const $defdir = @ScriptDir & "\def\"
@@ -110,7 +134,7 @@ Const $STATUS_SYNTAX = "syntax", $STATUS_FILEINFO = "fileinfo", $STATUS_UNKNOWNE
 	  $STATUS_FAILED = "failed", $STATUS_SUCCESS = "success", $STATUS_SILENT = "silent", $STATUS_TRAYEXIT = "trayexit"
 Const $TYPE_7Z = "7z", $TYPE_ACE = "ace", $TYPE_ACTUAL = "actual", $TYPE_AI = "ai", $TYPE_ALZ = "alz", $TYPE_ARC_CONV = "arc_conv", _
 	  $TYPE_AUDIO = "audio", $TYPE_BCM = "bcm", $TYPE_BOOTIMG = "bootimg", $TYPE_CAB = "cab", $TYPE_CHD = "chd", $TYPE_CHM = "chm", $TYPE_CI = "ci", _
-	  $TYPE_CIC = "cic", $TYPE_CTAR = "ctar", $TYPE_DGCA = "dgca", $TYPE_DAA = "daa", $TYPE_DCP = "dcp", $TYPE_EI = "ei", $TYPE_ENIGMA = "enigma", _
+	  $TYPE_CIC = "cic", $TYPE_CTAR = "ctar", $TYPE_DGCA = "dgca", $TYPE_DAA = "daa", $TYPE_DCP = "dcp", $TYPE_ECM = "ecm", $TYPE_EI = "ei", $TYPE_ENIGMA = "enigma", _
 	  $TYPE_FEAD = "fead", $TYPE_FORGE = "installforge", $TYPE_FREEARC = "freearc", $TYPE_FSB = "fsb", $TYPE_GARBRO = "garbro", $TYPE_GHOST = "ghost", _
 	  $TYPE_HLP = "hlp", $TYPE_INNO = "inno", $TYPE_ISCAB = "iscab", $TYPE_ISCRIPT = "installscript", $TYPE_ISEXE = "isexe", $TYPE_ISZ = "isz", _
 	  $TYPE_KGB = "kgb", $TYPE_LZ = "lz", $TYPE_LZO = "lzo", $TYPE_LZX = "lzx", $TYPE_MOLE = "mole", $TYPE_MSCF = "mscf", $TYPE_MSI = "msi", _
@@ -120,15 +144,15 @@ Const $TYPE_7Z = "7z", $TYPE_ACE = "ace", $TYPE_ACTUAL = "actual", $TYPE_AI = "a
 	  $TYPE_THINSTALL = "thinstall", $TYPE_TTARCH = "ttarch", $TYPE_UHA = "uha", $TYPE_UIF = "uif", $TYPE_UNITYPACKAGE = "unitypackage", _
 	  $TYPE_UNREAL = "unreal", $TYPE_VIDEO = "video", $TYPE_VIDEO_CONVERT = "videoconv", $TYPE_VISIONAIRE3 = "visionaire3", $TYPE_VSSFX = "vssfx", _
 	  $TYPE_VSSFX_PATH = "vssfxpath", $TYPE_WISE = "wise", $TYPE_WIX = "wix", $TYPE_WOLF = "wolf", $TYPE_ZIP = "zip", $TYPE_ZOO = "zoo", _
-	  $TYPE_ZPAQ = "zpaq"
+	  $TYPE_ZPAQ = "zpaq", $TYPE_ATLANTIS = "atlantis"
 Const $aExtractionTypes = [$TYPE_7Z, $TYPE_ACE, $TYPE_ACTUAL, $TYPE_AI, $TYPE_ALZ, $TYPE_ARC_CONV, $TYPE_AUDIO, $TYPE_BCM, $TYPE_BOOTIMG, _
-	  $TYPE_CAB, $TYPE_CHD, $TYPE_CHM, $TYPE_CI, $TYPE_CIC, $TYPE_CTAR, $TYPE_DGCA, $TYPE_DAA, $TYPE_DCP, $TYPE_EI, $TYPE_ENIGMA, $TYPE_FEAD, _
+	  $TYPE_CAB, $TYPE_CHD, $TYPE_CHM, $TYPE_CI, $TYPE_CIC, $TYPE_CTAR, $TYPE_DGCA, $TYPE_DAA, $TYPE_DCP, $TYPE_ECM, $TYPE_EI, $TYPE_ENIGMA, $TYPE_FEAD, _
 	  $TYPE_FORGE, $TYPE_FREEARC, $TYPE_FSB, $TYPE_GARBRO, $TYPE_GHOST, $TYPE_HLP, $TYPE_INNO, $TYPE_ISCAB, $TYPE_ISCRIPT, $TYPE_ISEXE, $TYPE_ISZ, _
 	  $TYPE_KGB, $TYPE_LZ, $TYPE_LZO, $TYPE_LZX, $TYPE_MOLE, $TYPE_MSCF, $TYPE_MSI, $TYPE_MSM, $TYPE_MSP, $TYPE_MSU, $TYPE_NBH, $TYPE_NSIS, _
 	  $TYPE_PDF, $TYPE_PEA, $TYPE_QBMS, $TYPE_RAI, $TYPE_RAR, $TYPE_RGSS, $TYPE_ROBO, $TYPE_RPA, $TYPE_SFARK, $TYPE_SIS, $TYPE_SQLITE, _
 	  $TYPE_SUPERDAT, $TYPE_SWF, $TYPE_SWFEXE, $TYPE_THINSTALL, $TYPE_TTARCH, $TYPE_UHA, $TYPE_UIF, $TYPE_UNITYPACKAGE, $TYPE_UNREAL, _
 	  $TYPE_VIDEO, $TYPE_VIDEO_CONVERT, $TYPE_VISIONAIRE3, $TYPE_VSSFX, $TYPE_VSSFX_PATH, $TYPE_WISE, $TYPE_WIX, $TYPE_WOLF, $TYPE_ZIP, _
-	  $TYPE_ZOO, $TYPE_ZPAQ]
+	  $TYPE_ZOO, $TYPE_ZPAQ, $TYPE_ATLANTIS]
 
 
 Opt("GUIOnEventMode", 1)
@@ -157,12 +181,13 @@ Global $addassoc = ""
 Global $sOptGuid = ""
 Global $bOptAskForFeedback = 1
 Global $bOptCreateLog = 0
-Global $bOptSendStats = 1
+Global $bOptSendStats = 0
 Global $bOptNightlyUpdates = 0
 Global $iCleanup = $OPTION_MOVE
 Global $bOptLockOutputDirectory = 0
 Global $bOptKeepOpen = 0
 Global $silentmode = 0
+Global $g_bUpdateRunning = False
 Global $extract = 1
 Global $checkUnicode = 1
 Global $bOptExtractVideo = 1
@@ -176,9 +201,18 @@ Global $hMutex, $hProgress, $hTridDll = 0
 Global $prompt, $prefs, $sUpdateURL = $sUrlUpdateStable, $eCustomPromptSetting = $PROMPT_ASK
 Global $Type, $silent, $iUnicodeMode = $UNICODE_NONE, $reg64 = "", $iOsArch = 32
 Global $logdir, $archdir, $settingsdir, $userDefDir, $batchQueue, $fileScanLogFile, $sPasswordFile, $aDefDirs[0]
-Global $sFullLog = "", $success = $RESULT_UNKNOWN, $sArcTypeOverride = 0, $sMethodSelectOverride = 0
+Global $sFullLog = "", $success = $RESULT_UNKNOWN, $sArcTypeOverride = 0, $sMethodSelectOverride = 0, $g_bPasswordFailureAbort = False
 Global $innofailed, $arjfailed, $7zfailed, $zipfailed, $iefailed, $isofailed, $tridfailed, $gamefailed, $observerfailed
 Global $unpackfailed, $exefailed, $ttarchfailed
+Global $g_bInnoExtractUsable = False
+Global $g_bSymlinkOnlyWarning = False
+Global $g_bArchiveIntegrityError = False
+Global $g_sPrimaryDetectRaw = "", $g_sPrimaryDetectMatch = "", $g_sPrimaryDetectScanner = "", $g_bPrimaryStrongHit = False
+Global $g_sDetectionWinner = "", $g_sExtractorWinner = "", $g_sDetectedTypeForSummary = ""
+Global $g_sPipelineRows = "", $g_iPipelineSeq = 0
+Global $g_sPipelineTimeline = "", $g_sPipelineLine = "", $g_sPipelineToolVersions = ""
+Global $g_iPipelineWarn = 0, $g_iPipelineFail = 0, $g_iPipelineOk = 0, $g_iPipelineRun = 0
+Global $g_bStrictPipeline = True, $g_sStoredTridType = "", $g_sStoredUnixType = ""
 Global $oldpath, $oldoutdir, $sUnicodeName, $createdir
 Global $guiprefs, $TBgui = 0, $exStyle = -1, $idTrayStatusExt, $BatchBut, $idProgress, $sComError = 0
 Global $Tray_Statusbox, $isexe = False, $Message, $run = 0, $runtitle, $idOptDeleteSourceFile[3]
@@ -206,6 +240,7 @@ Const $7z = Quote($archdir & '7z.exe', True)
 Const $7zsplit = "7ZSplit.exe"
 Const $ace = "acefile.exe"
 Const $alz = "unalz.exe"
+Const $unecm = "unecm.exe"
 Const $arj = "arj.exe"
 Const $aspack = Quote($bindir & "AspackDie.exe", True)
 Const $bcm = Quote($archdir & "bcm.exe", True)
@@ -214,17 +249,24 @@ Const $cic = "cicdec.exe"
 Const $daa = "daa2iso.exe"
 Const $enigma = "EnigmaVBUnpacker.exe"
 Const $exeinfope = Quote($bindir & "exeinfope.exe")
+Const $diec_path = $bindir & "die\diec.exe"
+Const $diegui_path = $bindir & "die\die.exe"
+Const $diec = Quote($diec_path, True)
+Const $diegui = Quote($diegui_path, True)
 Const $expand = Quote(@SystemDir & "\expand.exe", True)
-Const $filetool = Quote($bindir & "file.exe", True)
+Const $filetool = Quote($bindir & "file.exe", True) & " -m " & Quote($bindir & "magic.mgc")
 Const $freearc = "unarc.exe"
 Const $fsb = "fsbext.exe"
-Const $garbro = Quote($bindir & "GARbro\GARbro.Console.exe", True)
+Const $garbro = $bindir & "GARbro\GARbro.Console.exe"
 Const $gcf = $archdir & "GCFScape.exe"
 Const $hlp = "helpdeco.exe"
 Const $innoextract = Quote($bindir & "innoextract.exe", True)
-Const $innounp = "innounp.exe"
+Const $innounp = Quote($bindir & "innounp.exe", True)
 Const $is6cab = "i6comp.exe"
 Const $isxunp = "IsXunpack.exe"
+Const $isx = "ISx.exe"
+Const $isx_x86 = "ISx-x86.exe"
+Const $ALLOW_INSTALLSHIELD_B = False ; Safe mode: do not launch InstallShield /b unless explicitly enabled
 Const $isz = "unisz.exe"
 Const $kgb = "kgb\kgb2_console.exe"
 Const $lit = "clit.exe"
@@ -241,6 +283,7 @@ Const $pdfdetach = "pdfdetach.exe"
 Const $pdftohtml = "pdftohtml.exe"
 Const $pdftopng = "pdftopng.exe"
 Const $pdftotext = "pdftotext.exe"
+Const $qpdf = "qpdf\bin\qpdf.exe"
 Const $peid = Quote($bindir & "peid.exe")
 Const $quickbms = Quote($bindir & "quickbms.exe", True)
 Const $rai = "RAIU.EXE"
@@ -319,6 +362,7 @@ Global $CM_Shells[5][4] = [ _
 
 ; Make sure a language file exists
 If Not FileExists($sEnglishLangFile) And Not FileExists($langdir) Then
+	If _ArraySearch($cmdline, "/silent") > -1 Then Exit 99
 	RepairProgramFiles("No language file found." & @CRLF & @CRLF & "Do you want " & $name & " to download all missing files?")
 	Exit 99
 EndIf
@@ -326,6 +370,7 @@ EndIf
 ReadPrefs()
 
 Cout("Starting " & $name & " " & $sVersion)
+_LogDieVersion()
 
 ParseCommandLine()
 
@@ -339,19 +384,32 @@ If $sOptGuid = "" Or StringIsSpace($sOptGuid) Then
 
 	Cout("Created user ID: " & $sOptGuid)
 	SavePref("ID", $sOptGuid)
-	GUI_FirstStart()
 
-	While $FS_GUI
-		Sleep(250)
-	WEnd
+	If $silentmode Then
+		Cout("Silent mode: skipping first start assistant")
+	Else
+		GUI_FirstStart()
+		While $FS_GUI
+			Sleep(250)
+		WEnd
+	EndIf
 EndIf
 
-If Not FileExists($bindir) And RepairProgramFiles(t('PROGRAM_FILES_MISSING')) Then Exit 99
+If Not FileExists($bindir) Then
+	If $silentmode Then
+		Cout("Program files missing; interactive repair is disabled in silent mode")
+		Exit 99
+	ElseIf RepairProgramFiles(t('PROGRAM_FILES_MISSING')) Then
+		Exit 99
+	EndIf
+EndIf
 
 ; If no file passed, display GUI to select file and set options
 If $prompt Then
 	CreateGUI()
+	$g_bUpdateRunning = True
 	CheckUpdate($UPDATEMSG_FOUND_ONLY, True, $UPDATE_ALL, False)
+	$g_bUpdateRunning = False
 
 	While 1
 		If Not $guimain Then ExitLoop
@@ -383,6 +441,21 @@ Func StartExtraction()
 	EndIf
 
 	FilenameParse($file)
+
+	; Context-menu/command-line batch can start any selected file as the first active process.
+	; Queue-level multipart guards do not run for that first/current process, so skip
+	; downstream split volumes here before output directory setup, history, detection,
+	; extraction, or per-file result logging.  Do not limit this to /sub: Extract Here
+	; and /last can hit the same first-process bypass.
+	If $extract And $cmdline[0] > 1 And $outdir <> "" Then
+		Local $sPreferredVolume = ""
+		If __IsLaterMultipartVolumeWithPreferredSibling($file, $sPreferredVolume) Then
+			Cout("Skipping later multipart direct batch file " & PathGetFileName($file) & "; preferred volume exists: " & PathGetFileName($sPreferredVolume))
+			EnableBatchMode()
+			terminate($STATUS_BATCH)
+		EndIf
+	EndIf
+
 	ValidateOutputDirectory()
 
 	; Collect file information (for log/feedback only)
@@ -415,31 +488,51 @@ Func StartExtraction()
 	$ttarchfailed = False
 	$unpackfailed = False
 	ReDim $aFiletype[0][2]
+	$g_sPrimaryDetectRaw = ""
+	$g_sPrimaryDetectMatch = ""
+	$g_sPrimaryDetectScanner = ""
+	$g_bPrimaryStrongHit = False
+	$g_sDetectionWinner = ""
+	$g_sExtractorWinner = ""
+	$g_sDetectedTypeForSummary = ""
+	$g_sPipelineRows = ""
+	$g_sPipelineTimeline = ""
+	$g_sPipelineLine = ""
+	$g_sPipelineToolVersions = ""
+	$g_iPipelineSeq = 0
+	$g_iPipelineWarn = 0
+	$g_iPipelineFail = 0
+	$g_iPipelineOk = 0
+	$g_iPipelineRun = 0
+	_PipelineStep("INPUT", "File", "INFO", $filenamefull)
+	$g_bStrictPipeline = True
+	$g_sStoredTridType = ""
+	$g_sStoredUnixType = ""
 
 	; If an extractor is specified via command line parameter, we simply use that without scanning
 	If $sArcTypeOverride Then Return extract($sArcTypeOverride, $sArcTypeOverride & " " & t('TERM_FILE'))
 
 	; Extract contents from known file types
 
-	; UniExtract uses four methods of detection (in order):
-	; 1. File extensions for special cases
-	; 2. Binary file analysis of files using TrID if file extension is not .exe
-	; 3. Binary file analysis of PE (executable) files using Exeinfo PE
-	; 4. Extra analysis using PeID if executable is not recognized by Exeinfo PE
-	; 5. Binary file analysis of files using TrID
-	; 6. File extensions
+	; Strict detection pipeline (in order):
+	; 1. Detect It Easy (DiE), with Exeinfo PE fallback
+	; 2. TrID
+	; 3. File extension checks
+	; 4. 7-Zip probe
+	; 5. Unix file tool fallback
+	; 6. Final detector-based routing fallback
 
 	; First, check for file extensions that require special actions
 	InitialCheckExt()
 
-	; If file is an .exe, scan with Exeinfo PE and PEiD
+	; Executables use the dedicated strict pipeline in IsExe()
 	If $fileext = "exe" Or $fileext = "dll" Then IsExe()
 
-	; Scan file with TrID, if file is not an .exe
-	FileScan_Trid($extract)
-
-	; ExeInfo PE supports non-executables as well
+	; Primary detector first for every non-executable file
 	If Not $exefailed Then FileScan_ExeInfo()
+
+	; Secondary detector
+	FileScan_Trid($extract)
 
 	; Display file information and terminate if scan only mode
 	If Not $extract Then
@@ -448,14 +541,28 @@ Func StartExtraction()
 	EndIf
 
 	; Else perform additional extraction methods
-	CheckIso()
-	CheckGame()
-	CheckTotalObserver()
+	If _ShouldSkipNonFatalProbesForPrimaryMatch() Then
+		Cout("Skipping non-fatal ISO/game probes because primary detector already identified media")
+	Else
+		CheckIso()
+		CheckGame()
+		CheckTotalObserver()
+	EndIf
 
 	; Use file extension if signature not recognized
 	CheckExt()
 
-	check7z()
+	If check7z(0, False, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
+	If $g_bArchiveIntegrityError Then
+		Cout("Definitive archive corruption/broken-volume failure detected after general 7-Zip probe; aborting further fallback scans")
+		terminate($STATUS_FAILED, $file, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
+	EndIf
+	FileScan_UnixFile()
+	If $g_bArchiveIntegrityError Then
+		Cout("Definitive archive corruption/broken-volume failure detected after unix file tool stage; aborting strict fallback")
+		terminate($STATUS_FAILED, $file, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
+	EndIf
+	ResolveStrictPipeline()
 
 	; Cannot determine filetype, all checks failed - abort
 	_DeleteTrayMessageBox()
@@ -475,29 +582,108 @@ Func IsExe()
 
 	FileScan_ExeInfo()
 
-	FileScan_Peid("ext", $extract) ; Userdb is much faster
-	FileScan_Peid("hard", $extract)
+	Local $bDeferredPeidFallback = False
+	If $g_bPrimaryStrongHit Then
+		Cout("Deferring PEiD fallback because primary detector already produced a strong match: " & $g_sPrimaryDetectMatch)
+		$bDeferredPeidFallback = True
+	Else
+		FileScan_Peid("ext", $extract) ; Userdb is much faster
+		FileScan_Peid("hard", $extract)
+	EndIf
 
 	; Make sure TrID doesn't call IsExe again
 	$exefailed = True
 
 	If Not $extract Then Return
 
-	; Perform additional tests if necessary
-	checkInno()
-	checkIE()
-
-	CheckGame()
-
 	FileScan_Trid()
+	; Do not run extension registry extraction inside the EXE pipeline.
+	; Bioruebe's IsExe() never did this, and a definition match for .exe could abort before EXE fallbacks.
+	If _IsSetupFactoryCandidate() Then
+		Cout("Trying Setup Factory handlers before 7zip because detector indicates Setup Factory")
+		CheckTotalObserver('Setup Factory ' & t('TERM_INSTALLER'))
+		checkIE()
+	EndIf
+	If _IsInstallExplorerCandidate() Then
+		Cout("Trying InstallExplorer before 7zip because detector/signature indicates VISE/Gentee")
+		checkIE()
+	EndIf
+	If StringInStr($g_sPrimaryDetectMatch, "WiX Installer") Or StringInStr($g_sPrimaryDetectMatch, "WiX Toolset Installer") Then
+		Cout("Trying WiX/Dark extraction before 7zip because primary detector indicates WiX/Burn")
+		If extract($TYPE_WIX, "WiX " & t('TERM_INSTALLER'), "", True, True) Then
+			LogExtractorWinner("dark")
+			terminate($STATUS_SUCCESS, $filenamefull, $TYPE_WIX, "WiX " & t('TERM_INSTALLER'))
+		EndIf
+		Cout("WiX/Dark extraction failed or produced no usable output; falling back to 7zip probe")
+	EndIf
+	If _ShouldTryAtlantisFallback() Then
+		Cout("Trying Atlantis FILES fallback before 7zip because primary detector indicates Delphi/VCL custom installer")
+		LogDetectionWinner($g_sPrimaryDetectScanner, "Delphi/VCL custom installer candidate (FILES resource)")
+		If extract($TYPE_ATLANTIS, "Atlantis FILES custom installer", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_ATLANTIS, "Atlantis FILES custom installer")
+	EndIf
 
-	check7z()
+	; Do NOT run Bioruebe's generic checkInno() -> checkIE() fallback for every EXE here.
+	; InstExpl.wcx can false-positive on NSIS installers, and extract($TYPE_QBMS) may terminate
+	; as failed before the normal NSIS/7-Zip route gets a chance.
+	; InstallExplorer is still tried only by targeted VISE/Gentee/Setup Factory detector/marker routes above
+	; and by ResolveStrictPipeline() before 7-Zip when such a detector hit is stored.
 
-	terminate($STATUS_UNKNOWNEXE, $file, StringLeft($aFiletype[0][1], 50))
+	; Bioruebe applied Exeinfo and TrID routes before generic 7-Zip.
+	; Apply stored detector/TrID routes here so 7-Zip cannot steal or block a specific installer extractor.
+	ResolveStrictPipeline(True, False)
+
+	If $bDeferredPeidFallback Then
+		Cout("Running deferred PEiD fallback after primary/TrID routes did not finish extraction")
+		FileScan_Peid("ext", $extract) ; Userdb is much faster
+		FileScan_Peid("hard", $extract)
+	EndIf
+
+	Local $sSkip7zReason = ""
+	If $g_sPrimaryDetectScanner = "Detect It Easy" Then
+		If StringInStr($g_sPrimaryDetectMatch, "Inno Setup") Then
+			$sSkip7zReason = "Inno Setup"
+		ElseIf StringInStr($g_sPrimaryDetectMatch, "InstallShield") Then
+			$sSkip7zReason = "InstallShield"
+		EndIf
+	EndIf
+	If $sSkip7zReason = "" Then
+		If check7z(0, False, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_7Z, "7-Zip " & t('TERM_INSTALLER') & " " & t('TERM_PACKAGE'))
+		If $g_bArchiveIntegrityError Then
+			Cout("Definitive archive corruption/broken-volume failure detected after executable 7-Zip probe; aborting further fallback scans")
+			terminate($STATUS_FAILED, $file, $TYPE_7Z, "7-Zip " & t('TERM_INSTALLER') & " " & t('TERM_PACKAGE'))
+		EndIf
+	Else
+		Cout("Skipping 7zip probe because detectors corroborated " & $sSkip7zReason)
+	EndIf
+
+	; Keep broad game/resource probes late for EXEs so they do not run before known
+	; installer/SFX routes or the generic 7-Zip archive/SFX probe.
+	; If a real installer was already identified and tried, do not send setup.exe
+	; through broad QuickBMS game probes. They can hang and keep the temp copy locked.
+	If _ShouldSkipBroadGameProbeForInstaller() Then
+		Cout("Skipping broad game archive probes because detectors already identified a known installer")
+	Else
+		CheckGame()
+	EndIf
+
+	FileScan_UnixFile()
+	If $g_bArchiveIntegrityError Then
+		Cout("Definitive archive corruption/broken-volume failure detected after unix file tool stage; aborting strict fallback")
+		terminate($STATUS_FAILED, $file, $TYPE_7Z, "7-Zip " & t('TERM_INSTALLER') & " " & t('TERM_PACKAGE'))
+	EndIf
+	ResolveStrictPipeline(False, True)
+
+	; Match 2.9.3-style batch popup behavior: do not show noisy detector/compiler details for unsupported EXEs.
+	; Detailed detector output remains in the per-file log.
+	terminate($STATUS_UNKNOWNEXE, $file, "unknown")
 EndFunc
 
 ; Parse filename
 Func FilenameParse($f)
+	; Accept paths copied from Explorer's "Copy as path", including surrounding quotes/noise.
+	$f = StringStripWS($f, 3)
+	If StringLen($f) >= 2 And StringLeft($f, 1) = '"' And StringRight($f, 1) = '"' Then _
+		$f = StringTrimLeft(StringTrimRight($f, 1), 1)
 	If StringIsSpace($f) Then Return SetError(1)
 
 	$file = _PathFull($f)
@@ -555,12 +741,97 @@ Func EnvParse($sString)
 	Return $sString
 EndFunc
 
+; Read language INI files as Unicode text instead of using Windows IniRead().
+; This allows shipped translations to be UTF-8/UTF-8-BOM while keeping old
+; UTF-16 LE BOM language files compatible. Preferences still use IniRead().
+Func _LangFileRead($sPath)
+	Static $aCachePath[1] = [0]
+	Static $aCacheText[1] = [0]
+
+	For $i = 1 To $aCachePath[0]
+		If $aCachePath[$i] = $sPath Then Return $aCacheText[$i]
+	Next
+
+	Local $hFile = FileOpen($sPath, $FO_BINARY)
+	If $hFile = -1 Then Return SetError(1, 0, "")
+
+	Local $bData = FileRead($hFile)
+	FileClose($hFile)
+
+	Local $sText = ""
+	Switch True
+		Case BinaryLen($bData) >= 3 And BinaryMid($bData, 1, 3) = Binary("0xEFBBBF")
+			$sText = BinaryToString(BinaryMid($bData, 4), $SB_UTF8)
+		Case BinaryLen($bData) >= 2 And BinaryMid($bData, 1, 2) = Binary("0xFFFE")
+			$sText = BinaryToString(BinaryMid($bData, 3), $SB_UTF16LE)
+		Case BinaryLen($bData) >= 2 And BinaryMid($bData, 1, 2) = Binary("0xFEFF")
+			$sText = BinaryToString(BinaryMid($bData, 3), $SB_UTF16BE)
+		Case BinaryLen($bData) >= 4 And BinaryMid($bData, 2, 1) = Binary("0x00") And BinaryMid($bData, 4, 1) = Binary("0x00")
+			$sText = BinaryToString($bData, $SB_UTF16LE)
+		Case Else
+			$sText = BinaryToString($bData, $SB_UTF8)
+	EndSwitch
+
+	$aCachePath[0] += 1
+	ReDim $aCachePath[$aCachePath[0] + 1]
+	ReDim $aCacheText[$aCachePath[0] + 1]
+	$aCachePath[$aCachePath[0]] = $sPath
+	$aCacheText[$aCachePath[0]] = $sText
+
+	Return $sText
+EndFunc
+
+Func _LangIniRead($sPath, $sSection, $sKey, $sDefault = "")
+	Local $sContent = _LangFileRead($sPath)
+	If @error Then Return $sDefault
+
+	$sContent = StringReplace($sContent, @CRLF, @LF)
+	$sContent = StringReplace($sContent, @CR, @LF)
+	Local $aLines = StringSplit($sContent, @LF, $STR_ENTIRESPLIT)
+	Local $sCurrentSection = ""
+
+	For $i = 1 To $aLines[0]
+		Local $sLine = StringStripWS($aLines[$i], 3)
+		If $sLine = "" Then ContinueLoop
+		If StringLeft($sLine, 1) = ";" Or StringLeft($sLine, 1) = "#" Then ContinueLoop
+
+		If StringLeft($sLine, 1) = "[" And StringRight($sLine, 1) = "]" Then
+			$sCurrentSection = StringTrimRight(StringTrimLeft($sLine, 1), 1)
+			ContinueLoop
+		EndIf
+
+		If $sCurrentSection <> $sSection Then ContinueLoop
+
+		Local $iPos = StringInStr($sLine, "=")
+		If $iPos < 2 Then ContinueLoop
+
+		Local $sLineKey = StringStripWS(StringLeft($sLine, $iPos - 1), 3)
+		If $sLineKey <> $sKey Then ContinueLoop
+
+		Local $sValue = StringStripWS(StringMid($sLine, $iPos + 1), 3)
+		; Native IniRead strips one pair of surrounding quotes.  Keep the
+		; same behaviour so language values like MENU_FILE="File" do not
+		; appear in the UI as "File".
+		If StringLen($sValue) >= 2 Then
+			Local $sFirstChar = StringLeft($sValue, 1)
+			Local $sLastChar = StringRight($sValue, 1)
+			If ($sFirstChar = '"' And $sLastChar = '"') Or ($sFirstChar = "'" And $sLastChar = "'") Then
+				$sValue = StringMid($sValue, 2, StringLen($sValue) - 2)
+			EndIf
+		EndIf
+
+		Return $sValue
+	Next
+
+	Return $sDefault
+EndFunc
+
 ; Translate text
 Func t($t, $aVars = 0, $lang = $language, $sDefault = 0)
-	Local $return = IniRead($lang = 'English'? $sEnglishLangFile: $langdir & '\' & $lang & '.ini', 'UniExtract', $t, '')
+	Local $return = _LangIniRead($lang = 'English'? $sEnglishLangFile: $langdir & '\' & $lang & '.ini', 'UniExtract', $t, '')
 	If $return == '' Then
 		Cout("Translation not found for term " & $t)
-		$return = IniRead($sEnglishLangFile, 'UniExtract', $t, '')
+		$return = _LangIniRead($sEnglishLangFile, 'UniExtract', $t, '')
 		If $return = '' Then
 			Cout("Warning: term " & $t & " is not defined")
 			Return $sDefault == 0? $t: $sDefault
@@ -596,7 +867,16 @@ Func ParseCommandLine()
 
 	$extract = True
 
-	Cout("Command line parameters: " & $CmdLineRaw)
+	; If the first context-menu/batch child is launched by Windows as /sub only,
+	; but silent mode is already enabled in preferences, normalize the current
+	; process arguments too.  Later queued children already get /silent via GetCmd().
+	If $silentmode And _ArraySearch($cmdline, "/silent") < 0 And _ArraySearch($cmdline, "/sub") > -1 Then
+		ReDim $cmdline[$cmdline[0] + 2]
+		$cmdline[0] += 1
+		$cmdline[$cmdline[0]] = "/silent"
+	EndIf
+
+	Cout("Command line parameters: " & __GetEffectiveCmdLineRaw())
 
 	If _ArraySearch($cmdline, "/silent") > -1 Then $silentmode = True
 	If _ArraySearch($cmdline, "/nolog") > -1 Then $bOptCreateLog = False
@@ -693,43 +973,55 @@ Func ParseCommandLine()
 	If _ArraySearch($cmdline, "/close") > -1 Then terminate($STATUS_SILENT)
 EndFunc
 
+; Return command line text after internal normalization, so logs show the effective flags.
+Func __GetEffectiveCmdLineRaw()
+	Local $sReturn = $CmdLineRaw
+	If _ArraySearch($cmdline, "/silent") > -1 And Not StringRegExp(StringLower($sReturn), '(^|\s)/silent($|\s)') Then $sReturn &= " /silent"
+	Return $sReturn
+EndFunc
+
 ; Read complete preferences
 Func ReadPrefs()
 	If IsAdmin() Then Cout("Warning: running as admin")
 
 	; Select ini file
-	Global $settingsdir = @AppDataDir & "\Bioruebe\UniExtract"
-	Local Const $globalIni = @ScriptDir & "\UniExtract.ini"
-	Local Const $userIni = $settingsdir & "\UniExtract.ini"
+	; Fork policy: use the program folder for portable settings, with an AppData fallback when the program folder is not writable.
+	Global $settingsdir = @ScriptDir
+	Local Const $programIni = @ScriptDir & "\UniExtract.ini"
+	Local Const $appDataSettingsDir = @AppDataDir & "\UniExtract"
+	Local Const $appDataIni = $appDataSettingsDir & "\UniExtract.ini"
 
-	If FileExists($userIni) Then
-		Cout("Using current user's settings")
+	If HasWriteAccess($programIni) Then
+		Cout("Using program folder settings")
 	Else
-		; Test file permissions, e.g. when UniExtract is in program files directory,
-		; user settings are stored in %appdata% due to permission issues
-		If CanAccess($globalIni) And HasWriteAccess($globalIni) Then
-			Cout("Using global settings")
-			$settingsdir = @ScriptDir
-		Else
-			Cout("Cannot write to " & $globalIni & ", using %appdata%")
-			FileCopy($globalIni, $userIni, 8)
-		EndIf
+		$settingsdir = $appDataSettingsDir
+		If Not FileExists($settingsdir) Then DirCreate($settingsdir)
+		If FileExists($programIni) And Not FileExists($appDataIni) Then FileCopy($programIni, $appDataIni, 8)
+		Cout("Cannot write to program settings file, using AppData settings: " & $appDataIni)
 	EndIf
 
 	; Setup paths
 	Global $prefs = $settingsdir & "\UniExtract.ini"
 	Global $batchQueue = $settingsdir & "\batch.queue"
-	Global $logdir = $settingsdir & "\log\"
+	Global $logdir = @ScriptDir & "\log\"
+	If Not FileExists($logdir) Then DirCreate($logdir)
+	If Not CanAccess($logdir) Then
+		$logdir = @AppDataDir & "\UniExtract\log\"
+		If Not FileExists($logdir) Then DirCreate($logdir)
+		Cout("Cannot write to program log folder, using AppData log folder: " & $logdir)
+	Else
+		Cout("Using program folder log folder")
+	EndIf
 	Global $userDefDir = $settingsdir & "\def\"
 	Global $aDefDirs[] = [$userDefDir, $defdir]
 	Global $fileScanLogFile = $logdir & "filescan.txt"
 	Global $sPasswordFile = $settingsdir & "\passwords.txt"
 
 	LoadPref("language", $language, False)
-	LoadPref("batchqueue", $batchQueue, False)
-	If $batchQueue Then $batchQueue = _PathFull($batchQueue, $settingsdir)
-	LoadPref("filescanlogfile", $fileScanLogFile, False)
-	If Not @error Then $fileScanLogFile = _PathFull($fileScanLogFile, $settingsdir)
+	; Fork policy: these paths are derived from the active settings/log folders.
+	; Do not load stale absolute paths from old INI files.
+	SavePref("batchqueue", $batchQueue)
+	SavePref("filescanlogfile", $fileScanLogFile)
 	LoadPref("batchenabled", $batchEnabled, 0)
 	LoadPref("history", $history)
 	LoadPref("appendext", $appendext)
@@ -749,7 +1041,9 @@ Func ReadPrefs()
 	LoadPref("keepopen", $bOptKeepOpen)
 	LoadPref("feedbackprompt", $bOptAskForFeedback)
 	LoadPref("log", $bOptCreateLog)
-	LoadPref("sendstats", $bOptSendStats)
+	; Usage statistics are disabled in this fork, regardless of old ini values.
+	$bOptSendStats = 0
+	SavePref("sendstats", $bOptSendStats)
 	LoadPref("extract", $extract)
 	LoadPref("unicodecheck", $checkUnicode)
 	LoadPref("extractvideotrack", $bOptExtractVideo)
@@ -900,6 +1194,7 @@ EndFunc
 ; Scan file with TrID
 Func FileScan_Trid($analyze = 1)
 	If $tridfailed Then Return
+	Local $sPipelineDetected = ""
 
 	_CreateTrayMessageBox(t('SCANNING_FILE', "TrID"))
 	Cout("Starting file scan using TrID")
@@ -907,11 +1202,27 @@ Func FileScan_Trid($analyze = 1)
 	If $extract Then
 		Local $iResults = TridLib_Analyse($file)
 
-		If $iResults = 0 Then
+		If @error Then
+			Cout("TrIDLib unavailable, falling back to trid.exe")
+			Local $aReturn = StringSplit(FetchStdout(Quote($bindir & $trid) & ' "' & $file & '"' & ($analyze? "": " -v"), $filedir, @SW_HIDE, 0, True, False), @CRLF)
+			Local $sFileType = ""
+			For $i = 1 To UBound($aReturn) - 1
+				If StringInStr($aReturn[$i], "%") Or (Not $analyze And (StringInStr($aReturn[$i], "Related URL") Or StringInStr($aReturn[$i], "Remarks"))) Then _
+					$sFileType &= $aReturn[$i] & @CRLF
+			Next
+			If $sFileType <> "" Then
+				$sPipelineDetected = $sFileType
+				_FiletypeAdd("TrID", $sFileType)
+				If $analyze Then tridcompare($sFileType)
+			Else
+				Cout("Unknown filetype!")
+			EndIf
+		ElseIf $iResults = 0 Then
 			Cout("Unknown filetype!")
 		Else
 			For $i = 1 To $iResults
 				Local $sType = TridLib_GetType($i)
+				$sPipelineDetected &= ($sPipelineDetected <> "" ? @CRLF : "") & $sType
 				_FiletypeAdd("TrID", $sType)
 				If $appendext And $i == 1 Then RenameWithTridExtension()
 				If $analyze And $i < 4 Then tridcompare($sType)
@@ -919,7 +1230,7 @@ Func FileScan_Trid($analyze = 1)
 		EndIf
 
 	Else ; Run TrID and fetch output to include additional information about the file type
-		Local $aReturn = StringSplit(FetchStdout($trid & ' "' & $file & '"' & ($analyze? "": " -v"), $filedir, @SW_HIDE, 0, True, False), @CRLF)
+		Local $aReturn = StringSplit(FetchStdout(Quote($bindir & $trid) & ' "' & $file & '"' & ($analyze? "": " -v"), $filedir, @SW_HIDE, 0, True, False), @CRLF)
 		If $appendext Then RenameWithTridExtension($file, True)
 
 		Local $sFileType = ""
@@ -929,13 +1240,19 @@ Func FileScan_Trid($analyze = 1)
 		Next
 
 		If $sFileType <> "" Then
+			$sPipelineDetected = $sFileType
 			_FiletypeAdd("TrID", $sFileType)
 			If $analyze Then tridcompare($sFileType)
 		EndIf
 	EndIf
 
+	If $sPipelineDetected <> "" Then
+		_PipelineStep("DETECTOR", "TrID", "OK", _PipelineCompactDetails($sPipelineDetected))
+	Else
+		_PipelineStep("DETECTOR", "TrID", "UNKNOWN", "No usable output")
+	EndIf
+
 	_DeleteTrayMessageBox()
-	FileScan_UnixFile()
 
 	$tridfailed = True
 EndFunc
@@ -945,10 +1262,47 @@ Func TridLib_Load()
 	If $hTridDll Then Return True
 	Cout("Loading TridLib")
 
-	$hTridDll = DllOpen($bindir & "TrIDLib.dll")
+	Local $sTridDll = $bindir & "TrIDLib.dll"
+	Local $sTridDefs = $bindir & "TrIDDefs.TRD"
+	If Not FileExists($sTridDll) Then
+		Cout("TrIDLib.dll not found: " & $sTridDll)
+		Return SetError(1, 0, False)
+	EndIf
+	If Not FileExists($sTridDefs) Then
+		Cout("TrIDDefs.TRD not found: " & $sTridDefs)
+		Return SetError(1, 0, False)
+	EndIf
+
+	; Harden DLL loading: ensure bin folder is on PATH and current directory during load
+	Local $sPrevPath = EnvGet("PATH")
+	Local $sPrevDir = @WorkingDir
+	EnvSet("PATH", $bindir & ";" & $sPrevPath)
+	FileChangeDir($bindir)
+
+	$hTridDll = DllOpen($sTridDll)
+
+	; Restore process state immediately after load attempt
+	FileChangeDir($sPrevDir)
+	EnvSet("PATH", $sPrevPath)
+
+	If $hTridDll = -1 Then
+		$hTridDll = 0
+		Cout("Failed to open TridLib.dll: " & $sTridDll)
+		Cout("TrIDLib loader hardening applied (PATH + cwd), still failed; using trid.exe fallback")
+		Return SetError(1, 0, False)
+	EndIf
+
 	Local $aReturn = DllCall($hTridDll, "int", "TrID_LoadDefsPack", "str", $bindir)
-	If @error Or $aReturn[0] < 1 Then
-		Cout("Failed to load Trid definitions")
+	If @error Then
+		Cout("TrID_LoadDefsPack call failed")
+		DllClose($hTridDll)
+		$hTridDll = 0
+		Return SetError(1, 0, False)
+	EndIf
+	If $aReturn[0] < 1 Then
+		Cout("Failed to load Trid definitions from: " & $sTridDefs)
+		DllClose($hTridDll)
+		$hTridDll = 0
 		Return SetError(1, 0, False)
 	EndIf
 
@@ -1037,13 +1391,23 @@ Func FileScan_UnixFile()
 	Local $sFileType = FetchStdout($filetool & ' "' & $file & '"', $filedir, @SW_HIDE)
 	$sFileType = StringReplace(StringReplace($sFileType, $file & ": ", ""), @CRLF, "")
 
-	If $sFileType And $sFileType <> "data" Then _FiletypeAdd("Unix File Tool", $sFileType)
+	If $sFileType And $sFileType <> "data" Then
+		_FiletypeAdd("Unix File Tool", $sFileType)
+		_PipelineStep("DETECTOR", "Unix File Tool", "OK", _PipelineCompactDetails($sFileType))
+	Else
+		_PipelineStep("DETECTOR", "Unix File Tool", "UNKNOWN", "No usable output")
+	EndIf
 
 	_DeleteTrayMessageBox()
 
 	If Not $extract Then
 		; Text files are often misdetected, renaming them is not a good idea
 		If $appendext And (StringInStr($sFileType, "text", 0) Or StringInStr($sFileType, "ASCII", 0)) Then $appendext = False
+		Return
+	EndIf
+
+	If $g_bStrictPipeline Then
+		If $g_sStoredUnixType = "" Then $g_sStoredUnixType = $sFileType
 		Return
 	EndIf
 
@@ -1071,7 +1435,10 @@ Func FileScan_MediaInfo()
 
 	; Return if file is not a media file
 	$aReturn = StringSplit($aReturn[0], @CRLF, 2)
-	If UBound($aReturn) < 10 Then Return _DeleteTrayMessageBox()
+	If UBound($aReturn) < 10 Then
+		_PipelineStep("DETECTOR", "MediaInfo", "SKIPPED", "Not a media file / no detailed media output")
+		Return _DeleteTrayMessageBox()
+	EndIf
 
 	; Format returned string to align in message box
 	For $i in $aReturn
@@ -1089,195 +1456,299 @@ Func FileScan_MediaInfo()
 	Next
 
 	_FiletypeAdd("MediaInfo", $sFileType)
+	_PipelineStep("DETECTOR", "MediaInfo", "OK", _PipelineCompactDetails($sFileType))
 	_DeleteTrayMessageBox()
 EndFunc
 
-; Scan file with Exeinfo PE
-Func FileScan_ExeInfo($bUseCmd = $extract)
-	Local $sFileType = ""
+Func _SanitizeDieOutput($sText)
+	If StringIsSpace($sText) Then Return $sText
 
-	Cout("Start file scan using Exeinfo PE")
-	_CreateTrayMessageBox(t('SCANNING_EXE', "Exeinfo PE"))
+	Local $aLines = StringSplit(StringStripCR($sText), @LF, 1)
+	If @error Or Not IsArray($aLines) Then Return $sText
 
-	; Analyze file
-	If $bUseCmd Then ; Use log command line for best speed
-		Local Const $LogFile = $logdir & "exeinfo.log"
-		RunWait($exeinfope & ' "' & $file & '*" /sx /log:"' & $LogFile & '"', $bindir, @SW_HIDE)
-		$sFileType = _FileRead($LogFile, True)
-		If StringInStr($sFileType, "File corrupted or Buffer Error") Or StringIsSpace($sFileType) Then Return FileScan_ExeInfo(False)
-	Else ; In scan only mode run and read GUI fields to get additional information on how to extract
-		$aReturn = OpenExeInfo()
-		$TimerStart = TimerInit()
+	Local $sOut = ""
 
-		While $sFileType = "" Or StringInStr($sFileType, "File too big") Or StringInStr($sFileType, "Antivirus may slow") Or _
-			  StringInStr($sFileType, "File corrupted or Buffer Error")
-			Sleep(200)
-			$sFileType = ControlGetText($aReturn[0], "", "TEdit6")
-			$TimerDiff = TimerDiff($TimerStart)
-			If $TimerDiff > $Timeout Then ExitLoop
-		WEnd
+	For $i = 1 To $aLines[0]
+		Local $line = StringStripWS($aLines[$i], 3)
+		If $line = "" Then ContinueLoop
 
-		$sFileType &= @CRLF & @CRLF & ControlGetText($aReturn[0], "", "TEdit5")
+		Local $sLow = StringLower($line)
 
-		CloseExeInfo($aReturn)
+		If StringRegExp($line, '(?i)\.sg:\s*\d+:\s*(typeerror|syntaxerror|referenceerror):') Then ContinueLoop
+		If StringInStr($sLow, "unknown return type") Then ContinueLoop
+		If StringInStr($sLow, "register the type with qscrip") Then ContinueLoop
+
+		$sOut &= $line & @CRLF
+	Next
+
+	Return StringStripWS($sOut, 3)
+EndFunc
+
+; Log Detect It Easy (DiE) CLI version once at startup
+Func _LogDieVersion()
+	If Not FileExists($diec_path) Then
+		Cout("Detect It Easy (DiE) CLI not found: " & $diec_path)
+		Return ""
 	EndIf
+
+	Local $sDieWorkDir = $bindir & "die"
+	Local $sDieVersionLog = @TempDir & "\diec_version_" & @AutoItPID & ".log"
+	Local $iExitCode = 0, $sDieVersion = ""
+
+	FileDelete($sDieVersionLog)
+	$iExitCode = RunWait(@ComSpec & ' /d /c ""' & $diec_path & '" --version > "' & $sDieVersionLog & '" 2>&1"', $sDieWorkDir, @SW_HIDE)
+	If FileExists($sDieVersionLog) Then $sDieVersion = _FileRead($sDieVersionLog, True)
+	FileDelete($sDieVersionLog)
+
+	If StringIsSpace($sDieVersion) Then
+		Cout("Detect It Easy (DiE) version: unknown (diec.exe --version produced no output, exit code " & $iExitCode & ")")
+		Return ""
+	EndIf
+
+	$sDieVersion = StringReplace($sDieVersion, @CRLF, " | ")
+	$sDieVersion = StringReplace($sDieVersion, @LF, " | ")
+	$sDieVersion = StringReplace($sDieVersion, @CR, " | ")
+	$sDieVersion = StringStripWS($sDieVersion, 7)
+	Cout("Detect It Easy (DiE) version: " & $sDieVersion & " (exit code " & $iExitCode & ")")
+	Return $sDieVersion
+EndFunc
+
+; Scan file with Detect It Easy (DiE), fallback to Exeinfo PE
+Func FileScan_ExeInfo($bUseCmd = $extract)
+	Local $sFileType = "", $sScanner = "Detect It Easy"
+	Local $bDieRan = False, $sDiePipeline = ""
+
+	If Not $extract Then $bUseCmd = True
+
+	Cout("Start file scan using Detect It Easy (DiE)")
+	_CreateTrayMessageBox(t('SCANNING_EXE', "Detect It Easy (DiE)"))
+
+	If FileExists($diec_path) Then
+		$bDieRan = True
+		Local $sDieWorkDir = $bindir & "die"
+		Local $sDieLog = $logdir & "diec.log"
+		FileDelete($sDieLog)
+		RunWait(@ComSpec & ' /d /c ""' & $diec_path & '" -r "' & $file & '" > "' & $sDieLog & '" 2>&1"', $sDieWorkDir, @SW_HIDE)
+		If FileExists($sDieLog) Then
+			$sFileType = _FileRead($sDieLog, True)
+		Else
+			$sFileType = ""
+		EndIf
+
+		If Not StringIsSpace($sFileType) Then
+			If _IsBrokenDieOutput($sFileType) Then
+				Cout("Detect It Easy raw output was rejected as broken/error output")
+				$sFileType = ""
+			Else
+				$sFileType = _SanitizeDieOutput($sFileType)
+
+				Local $sDieNormalized = _NormalizeDetectorOutput($sFileType, "Detect It Easy")
+				Local $bDieStrong = _IsStrongPrimaryDetectorHit($sDieNormalized)
+
+				If $bDieStrong Then
+					Cout("Detect It Easy produced usable output (strong hit)")
+					$sFileType = $sDieNormalized
+				Else
+					Cout("Detect It Easy produced usable output (non-strong hit)")
+					$sFileType = $sDieNormalized
+				EndIf
+			EndIf
+		EndIf
+	EndIf
+
+	$sDiePipeline = $sFileType
+	If $bDieRan Then
+		_PipelineStep("DETECTOR", "Detect It Easy", _PipelineDetectorStatus($sDiePipeline, _IsStrongPrimaryDetectorHit($sDiePipeline)), _PipelineCompactDetails($sDiePipeline))
+	Else
+		_PipelineStep("DETECTOR", "Detect It Easy", "SKIPPED", "diec.exe not found")
+	EndIf
+
+If StringIsSpace($sFileType) Or ($sScanner = "Detect It Easy" And Not _IsStrongPrimaryDetectorHit($sFileType)) Then
+		If StringIsSpace($sFileType) Then
+			Cout("Detect It Easy returned no usable output, falling back to Exeinfo PE")
+		Else
+			Cout("Detect It Easy result is non-strong; falling back to Exeinfo PE for Bioruebe-compatible EXE routing")
+		EndIf
+		$sScanner = "Exeinfo PE"
+
+		If $bUseCmd Then
+			Local Const $LogFile = $logdir & "exeinfo.log"
+			RunWait($exeinfope & ' "' & $file & '*" /sx /log:"' & $LogFile & '"', $bindir, @SW_HIDE)
+			$sFileType = _FileRead($LogFile, True)
+			If StringInStr($sFileType, "File corrupted or Buffer Error") Or StringIsSpace($sFileType) Then
+				If Not $extract Then
+					Cout("Exeinfo PE command mode returned no usable output; suppressing GUI fallback in scan mode")
+					_DeleteTrayMessageBox()
+					Return
+				EndIf
+				Return FileScan_ExeInfo(False)
+			EndIf
+		Else
+			$aReturn = OpenExeInfo()
+			$TimerStart = TimerInit()
+
+			While $sFileType = "" Or StringInStr($sFileType, "File too big") Or StringInStr($sFileType, "Antivirus may slow") Or _
+				  StringInStr($sFileType, "File corrupted or Buffer Error")
+				Sleep(200)
+				$sFileType = ControlGetText($aReturn[0], "", "TEdit6")
+				$TimerDiff = TimerDiff($TimerStart)
+				If $TimerDiff > ($Timeout * 1000) Then ExitLoop
+			WEnd
+
+			$sFileType &= @CRLF & @CRLF & ControlGetText($aReturn[0], "", "TEdit5")
+
+			CloseExeInfo($aReturn)
+		EndIf
+	EndIf
+
+	If $sScanner = "Exeinfo PE" Then _PipelineStep("DETECTOR", "Exeinfo PE", _PipelineDetectorStatus($sFileType, Not StringIsSpace($sFileType)), _PipelineCompactDetails($sFileType))
 
 	_DeleteTrayMessageBox()
 
-	If StringInStr($sFileType, $filenamefull) Then $sFileType = StringTrimLeft(StringStripWS(StringReplace($sFileType, $filenamefull, ""), 1), 2)
+	If StringInStr($sFileType, $filenamefull) Then
+		$sFileType = StringTrimLeft(StringStripWS(StringReplace($sFileType, $filenamefull, ""), 1), 2)
+	EndIf
 
-	; Return if file is too big
 	If StringInStr($sFileType, "Skipped") Then Return
 
-	; Do not display 'unknown file type' scan result in scan only mode
-	If Not $extract And StringInStr($sFileType, "file is not EXE or DLL") Then Return
+	If Not $extract And ($sScanner = "Exeinfo PE" And StringInStr($sFileType, "file is not EXE or DLL")) Then Return
 
-	_FiletypeAdd("Exeinfo PE", $sFileType)
+	_FiletypeAdd($sScanner, $sFileType)
 
-	; Return filetype without matching if specified
 	If Not $extract Then Return $sFileType
 
-	; Match known patterns
+	Local $sMatchType = _NormalizeDetectorOutput($sFileType, $sScanner)
+	$g_sPrimaryDetectRaw = $sFileType
+	$g_sPrimaryDetectMatch = $sMatchType
+	$g_sPrimaryDetectScanner = $sScanner
+	$g_bPrimaryStrongHit = _IsStrongPrimaryDetectorHit($sMatchType)
+
+	If $g_bPrimaryStrongHit Then
+		Local $sWinnerType = $sMatchType
+		If $sScanner = "Detect It Easy" Then $sWinnerType = _SummarizeDieDetection($sMatchType)
+		Cout("Primary detector strong match: " & StringReplace($sWinnerType, @CRLF, " | "))
+		LogDetectionWinner($sScanner, $sWinnerType)
+	Else
+		Cout("Primary detector non-strong match: " & StringReplace($sMatchType, @CRLF, " | "))
+	EndIf
+
+	If $g_bStrictPipeline Then Return $sFileType
+
 	Select
-		Case StringInStr($sFileType, "Inno Setup")
+		Case StringInStr($sMatchType, "Inno Setup")
 			checkInno()
 
-		Case StringInStr($sFileType, "WinAce / SFX Factory")
+		Case StringInStr($sMatchType, "WinAce / SFX Factory")
 			extract($TYPE_ACE, t('TERM_SFX') & " ACE " & t('TERM_ARCHIVE'))
 
-		Case StringInStr($sFileType, "Actual Installer")
-			extract($TYPE_ACTUAL, 'Actual Installer ' & t('TERM_PACKAGE'))
+		Case StringInStr($sMatchType, "Actual Installer")
+			extract($TYPE_ACTUAL)
 
-		Case StringInStr($sFileType, "Advanced Installer")
+		Case StringInStr($sMatchType, "Advanced Installer")
 			extract($TYPE_AI, 'Advanced Installer ' & t('TERM_PACKAGE'))
 
-		Case StringInStr($sFileType, "FreeArc")
+		Case StringInStr($sMatchType, "FreeArc")
 			extract($TYPE_FREEARC, 'FreeArc ' & t('TERM_ARCHIVE'))
 
-		Case StringInStr($sFileType, "CreateInstall")
+		Case StringInStr($sMatchType, "CreateInstall")
 			extract($TYPE_CI, 'CreateInstall ' & t('TERM_INSTALLER'))
 
-		Case StringInStr($sFileType, "Excelsior Installer")
+		Case StringInStr($sMatchType, "Excelsior Installer")
 			extract($TYPE_EI, 'Excelsior Installer ' & t('TERM_INSTALLER'))
 
-		Case StringInStr($sFileType, "Ghost Installer Studio")
-			extract($TYPE_GHOST, 'Ghost Installer Studio ' & t('TERM_INSTALLER'))
+		Case StringInStr($sMatchType, "Ghost Installer Studio")
+			extract($TYPE_GHOST)
 
-		Case StringInStr($sFileType, "Gentee Installer") Or StringInStr($sFileType, "Installer VISE")
-			checkIE()
-
-		Case StringInStr($sFileType, "Setup Factory")
+		Case _IsSetupFactoryDetectorHit($sMatchType)
 			CheckTotalObserver('Setup Factory ' & t('TERM_INSTALLER'))
 			checkIE()
 
-		Case StringInStr($sFileType, "install4j")
+		Case _IsInstallExplorerDetectorHit($sMatchType)
+			checkIE()
+
+		Case StringInStr($sMatchType, "install4j")
 			BmsExtract("install4j")
 
-		; Needs to be before InstallShield
-		Case StringInStr($sFileType, "InstallAware")
+		Case StringInStr($sMatchType, "InstallAware")
 			extract($TYPE_7Z, 'InstallAware ' & t('TERM_INSTALLER') & ' ' & t('TERM_PACKAGE'))
 
-		Case StringInStr($sFileType, "Install Creator/Pro")
+		Case StringInStr($sMatchType, "Install Creator/Pro")
 			extract($TYPE_CIC, 'Clickteam Install Creator ' & t('TERM_INSTALLER'))
 
-		Case StringInStr($sFileType, "InstallScript Setup Launcher")
-			extract($TYPE_ISCRIPT, 'InstallScript ' & t('TERM_INSTALLER'))
+		Case StringInStr($sMatchType, "InstallScript Setup Launcher")
+			extract($TYPE_ISCRIPT)
 
-		Case StringInStr($sFileType, "InstallShield")
-			extract($TYPE_ISEXE, 'InstallShield ' & t('TERM_INSTALLER'))
+		Case StringInStr($sMatchType, "InstallShield")
+			extract($TYPE_ISEXE)
 
-		Case StringInStr($sFileType, "KGB SFX")
-			extract($TYPE_KGB, t('TERM_SFX') & ' KGB ' & t('TERM_PACKAGE'))
+		Case StringInStr($sMatchType, "KGB SFX")
+			extract($TYPE_KGB)
 
-		Case StringInStr($sFileType, "Microsoft Visual C++ 7.0") And StringInStr($sFileType, "Custom") And Not StringInStr($sFileType, "Hotfix")
-			extract($TYPE_VSSFX, 'Visual C++ ' & t('TERM_SFX') & ' ' & t('TERM_INSTALLER'))
-
-		Case StringInStr($sFileType, "Microsoft Visual C++ 6.0") And StringInStr($sFileType, "Custom")
-			extract($TYPE_VSSFX_PATH, 'Visual C++ ' & t('TERM_SFX') & '' & t('TERM_INSTALLER'))
-
-		Case StringInStr($sFileType, "www.molebox.com")
+		Case StringInStr($sMatchType, "www.molebox.com")
 			extract($TYPE_MOLE, 'Mole Box ' & t('TERM_CONTAINER'))
 
-		Case StringInStr($sFileType, "Netopsystems AG INSTALLER FEAD")
-			extract($TYPE_FEAD, 'Netopsystems FEAD ' & t('TERM_PACKAGE'))
+		Case StringInStr($sMatchType, "Netopsystems AG INSTALLER FEAD")
+			extract($TYPE_FEAD)
 
-		Case StringInStr($sFileType, "Nullsoft")
-			checkNSIS()
+		Case StringInStr($sMatchType, "Nullsoft")
+			Cout("Primary NSIS/Nullsoft match deferred to generic 7-Zip for reference parity")
 
-		Case StringInStr($sFileType, "RAR SFX")
-			extract($TYPE_RAR, t('TERM_SFX') & ' RAR ' & t('TERM_ARCHIVE'));
+		Case StringInStr($sMatchType, "RAR SFX")
+			Cout("Primary RAR SFX match deferred to generic 7-Zip for reference parity")
 
-		Case StringInStr($sFileType, "RoboForm Installer")
+		Case StringInStr($sMatchType, "RoboForm Installer")
 			extract($TYPE_ROBO, 'RoboForm ' & t('TERM_INSTALLER'))
 
-		Case StringInStr($sFileType, "WiX Installer")
-			extract($TYPE_WIX, 'WiX ' & t('TERM_INSTALLER'))
+		Case StringInStr($sMatchType, "WiX Installer") Or StringInStr($sMatchType, "WiX Toolset Installer")
+			extract($TYPE_WIX, "WiX " & t('TERM_INSTALLER'))
 
-		Case StringInStr($sFileType, "SPx Method") Or StringInStr($sFileType, "Microsoft SFX CAB")
+		Case StringInStr($sMatchType, "Microsoft Windows Installer")
+			extract($TYPE_MSI)
+
+		Case StringInStr($sMatchType, "SPx Method") Or StringInStr($sMatchType, "Microsoft SFX CAB")
 			Local $arcdisp = t('TERM_SFX') & " Microsoft CAB " & t('TERM_ARCHIVE')
-			If StringInStr($sFileType, "rename file *.exe as *.cab") Then
+			If StringInStr($sMatchType, "rename file *.exe as *.cab") Then
 				CreateRenamedCopy("cab")
 				check7z($arcdisp)
 			Else
 				extract($TYPE_CAB, $arcdisp)
 			EndIf
 
-		Case StringInStr($sFileType, "Overlay :  SWF flash object ver", 0)
+		Case StringInStr($sMatchType, "Overlay :  SWF flash object ver")
 			extract($TYPE_SWFEXE, 'Shockwave Flash ' & t('TERM_CONTAINER'))
 
-		Case StringInStr($sFileType, "VMware ThinApp") Or StringInStr($sFileType, "Thinstall") Or StringInStr($sFileType, "ThinyApp Packager", 0)
-			extract($TYPE_THINSTALL, "ThinApp/Thinstall" & t('TERM_ARCHIVE'))
+		Case StringInStr($sMatchType, "VMware ThinApp") Or StringInStr($sMatchType, "Thinstall") Or StringInStr($sMatchType, "ThinyApp Packager")
+			extract($TYPE_THINSTALL)
 
-		Case StringInStr($sFileType, "Wise") Or StringInStr($sFileType, "PEncrypt 4.0")
+		Case StringInStr($sMatchType, "Wise Installer")
+			extract($TYPE_WISE)
+
+		Case StringInStr($sMatchType, "PEncrypt 4.0")
 			extract($TYPE_WISE, 'Wise Installer ' & t('TERM_PACKAGE'))
 
-		Case StringInStr($sFileType, "ZIP SFX") Or (StringInStr($sFileType, "WinZip") And StringInStr($sFileType, "Sfx ver"))
-			extract($TYPE_ZIP, t('TERM_SFX') & ' ZIP ' & t('TERM_ARCHIVE'))
+		Case StringInStr($sMatchType, "ZIP SFX") Or StringInStr($sMatchType, "WinZip")
+			extract($TYPE_ZIP)
 
-		Case StringInStr($sFileType, "Enigma Virtual Box")
+		Case StringInStr($sMatchType, "Enigma Virtual Box")
 			extract($TYPE_ENIGMA, 'Enigma Virtual Box ' & t('TERM_PACKAGE'))
 
-		Case StringInStr($sFileType, ".dmg  Mac OS")
-			extract($TYPE_7Z, "DMG " & t('TERM_IMAGE'))
-
-		Case StringInStr($sFileType, ".pak  Chromium format")
-			extract($TYPE_7Z, "Chromium Pak " & t('TERM_ARCHIVE'))
-
-		Case StringInStr($sFileType, "Explorer cache file")
-			extract($TYPE_7Z, "Explorer Thumbnail " & t('TERM_DATABASE'))
-
-		Case StringInStr($sFileType, "PyInstaller")
+		Case StringInStr($sMatchType, "PyInstaller")
 			extract($TYPE_7Z, "PyInstaller " & t('TERM_PACKAGE'))
 
-		Case StringInStr($sFileType, "MSCF Cab file detected") Or StringInStr($sFileType, "VirtualBox Installer")
+		Case StringInStr($sMatchType, ".dmg  Mac OS")
+			extract($TYPE_7Z, "DMG " & t('TERM_IMAGE'))
+
+		Case StringInStr($sMatchType, ".pak  Chromium format")
+			extract($TYPE_7Z, "Chromium Pak " & t('TERM_ARCHIVE'))
+
+		Case StringInStr($sMatchType, "Explorer cache file")
+			extract($TYPE_7Z, "Explorer Thumbnail " & t('TERM_DATABASE'))
+
+		Case StringInStr($sMatchType, "MSCF Cab file detected") Or StringInStr($sMatchType, "VirtualBox Installer")
 			extract($TYPE_MSCF, "MSCF " & t('TERM_INSTALLER'))
-
-		Case StringInStr($sFileType, "aspack")
-			unpack($PACKER_ASPACK)
-
-		; Not supported
-		Case StringInStr($sFileType, "Astrum InstallWizard") Or StringInStr($sFileType, "clickteam") Or _
-			 StringInStr($sFileType, "NE <- Windows 16bit") Or StringInStr($sFileType, "Enigma Protector")
-			terminate($STATUS_NOTSUPPORTED, $file, $sFileType, $sFileType)
-
-		; Terminate if file cannot be unpacked
-		Case (StringInStr($sFileType, "Not packed") And Not StringInStr($sFileType, "Microsoft Visual C++")) Or _
-			  StringInStr($sFileType, "ELF executable") Or StringInStr($sFileType, "Microsoft Visual C# / Basic.NET") Or _
-			  StringInStr($sFileType, "Autoit") Or StringInStr($sFileType, "LE <- Linear Executable") Or _
-			  StringInStr($sFileType, "NOT EXE - Empty file") Or StringInStr($sFileType, "Native - System driver") Or _
-			  StringInStr($sFileType, "Denuvo protector") Or StringInStr($sFileType, "Kaspersky AV Pack") Or _
-			  StringInStr($sFileType, "TASM / MASM / FASM - assembler")
-			terminate($STATUS_NOTPACKED, $file, $sFileType, $sFileType)
-
-		; Needs to be at the end, otherwise files might not be recognized
-		Case StringInStr($sFileType, "upx") And Not StringInStr($sFileType, "sign like")
-			unpack($PACKER_UPX)
-
-		Case Else
-			UserDefCompare($aExeinfoDefinitions, $sFileType, "Exeinfo")
 	EndSelect
 
-	Cout("No matches for known Exeinfo PE types")
+	Return $sFileType
 EndFunc
 
 ; Scan file with PEiD
@@ -1307,12 +1778,13 @@ Func FileScan_Peid($sType, $analyze = 1)
 		Sleep(100)
 		$sFileType = ControlGetText("PEiD v", "", "Edit2")
 		$TimerDiff = TimerDiff($TimerStart)
-		If $TimerDiff > $Timeout Then ExitLoop
+		If $TimerDiff > ($Timeout * 1000) Then ExitLoop
 	WEnd
 	WinClose("PEiD v")
 
 	_FiletypeAdd("PEiD (" & $sType & ")", $sFileType)
 	Cout($sFileType)
+	_PipelineStep("DETECTOR", "PEiD (" & $sType & ")", _PipelineDetectorStatus($sFileType, Not StringIsSpace($sFileType)), _PipelineCompactDetails($sFileType))
 
 	; Restore previous PEiD options
 	If $bHasRegKey Then
@@ -1343,8 +1815,8 @@ Func FileScan_Peid($sType, $analyze = 1)
 		Case StringInStr($sFileType, "Inno Setup", 0)
 			checkInno()
 
-		Case StringInStr($sFileType, "Installer VISE", 0)
-			extract("ie", 'Installer VISE ' & t('TERM_INSTALLER'))
+		Case _IsInstallExplorerDetectorHit($sFileType)
+			checkIE()
 
 		Case StringInStr($sFileType, "KGB SFX", 0)
 			extract($TYPE_KGB, t('TERM_SFX') & ' KGB ' & t('TERM_PACKAGE'))
@@ -1356,19 +1828,20 @@ Func FileScan_Peid($sType, $analyze = 1)
 			extract($TYPE_VSSFX_PATH, 'Visual C++ ' & t('TERM_SFX') & '' & t('TERM_INSTALLER'))
 
 		Case StringInStr($sFileType, "Nullsoft PiMP SFX", 0)
-			checkNSIS()
+			Cout("PEiD NSIS/Nullsoft match deferred to generic 7-Zip for reference parity")
 
 		Case StringInStr($sFileType, "PEtite", 1)
 			If Not checkArj() Then extract($TYPE_ACE, t('TERM_SFX') & ' ACE ' & t('TERM_ARCHIVE'))
 
 		Case StringInStr($sFileType, "RAR SFX", 0)
-			extract($TYPE_RAR, t('TERM_SFX') & ' RAR ' & t('TERM_ARCHIVE'))
+			Cout("PEiD RAR SFX match deferred to generic 7-Zip for reference parity")
 
 		Case StringInStr($sFileType, "RoboForm Installer", 0)
 			extract($TYPE_ROBO, 'RoboForm ' & t('TERM_INSTALLER'))
 
 		Case StringInStr($sFileType, "Setup Factory 6.x", 0)
-			extract("ie", 'Setup Factory ' & t('TERM_ARCHIVE'))
+			CheckTotalObserver('Setup Factory ' & t('TERM_INSTALLER'))
+			checkIE()
 
 		Case StringInStr($sFileType, "SPx Method", 0) Or StringInStr($sFileType, "CAB SFX", 0)
 			extract($TYPE_CAB, t('TERM_SFX') & ' Microsoft CAB ' & t('TERM_ARCHIVE'))
@@ -1396,9 +1869,15 @@ EndFunc
 
 ; Compare unix file tool's return with supported file types
 Func filecompare($sFileType)
+	If $g_bStrictPipeline Then
+		If $g_sStoredUnixType = "" Then $g_sStoredUnixType = $sFileType
+		Return
+	EndIf
 	Select
 		Case StringInStr($sFileType, "7 zip archive data") Or StringInStr($sFileType, "7-zip archive data")
 			extract($TYPE_7Z, '7-Zip ' & t('TERM_ARCHIVE'))
+		Case StringInStr($sFileType, "JAR (ARJ Software", 0) Or StringInStr($sFileType, "ARJ Software, Inc.) archive data", 0)
+			extract("jar_arj", 'JAR (ARJ Software) ' & t('TERM_ARCHIVE'))
 		Case StringInStr($sFileType, "RAR archive data")
 			extract($TYPE_RAR, 'RAR ' & t('TERM_ARCHIVE'))
 		Case StringInStr($sFileType, "lzip compressed data")
@@ -1442,7 +1921,7 @@ Func filecompare($sFileType)
 		Case StringInStr($sFileType, "MS Windows HtmlHelp Data")
 			extract($TYPE_CHM, 'Compiled HTML ' & t('TERM_HELP'))
 		Case StringInStr($sFileType, "MIME entity text") Or StringInStr($sFileType, "mhtml")
-			extract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'))
+			extract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'), "mhtml")
 		Case StringInStr($sFileType, "MoPaQ", 0)
 			CheckTotalObserver('MPQ ' & t('TERM_ARCHIVE'))
 		Case StringInStr($sFileType, "MIME entity")
@@ -1489,6 +1968,14 @@ EndFunc
 ; Compare TrID's return with supported file types
 Func tridcompare($sFileType)
 	Cout("--> " & $sFileType)
+	If $g_bStrictPipeline Then
+		If $g_sStoredTridType = "" Then
+			$g_sStoredTridType = $sFileType
+		ElseIf Not StringInStr($g_sStoredTridType, $sFileType) Then
+			$g_sStoredTridType &= @CRLF & $sFileType
+		EndIf
+		Return
+	EndIf
 	Select
 		Case StringInStr($sFileType, "7-Zip compressed archive")
 			extract($TYPE_7Z, '7-Zip ' & t('TERM_ARCHIVE'))
@@ -1618,7 +2105,7 @@ Func tridcompare($sFileType)
 			extract($TYPE_LZX, 'LZX ' & t('TERM_COMPRESSED'))
 
 		Case StringInStr($sFileType, "MIME HTML archive format") Or StringInStr($sFileType, "E-Mail message")
-			extract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'))
+			extract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'), "mhtml")
 
 		Case StringInStr($sFileType, "Microsoft Windows Installer merge module")
 			extract($TYPE_MSM, 'Windows Installer (MSM) ' & t('TERM_MERGE_MODULE'))
@@ -1764,7 +2251,11 @@ Func tridcompare($sFileType)
 			extract($TYPE_FREEARC, 'FreeArc ' & t('TERM_ARCHIVE'))
 
 		Case StringInStr($sFileType, "InstallShield setup")
-			extract($TYPE_ISEXE, 'InstallShield ' & t('TERM_INSTALLER'))
+			If _HasCorroboratedInstallShieldHit() Then
+				extract($TYPE_ISEXE, 'InstallShield ' & t('TERM_INSTALLER'))
+			Else
+				Cout("Ignoring weak TrID InstallShield match without corroboration")
+			EndIf
 
 		Case StringInStr($sFileType, "audio") Or StringInStr($sFileType, "FLAC lossless")
 			extract($TYPE_AUDIO, t('TERM_AUDIO') & ' ' & t('TERM_FILE'))
@@ -1816,6 +2307,271 @@ Func UserDefCompare(ByRef $aDefinitions, $sFileType, $sSection)
 			If (StringInStr($sFileType, $aDefinitions[$i][1])) Then extract($aDefinitions[$i][0])
 		Next
 	Next
+EndFunc
+
+Func _IsBrokenDieOutput($sText)
+	If StringIsSpace($sText) Then Return True
+
+	Local $s = StringLower(StringStripWS(StringReplace(StringReplace($sText, @CR, " "), @LF, " "), 7))
+
+	If StringInStr($s, "installer:") _
+		Or StringInStr($s, "overlay:") _
+		Or StringInStr($s, "data:") _
+		Or StringInStr($s, "packer:") _
+		Or StringInStr($s, "protector:") _
+		Or StringInStr($s, "compiler:") _
+		Or StringInStr($s, "linker:") _
+		Or StringInStr($s, "sign tool:") _
+		Or StringInStr($s, "audio:") _
+		Or StringInStr($s, "video:") _
+		Or StringInStr($s, "format:") _
+		Or StringInStr($s, "archive:") _
+		Or StringInStr($s, "sfx:") Then
+		Return False
+	EndIf
+
+	If StringInStr($s, "typeerror:") Then Return True
+	If StringInStr($s, "syntaxerror:") Then Return True
+	If StringInStr($s, "referenceerror:") Then Return True
+	If StringInStr($s, "uncaught exception") Then Return True
+	If StringInStr($s, "cannot open") Then Return True
+	If StringInStr($s, "can't open") Then Return True
+	If StringInStr($s, "no such file") Then Return True
+	If StringInStr($s, "is not recognized as an internal or external command") Then Return True
+
+	If StringInStr($s, "warning:") Then
+		If Not StringInStr($s, "installer:") _
+			And Not StringInStr($s, "overlay:") _
+			And Not StringInStr($s, "data:") _
+			And Not StringInStr($s, "packer:") _
+			And Not StringInStr($s, "protector:") _
+			And Not StringInStr($s, "compiler:") _
+			And Not StringInStr($s, "linker:") _
+			And Not StringInStr($s, "sign tool:") _
+			And Not StringInStr($s, "audio:") _
+			And Not StringInStr($s, "video:") _
+			And Not StringInStr($s, "format:") _
+			And Not StringInStr($s, "archive:") _
+			And Not StringInStr($s, "sfx:") Then
+			Return True
+		EndIf
+	EndIf
+
+	Return False
+EndFunc
+
+; Normalize primary detector output so existing Exeinfo-style matching continues to work
+Func _NormalizeDetectorOutput($sFileType, $sScanner = "")
+	If $sScanner <> "Detect It Easy" Then Return $sFileType
+
+	Local $sMatchType = $sFileType
+	Local $sNorm = StringLower($sFileType)
+
+	If StringInStr($sNorm, "nsis") And Not StringInStr($sMatchType, "Nullsoft") Then $sMatchType &= @CRLF & "Nullsoft"
+	If StringInStr($sNorm, "nullsoft") And Not StringInStr($sMatchType, "Nullsoft") Then $sMatchType &= @CRLF & "Nullsoft"
+
+	If StringInStr($sNorm, "inno setup") And Not StringInStr($sMatchType, "Inno Setup") Then $sMatchType &= @CRLF & "Inno Setup"
+
+	If StringInStr($sNorm, "installshield") And Not StringInStr($sMatchType, "InstallShield") Then $sMatchType &= @CRLF & "InstallShield"
+
+	If (StringInStr($sNorm, "msi installer") _
+		Or StringInStr($sNorm, "windows installer") _
+		Or StringInStr($sNorm, "installer database") _
+		Or StringInStr($sNorm, "microsoft installer (msi)") _
+		Or StringInStr($sNorm, "windows installer xml toolset") _
+		Or StringInStr($sNorm, "wix toolset")) _
+		And Not StringInStr($sMatchType, "Microsoft Windows Installer") Then
+		$sMatchType &= @CRLF & "Microsoft Windows Installer"
+	EndIf
+
+	If StringInStr($sNorm, "wix toolset installer") And Not StringInStr($sMatchType, "WiX Installer") Then $sMatchType &= @CRLF & "WiX Installer"
+	If StringInStr($sNorm, "advanced installer") And Not StringInStr($sMatchType, "Advanced Installer") Then $sMatchType &= @CRLF & "Advanced Installer"
+	If StringInStr($sNorm, "installaware") And Not StringInStr($sMatchType, "InstallAware") Then $sMatchType &= @CRLF & "InstallAware"
+	If StringInStr($sNorm, "setup factory") And Not StringInStr($sMatchType, "Setup Factory") Then $sMatchType &= @CRLF & "Setup Factory"
+	If StringInStr($sNorm, "install4j") And Not StringInStr($sMatchType, "install4j") Then $sMatchType &= @CRLF & "install4j"
+	If StringInStr($sNorm, "wise") And Not StringInStr($sMatchType, "Wise Installer") Then $sMatchType &= @CRLF & "Wise Installer"
+	If StringInStr($sNorm, "squirrel") And Not StringInStr($sMatchType, "Squirrel") Then $sMatchType &= @CRLF & "Squirrel"
+
+	If StringInStr($sNorm, "rar") And StringInStr($sNorm, "sfx") And Not StringInStr($sMatchType, "RAR SFX") Then $sMatchType &= @CRLF & "RAR SFX"
+	If StringInStr($sNorm, "zip") And StringInStr($sNorm, "sfx") And Not StringInStr($sMatchType, "ZIP SFX") Then $sMatchType &= @CRLF & "ZIP SFX"
+	If (StringInStr($sNorm, "7-zip sfx") Or StringInStr($sNorm, "sfx: 7-zip") Or StringInStr($sNorm, "archive: 7-zip")) _
+		And Not StringInStr($sMatchType, "7-Zip SFX") Then $sMatchType &= @CRLF & "7-Zip SFX"
+	If StringInStr($sNorm, "cab") And StringInStr($sNorm, "sfx") And Not StringInStr($sMatchType, "Microsoft SFX CAB") Then $sMatchType &= @CRLF & "Microsoft SFX CAB"
+
+	If StringInStr($sNorm, "molebox") And Not StringInStr($sMatchType, "www.molebox.com") Then $sMatchType &= @CRLF & "www.molebox.com"
+	If StringInStr($sNorm, "thinstall") And Not StringInStr($sMatchType, "VMware ThinApp") Then $sMatchType &= @CRLF & "VMware ThinApp"
+	If StringInStr($sNorm, "thinapp") And Not StringInStr($sMatchType, "VMware ThinApp") Then $sMatchType &= @CRLF & "VMware ThinApp"
+	If StringInStr($sNorm, "pyinstaller") And Not StringInStr($sMatchType, "PyInstaller") Then $sMatchType &= @CRLF & "PyInstaller"
+	If StringInStr($sNorm, "enigma virtual box") And Not StringInStr($sMatchType, "Enigma Virtual Box") Then $sMatchType &= @CRLF & "Enigma Virtual Box"
+
+	If StringInStr($sNorm, "mscf") And Not StringInStr($sMatchType, "MSCF Cab file detected") Then $sMatchType &= @CRLF & "MSCF Cab file detected"
+	If StringInStr($sNorm, "upx") And Not StringInStr($sMatchType, "upx") Then $sMatchType &= @CRLF & "upx"
+	If StringInStr($sNorm, "aspack") And Not StringInStr($sMatchType, "aspack") Then $sMatchType &= @CRLF & "aspack"
+
+	If StringInStr($sNorm, "autoit") And Not StringInStr($sMatchType, "Autoit") Then $sMatchType &= @CRLF & "Autoit"
+
+	Return $sMatchType
+EndFunc
+
+Func _SummarizeDieDetection($sText)
+	If StringIsSpace($sText) Then Return $sText
+
+	Local $aLines = StringSplit(StringStripCR($sText), @LF, 1)
+	If @error Or Not IsArray($aLines) Then Return $sText
+
+	Local $sInstaller = "", $sSfx = "", $sArchive = "", $sData = "", $sPacker = "", $sOverlay = ""
+
+	For $i = 1 To $aLines[0]
+		Local $line = StringStripWS($aLines[$i], 3)
+		If $line = "" Then ContinueLoop
+
+		If StringInStr($line, "Installer:", 2) = 1 And $sInstaller = "" Then
+			$sInstaller = $line
+		ElseIf StringInStr($line, "Sfx:", 2) = 1 And $sSfx = "" Then
+			$sSfx = $line
+		ElseIf StringInStr($line, "Archive:", 2) = 1 And $sArchive = "" Then
+			$sArchive = $line
+		ElseIf StringInStr($line, "Data:", 2) = 1 And $sData = "" Then
+			$sData = $line
+		ElseIf StringInStr($line, "Packer:", 2) = 1 And $sPacker = "" Then
+			$sPacker = $line
+		ElseIf StringInStr($line, "Overlay:", 2) = 1 And $sOverlay = "" Then
+			$sOverlay = $line
+		EndIf
+	Next
+
+	Local $sSummary = ""
+	If $sInstaller <> "" Then
+		$sSummary = $sInstaller
+		If $sData <> "" Then $sSummary &= @CRLF & $sData
+	ElseIf $sSfx <> "" Then
+		$sSummary = $sSfx
+		If $sArchive <> "" Then $sSummary &= @CRLF & $sArchive
+	ElseIf $sPacker <> "" Then
+		$sSummary = $sPacker
+		If $sOverlay <> "" Then $sSummary &= @CRLF & $sOverlay
+	ElseIf $sArchive <> "" Then
+		$sSummary = $sArchive
+	Else
+		Return $sText
+	EndIf
+
+	Return $sSummary
+EndFunc
+
+Func _HasCorroboratedInstallShieldHit()
+	For $i = 0 To UBound($aFiletype) - 1
+		If $aFiletype[$i][0] = "TrID" Then ContinueLoop
+		If StringInStr($aFiletype[$i][1], "InstallShield") Or StringInStr($aFiletype[$i][1], "InstallScript") Then Return True
+	Next
+	Return False
+EndFunc
+
+Func _IsInstallExplorerDetectorHit($sText)
+	If StringIsSpace($sText) Then Return False
+
+	Local $s = StringLower($sText)
+	If StringInStr($s, "installer vise") Then Return True
+	If StringInStr($s, "installer: vise") Then Return True
+	If StringInStr($s, "installer - vise") Then Return True
+	If StringInStr($s, "vise mindvision") Then Return True
+	If StringInStr($s, "vise32ex.dll") Then Return True
+	If StringInStr($s, "gentee installer") Then Return True
+
+	Return False
+EndFunc
+
+Func _IsSetupFactoryDetectorHit($sText)
+	If StringIsSpace($sText) Then Return False
+
+	Local $s = StringLower($sText)
+	If StringInStr($s, "setup factory") Then Return True
+
+	Return False
+EndFunc
+
+Func _FileContainsAsciiMarker($sPath, $sNeedle, $iMaxBytes = 4194304)
+	Local $hFile = FileOpen($sPath, $FO_BINARY)
+	If $hFile = -1 Then Return False
+
+	Local $bData = FileRead($hFile, $iMaxBytes)
+	FileClose($hFile)
+	If @error Or BinaryLen($bData) = 0 Then Return False
+
+	Local $sHaystack = StringLower(String($bData))
+	Local $sNeedleHex = StringLower(StringTrimLeft(String(StringToBinary($sNeedle, 1)), 2))
+	Return StringInStr($sHaystack, $sNeedleHex) > 0
+EndFunc
+
+Func _IsSetupFactoryCandidate()
+	If _IsSetupFactoryDetectorHit($g_sPrimaryDetectRaw) Then Return True
+	If _IsSetupFactoryDetectorHit($g_sPrimaryDetectMatch) Then Return True
+	If _IsSetupFactoryDetectorHit($g_sStoredTridType) Then Return True
+	If _IsSetupFactoryDetectorHit($g_sStoredUnixType) Then Return True
+
+	Return False
+EndFunc
+
+Func _IsInstallExplorerCandidate()
+	If _IsInstallExplorerDetectorHit($g_sPrimaryDetectRaw) Then Return True
+	If _IsInstallExplorerDetectorHit($g_sPrimaryDetectMatch) Then Return True
+	If _IsInstallExplorerDetectorHit($g_sStoredTridType) Then Return True
+	If _IsInstallExplorerDetectorHit($g_sStoredUnixType) Then Return True
+
+	; Bioruebe succeeded on this family because checkIE() was tried for EXEs.
+	; Keep the new strict pipeline narrow by using the embedded VISE runtime marker instead of trying IE for every EXE.
+	If _FileContainsAsciiMarker($file, "vise32ex.dll") Then Return True
+
+	Return False
+EndFunc
+
+Func _IsStrongPrimaryDetectorHit($sText)
+	If StringIsSpace($sText) Then Return False
+
+	Local $s = StringLower($sText)
+
+	If StringInStr($s, "inno setup") Then Return True
+	If StringInStr($s, "nullsoft") Then Return True
+	If StringInStr($s, "nsis") Then Return True
+	If StringInStr($s, "installshield") Then Return True
+	If StringInStr($s, "microsoft installer") Then Return True
+	If StringInStr($s, "windows installer") Then Return True
+	If StringInStr($s, "msi") And StringInStr($s, "installer") Then Return True
+	If StringInStr($s, "wix toolset installer") Then Return True
+	If StringInStr($s, "wix installer") Then Return True
+	If StringInStr($s, "advanced installer") Then Return True
+	If StringInStr($s, "installaware") Then Return True
+	If StringInStr($s, "setup factory") Then Return True
+	If StringInStr($s, "installer vise") Then Return True
+	If StringInStr($s, "installer: vise") Then Return True
+	If StringInStr($s, "installer - vise") Then Return True
+	If StringInStr($s, "vise mindvision") Then Return True
+	If StringInStr($s, "vise32ex.dll") Then Return True
+	If StringInStr($s, "gentee installer") Then Return True
+	If StringInStr($s, "install4j") Then Return True
+	If StringInStr($s, "wise installer") Then Return True
+	If StringInStr($s, "squirrel") Then Return True
+
+	If StringInStr($s, "7-zip sfx") Then Return True
+	If StringInStr($s, "sfx: 7-zip") Then Return True
+	If StringInStr($s, "archive: 7-zip") Then Return True
+	If StringInStr($s, "rar sfx") Then Return True
+	If StringInStr($s, "zip sfx") Then Return True
+	If StringInStr($s, "microsoft sfx cab") Then Return True
+	If StringInStr($s, "cab archive") And StringInStr($s, "overlay:") Then Return True
+
+	If StringInStr($s, "www.molebox.com") Then Return True
+	If StringInStr($s, "vmware thinapp") Then Return True
+	If StringInStr($s, "thinstall") Then Return True
+	If StringInStr($s, "pyinstaller") Then Return True
+	If StringInStr($s, "enigma virtual box") Then Return True
+
+	; DiE often reports Atlantis-style custom installers only as Delphi/VCL/compiler
+	; hints. If the PE contains the FILES resource, keep DiE as the strong
+	; primary detector instead of falling through to Exeinfo PE.
+	If (StringInStr($s, "delphi") Or StringInStr($s, "vcl") Or StringInStr($s, "turbo linker")) And _HasAtlantisFilesResource() Then Return True
+
+	Return False
 EndFunc
 
 ; Open ExeInfo PE and return an array containing initial registry values
@@ -1880,7 +2636,7 @@ Func RipExeInfo($tempoutdir, $sCommand)
 		Sleep(200)
 		$return = _GUICtrlListBox_FindString($hControl, "--- End of file ---", True)
 		If $return < 0 Then $return = _GUICtrlListBox_FindString($hControl, "-- End of file --", True)
-		If TimerDiff($TimerStart) > $Timeout Then ExitLoop
+		If TimerDiff($TimerStart) > ($Timeout * 1000) Then ExitLoop
 	WEnd
 
 	Local $success = _GUICtrlListBox_FindString($hControl, "--- Not found , sorry ---", True) == -1
@@ -1915,20 +2671,24 @@ EndFunc
 
 ; Determine if 7-zip can extract the file
 Func check7z($arcdisp = 0, $bIsDiskImage = False, $returnSuccess = False, $returnFail = False)
-	If $7zfailed Then Return
+	If $7zfailed Or $g_bArchiveIntegrityError Then Return
 
 	Cout("Testing 7zip")
 	_CreateTrayMessageBox(t('TERM_TESTING') & " " & ($arcdisp == 0? "7-Zip": $arcdisp))
-	Local $return = FetchStdout($7z & ' l "' & $file & '"', $filedir, @SW_HIDE)
+	Local $sListCmd = $7z & ' l ' & (($silentmode Or $batchEnabled)? '-p -slt ': '') & '"' & $file & '"'
+	Local $return = FetchStdout($sListCmd, $filedir, @SW_HIDE)
 
-	If StringInStr($return, "Listing archive:") And Not (StringInStr($return, "Errors: ") And StringInStr($return, "Can not open the file as ")) Then
+	If StringInStr($return, "Listing archive:") And Not (StringInStr($return, "Errors:") And (StringInStr($return, "Can not open the file as") Or StringInStr($return, "Cannot open the file as archive"))) Then
 		_DeleteTrayMessageBox()
 		If $bIsDiskImage Then
-			Return extractDiskImage($TYPE_7Z, $arcdisp)
+			Return extractDiskImage($TYPE_7Z, $arcdisp, "", $returnSuccess, $returnFail)
 		ElseIf $arcdisp Then
 			Return extract($TYPE_7Z, $arcdisp, "", $returnSuccess, $returnFail)
 		ElseIf $fileext = "exe" Then
-			If StringInStr($return, "InstallShield") Then CheckInstallShieldCab()
+			If StringInStr($return, "InstallShield") Then
+				CheckInstallShieldCab()
+				Return extract($TYPE_ISEXE, "InstallShield " & t('TERM_INSTALLER'), "", $returnSuccess, $returnFail)
+			EndIf
 
 			Return extract($TYPE_7Z, "7-Zip " & t('TERM_INSTALLER') & " " & t('TERM_PACKAGE'), "", $returnSuccess, $returnFail)
 		Else
@@ -1942,15 +2702,16 @@ Func check7z($arcdisp = 0, $bIsDiskImage = False, $returnSuccess = False, $retur
 EndFunc
 
 ; Determine if file is ALZip archive
-Func CheckAlz()
+Func CheckAlz($returnSuccess = False, $returnFail = False)
 	Cout("Testing ALZ")
 
 	_CreateTrayMessageBox(t('TERM_TESTING') & ' ALZ ' & t('TERM_ARCHIVE'))
 	Local $return = FetchStdout($alz & ' -l "' & $file & '"', $filedir, @SW_HIDE)
 
 	_DeleteTrayMessageBox()
-	If StringInStr($return, "Listing archive:") And Not (StringInStr($return, "corrupted file") _
-	Or StringInStr($return, "file open error")) Then extract($TYPE_ALZ, -1)
+	; unalz can print "It's corrupted file." even when it still produces a usable listing.
+	; Treat a real file listing as a valid ALZ probe, but still reject open/read failures.
+	If StringInStr($return, "Listing archive:") And StringInStr($return, "Total") And Not StringInStr($return, "file open error") Then Return extract($TYPE_ALZ, -1, "", $returnSuccess, $returnFail)
 
 	Return False
 EndFunc
@@ -2004,7 +2765,7 @@ Func CheckGame($bUseGaup = True, $bUseGarbro = True)
 
 	If $bUseGaup Then
 		; Check GAUP first
-		Local $return = FetchStdout($quickbms & ' -l "' & $bindir & $gaup & '" "' & $file & '"', $filedir, @SW_HIDE, -1)
+		Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $gaup & '" "' & $file & '"', $filedir, @SW_HIDE, -1)
 
 		If @error Or StringInStr($return, "Target directory:", 0) Or StringInStr($return, "0 files found", 0) Or StringInStr($return, "Error", 0) _
 		Or StringInStr($return, "exception occured", 0) Or StringInStr($return, "not supported", 0) Or $return == "" Then
@@ -2050,9 +2811,11 @@ Func CheckGarbro($arcdisp = 0)
 	HasNetFramework(4.6)
 	Cout("Testing GARbro")
 	_CreateTrayMessageBox(t('TERM_TESTING') & ' GARbro ' & t('TERM_ARCHIVE'))
-	Local $return = FetchStdout($garbro & ' l "' & $file & '"', $filedir, @SW_HIDE)
+	Local $sGarbroListCmd = Quote($garbro, True) & ' l "' & $file & '" || ' & Quote($garbro, True) & ' list "' & $file & '"'
+	Local $return = FetchStdout(@ComSpec & ' /d /c ' & $sGarbroListCmd, $filedir, @SW_HIDE)
 	If Not @error And Not StringInStr($return, "Error: Input file has an unknown format") And Not StringInStr($return, "Error: Archive is empty") Then
-		$return = StringStripWS(StringStripCR(FetchStdout($garbro & ' i "' & $file & '"', $filedir, @SW_HIDE, -1)), 8)
+		Local $sGarbroInfoCmd = Quote($garbro, True) & ' i "' & $file & '" || ' & Quote($garbro, True) & ' info "' & $file & '"'
+		$return = StringStripWS(StringStripCR(FetchStdout(@ComSpec & ' /d /c ' & $sGarbroInfoCmd, $filedir, @SW_HIDE, -1)), 8)
 		If $return == "ZIP" Then check7z()
 
 		extract($TYPE_GARBRO, $arcdisp? $arcdisp: $return & ' ' & t('TERM_GAME') & t('TERM_FILE'))
@@ -2068,7 +2831,7 @@ Func checkIE()
 
 	Cout("Testing InstallExplorer")
 	_CreateTrayMessageBox(t('TERM_TESTING') & ' InstallExplorer ' & t('TERM_INSTALLER'))
-	Local $return = FetchStdout($quickbms & ' -l "' & $bindir & $ie & '" "' & $file & '"', $filedir, @SW_HIDE)
+	Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $ie & '" "' & $file & '"', $filedir, @SW_HIDE)
 	_DeleteTrayMessageBox()
 
 	If StringInStr($return, "Target directory:", 0) Or StringInStr($return, "0 files found", 0) Or StringInStr($return, "Error", 0) _
@@ -2081,9 +2844,38 @@ Func checkIE()
 	extract($TYPE_QBMS, 'InstallExplorer ' & t('TERM_INSTALLER'), $ie)
 EndFunc
 
+; Evaluate whether innoextract probe output indicates the installer is usable for extraction
+Func _InnoExtractProbeUsable($sText)
+	If StringInStr($sText, "Not a supported Inno Setup installer!", 0) Then Return False
+	If StringInStr($sText, "Stream error while parsing setup headers!", 0) Then Return False
+	If StringInStr($sText, "error reason:", 0) Then Return False
+	If StringRegExp($sText, "(?i)Done with\s+[1-9]\d*\s+error") Then Return False
+	Return True
+EndFunc
+
 ; Determine if file is Inno Setup installer
 Func checkInno()
 	If $innofailed Then Return False
+
+	Cout("Testing Inno Setup")
+	_CreateTrayMessageBox(t('TERM_TESTING') & " Inno Setup " & t('TERM_INSTALLER'))
+	_DeleteTrayMessageBox()
+
+	; Keep extraction order strict: innounp -> innoextract -> 7z.
+	; Do not probe with innoextract before extraction, as that changes the visible/tool order in logs.
+	$g_bInnoExtractUsable = True
+
+	Return extract($TYPE_INNO, "Inno Setup " & t('TERM_INSTALLER'), False)
+EndFunc
+
+; Bioruebe-compatible generic EXE probe: checkInno() used to test Inno with
+; innoextract -i and then call checkIE() for non-Inno executables.
+; Keep this separate so detector-confirmed Inno still uses the newer innounp -> innoextract order.
+Func _CheckBioruebeInnoThenIEFallback()
+	If $innofailed Then
+		checkIE()
+		Return False
+	EndIf
 
 	Cout("Testing Inno Setup")
 	_CreateTrayMessageBox(t('TERM_TESTING') & " Inno Setup " & t('TERM_INSTALLER'))
@@ -2092,8 +2884,10 @@ Func checkInno()
 
 	_DeleteTrayMessageBox()
 
-	If Not StringInStr($sReturn, "Not a supported Inno Setup installer!", 0) Then _
+	If Not StringInStr($sReturn, "Not a supported Inno Setup installer!", 0) Then
+		$g_bInnoExtractUsable = True
 		Return extract($TYPE_INNO, "Inno Setup " & t('TERM_INSTALLER'), StringInStr($sReturn, "GOG.com game ID is"))
+	EndIf
 
 	$innofailed = True
 	checkIE()
@@ -2111,13 +2905,234 @@ Func CheckInstallShieldCab()
 	extract($TYPE_ISCAB, "InstallShield CAB " & t('TERM_ARCHIVE'))
 EndFunc
 
+Func TryInstallShieldCabFallback($arcdisp = 0)
+	Cout("Testing InstallShield CAB")
+	Local $sCab = _FileSearchFirst($filedir, "data*.cab")
+	If @error Then
+		Cout("InstallShield CAB fallback not available or failed")
+		Return False
+	EndIf
+
+	Local $sSavedFile = $file
+	FilenameParse($sCab)
+	Local $bOk = extract($TYPE_ISCAB, "InstallShield CAB " & t('TERM_ARCHIVE'), "", True, True)
+	FilenameParse($sSavedFile)
+	If $bOk Then
+		LogExtractorWinner("InstallShield CAB")
+		Return True
+	EndIf
+	Cout("InstallShield CAB fallback not available or failed")
+	Return False
+EndFunc
+
+; Detect InstallShield data*.cab sets before the generic Microsoft CAB path
+Func _IsInstallShieldCabCandidate()
+	If $fileext <> "cab" Then Return False
+	If Not StringRegExp($filenamefull, "(?i)^data\d+\.cab$") Then Return False
+	If FileExists($filedir & "\data1.hdr") Then Return True
+	If FileExists($filedir & "\" & $filename & ".hdr") Then Return True
+	Return False
+EndFunc
+
+Func TryIsXUnpackFallback($tempoutdir)
+	If Not HasPlugin($isxunp) Then
+		Cout("IsXunpack fallback not available")
+		Return False
+	EndIf
+
+	Cout("Trying IsXunpack fallback")
+	DirCreate($tempoutdir)
+	Local $sTempInput = $tempoutdir & "\" & $filenamefull
+	If Not FileCopy($file, $sTempInput, 9) Then
+		Cout("IsXunpack fallback could not copy input file")
+		Return False
+	EndIf
+
+	Run(_MakeCommand($isxunp & ' "' & $sTempInput & '"', True), $tempoutdir)
+	WinWait(@ComSpec, "", 5)
+	If WinExists(@ComSpec) Then
+		WinActivate(@ComSpec)
+		Send("{ENTER}")
+	EndIf
+	ProcessWaitClose($isxunp, 30)
+	FileDelete($sTempInput)
+
+	If _DirGetSize($tempoutdir) > 0 Then
+		MoveFiles($tempoutdir, $outdir, False, "", True, True)
+		If _DirGetSize($outdir, $initdirsize + 1) > $initdirsize Or FileGetTime($outdir, 0, 1) <> $dirmtime Then
+			Cout("IsXunpack fallback extracted usable output")
+			LogExtractorWinner("IsXunpack")
+			Return True
+		EndIf
+	EndIf
+
+	Cout("IsXunpack fallback produced no usable output")
+	Return False
+EndFunc
+
+Func TryISxFallback($tempoutdir)
+	Local $aCandidates[2]
+	If @OSArch = "X64" Then
+		$aCandidates[0] = $isx
+		$aCandidates[1] = $isx_x86
+	Else
+		$aCandidates[0] = $isx_x86
+		$aCandidates[1] = $isx
+	EndIf
+
+	For $i = 0 To 1
+		If Not HasPlugin($aCandidates[$i]) Then ContinueLoop
+		Cout("Trying " & $aCandidates[$i] & " fallback")
+		DirRemove($tempoutdir, 1)
+		DirCreate($tempoutdir)
+		RunWait(_MakeCommand($aCandidates[$i], True) & ' "' & $file & '" "' & $tempoutdir & '"', $outdir)
+		If _DirGetSize($tempoutdir) > 0 Then
+			Local $bHasExtBin = _HasInstallShieldExtBin($tempoutdir)
+			Local $bExtBinExtracted = False
+			If $bHasExtBin Then
+				If _HasStrictInstallShieldExtBin($tempoutdir) Then
+					$bExtBinExtracted = TryInstallShieldExtBinStage2($tempoutdir)
+					If Not $bExtBinExtracted Then
+						Cout($aCandidates[$i] & " produced payload-sized InstallShield _ext.bin, but stage-2 extraction failed; continuing fallbacks")
+						DirRemove($tempoutdir, 1)
+						ContinueLoop
+					EndIf
+				Else
+					Cout($aCandidates[$i] & " produced only small/stub InstallShield _ext.bin; accepting ISx stage-1 output")
+				EndIf
+			EndIf
+			MoveFiles($tempoutdir, $outdir, False, "", True, True)
+			If _DirGetSize($outdir, $initdirsize + 1) > $initdirsize Or FileGetTime($outdir, 0, 1) <> $dirmtime Then
+				Cout($aCandidates[$i] & " fallback extracted usable output")
+				LogExtractorWinner($aCandidates[$i] & ($bExtBinExtracted ? " + 7z" : ""))
+				Return True
+			EndIf
+		EndIf
+	Next
+
+	Cout("ISx fallback not available or failed")
+	Return False
+EndFunc
+
+Func _HasInstallShieldExtBin($sRootDir)
+	Local $aExtBins = _FileListToArrayRec($sRootDir, "*_ext.bin", $FLTAR_FILES, $FLTAR_RECUR, $FLTAR_NOSORT, $FLTAR_FULLPATH)
+	If @error Or $aExtBins[0] < 1 Then Return False
+	Return True
+EndFunc
+
+Func _HasStrictInstallShieldExtBin($sRootDir)
+	Local Const $iStrictExtBinMinSize = 1048576 ; 1 MiB: treat only payload-sized *_ext.bin as mandatory stage-2 payload
+	Local $aExtBins = _FileListToArrayRec($sRootDir, "*_ext.bin", $FLTAR_FILES, $FLTAR_RECUR, $FLTAR_NOSORT, $FLTAR_FULLPATH)
+	If @error Or $aExtBins[0] < 1 Then Return False
+
+	For $i = 1 To $aExtBins[0]
+		If FileGetSize($aExtBins[$i]) >= $iStrictExtBinMinSize Then Return True
+	Next
+
+	Return False
+EndFunc
+
+Func TryInstallShieldExtBinStage2($sRootDir)
+	Local $aExtBins = _FileListToArrayRec($sRootDir, "*_ext.bin", $FLTAR_FILES, $FLTAR_RECUR, $FLTAR_NOSORT, $FLTAR_FULLPATH)
+	If @error Or $aExtBins[0] < 1 Then Return False
+
+	Local $bExtracted = False
+	For $i = 1 To $aExtBins[0]
+		Local $sExtBin = $aExtBins[$i]
+
+		If _TryInstallShield7zStage2Payload($sRootDir, $sExtBin, "InstallShield _ext.bin") Then
+			$bExtracted = True
+			ContinueLoop
+		EndIf
+
+		Local $sSfx = StringRegExpReplace($sExtBin, "(?i)_ext\.bin$", "_sfx.exe")
+		If FileExists($sSfx) Then
+			Cout("InstallShield _ext.bin was not extractable; trying companion _sfx.exe")
+			If _TryInstallShield7zStage2Payload($sRootDir, $sSfx, "InstallShield companion _sfx.exe") Then $bExtracted = True
+		EndIf
+	Next
+
+	Return $bExtracted
+EndFunc
+
+Func _TryInstallShield7zStage2Payload($sRootDir, $sPayload, $sLabel)
+	Local $sPayloadDir = StringLeft($sPayload, StringInStr($sPayload, "\", 0, -1))
+	Local $iBefore = _DirGetSize($sRootDir, 0)
+	Local $iSavedSuccess = $success
+
+	Cout("Trying 7z stage-2 extraction of " & $sLabel & ": " & $sPayload)
+	_Run($7z & ' x -aou -y -o"' & $sPayloadDir & '" "' & $sPayload & '"', $sPayloadDir, @SW_HIDE, True, True, True, False)
+
+	Local $bOk = ($success = $RESULT_SUCCESS And _DirGetSize($sRootDir, 0) > $iBefore)
+	If $bOk Then
+		Cout($sLabel & " stage-2 extraction succeeded")
+	Else
+		Cout($sLabel & " stage-2 extraction failed or produced no new output")
+	EndIf
+
+	$success = $iSavedSuccess
+	Return $bOk
+EndFunc
+
+Func TryInstallShieldBFallback($tempoutdir)
+	If Not $ALLOW_INSTALLSHIELD_B Then
+		Cout("InstallShield /b fallback disabled by safe mode")
+		Return False
+	EndIf
+
+	Cout("Trying InstallShield /b extraction")
+	_CreateTrayMessageBox(t('INIT_WAIT'))
+	DirCreate($tempoutdir)
+	ShellExecute($file, '/b"' & $tempoutdir & '"', $filedir)
+
+	Opt("WinTitleMatchMode", 4)
+	For $i = 1 To $Timeout / 500
+		If WinExists("classname=MsiDialogCloseClass") Then
+			Local $msihandle = FileFindFirstFile($tempoutdir & "*.msi")
+			If Not @error Then
+				While 1
+					Local $msiname = FileFindNextFile($msihandle)
+					If @error Then ExitLoop
+					Local $tsearch = _FileSearchFirst(@TempDir, $msiname)
+					If @error Then ContinueLoop
+
+					Local $isdir = StringLeft($tsearch[1], StringInStr($tsearch[1], '\', 0, -1) - 1)
+					Local $ishandle = FileFindFirstFile($isdir & "\*")
+					$fname = FileFindNextFile($ishandle)
+					Do
+						If $fname <> $msiname Then FileCopy($isdir & "\" & $fname, $tempoutdir)
+						$fname = FileFindNextFile($ishandle)
+					Until @error
+					FileClose($ishandle)
+				WEnd
+				FileClose($msihandle)
+			EndIf
+
+			_DeleteTrayMessageBox()
+			Prompt(64, 'INIT_COMPLETE')
+			MoveFiles($tempoutdir, $outdir, False, "", True)
+			If _DirGetSize($outdir, $initdirsize + 1) > $initdirsize Or FileGetTime($outdir, 0, 1) <> $dirmtime Then
+				LogExtractorWinner("InstallShield /b")
+				Return True
+			EndIf
+			ExitLoop
+		EndIf
+		Sleep(500)
+	Next
+	$run = 0
+	_DeleteTrayMessageBox()
+	Prompt(64, 'INIT_COMPLETE')
+	Cout("InstallShield /b fallback failed or produced no usable output")
+	Return False
+EndFunc
+
 ; Determine if file is CD/DVD image
 Func CheckIso($returnSuccess = False, $returnFail = False)
 	If $isofailed Then Return False
 	Cout("Testing image file")
 	_CreateTrayMessageBox(t('TERM_TESTING') & " " & t('TERM_DISK_IMAGE'))
 
-	Local $return = FetchStdout($quickbms & ' -l "' & $bindir & $iso & '" "' & $file & '"', $filedir, @SW_HIDE)
+	Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $iso & '" "' & $file & '"', $filedir, @SW_HIDE)
 	_DeleteTrayMessageBox()
 	If StringInStr($return, "Target directory:") Or StringInStr($return, "0 files found")  Or $return == "" _
 	Or StringInStr($return, "exception occured") Or StringInStr($return, "not supported by this WCX plugin") Then
@@ -2133,9 +3148,10 @@ Func CheckLessmsi()
 	If Not HasNetFramework(4, False) Then Return False
 
 	Cout("Testing lessmsi")
-	Local $return = FetchStdout($msi_lessmsi & ' l "' & $file & '"', $outdir)
 
-	Return StringInStr($return, "Listing msi file") And Not StringInStr($return, "Error: ")
+	Local $return = FetchStdout($msi_lessmsi & ' l -t File "' & $file & '"', $outdir)
+
+	Return StringInStr($return, "File,Component_,FileName") > 0
 EndFunc
 
 ; Determine if file is NSIS installer
@@ -2144,7 +3160,7 @@ Func checkNSIS()
 	_CreateTrayMessageBox(t('TERM_TESTING') & ' NSIS ' & t('TERM_INSTALLER'))
 
 	Local $return = FetchStdout($7z & ' l "' & $file & '"', $filedir, @SW_HIDE)
-	If StringInStr($return, "Listing archive:") And Not StringInStr($return, "Can not open the file as") Then _
+	If StringInStr($return, "Listing archive:") And Not (StringInStr($return, "Can not open the file as") Or StringInStr($return, "Cannot open the file as archive") Or StringInStr($return, "Errors:")) Then _
 		extract($TYPE_NSIS, "NSIS " & t('TERM_INSTALLER'))
 
 	_DeleteTrayMessageBox()
@@ -2158,7 +3174,7 @@ Func CheckTotalObserver($arcdisp = 0)
 	Cout("Testing TotalObserver")
 	_CreateTrayMessageBox(t('TERM_TESTING') & ' TotalObserver ' & t('TERM_ARCHIVE'))
 
-	Local $return = FetchStdout($quickbms & ' -l "' & $bindir & $observer & '" "' & $file & '"', $filedir, @SW_HIDE)
+	Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $observer & '" "' & $file & '"', $filedir, @SW_HIDE)
 
 	_DeleteTrayMessageBox()
 	If StringInStr($return, "not supported by this WCX plugin") Or StringInStr($return, "0 files found") Or _
@@ -2170,7 +3186,447 @@ Func CheckTotalObserver($arcdisp = 0)
 	extract($TYPE_QBMS, $arcdisp, $observer)
 EndFunc
 
+; Determine if Delphi/VCL detector hints qualify for Atlantis FILES fallback
+Func _ShouldTryAtlantisFallback($sMatchType = "", $sScanner = "", $sRaw = "")
+	If $sMatchType = "" Then $sMatchType = $g_sPrimaryDetectMatch
+	If $sScanner = "" Then $sScanner = $g_sPrimaryDetectScanner
+	If $sRaw = "" Then $sRaw = $g_sPrimaryDetectRaw
+
+	If $sScanner <> "Detect It Easy" And $sScanner <> "Exeinfo PE" Then Return False
+
+	Local $sCombined = StringLower($sMatchType & @CRLF & $sRaw)
+	If $sCombined = "" Then Return False
+
+	If StringInStr($sCombined, "inno setup") Or StringInStr($sCombined, "nullsoft") Or StringInStr($sCombined, "nsis") Or _
+		StringInStr($sCombined, "installshield") Or StringInStr($sCombined, "windows installer") Or StringInStr($sCombined, "msi installer") Or _
+		StringInStr($sCombined, "advanced installer") Or StringInStr($sCombined, "installaware") Or StringInStr($sCombined, "setup factory") Or _
+		StringInStr($sCombined, "wise installer") Or StringInStr($sCombined, "install4j") Or StringInStr($sCombined, "sfx") Then Return False
+
+	If Not (StringInStr($sCombined, "delphi") Or StringInStr($sCombined, "vcl") Or StringInStr($sCombined, "turbo linker")) Then Return False
+
+	If Not _HasAtlantisFilesResource($file) Then Return False
+
+	Return True
+EndFunc
+
+Func _HasAtlantisFilesResource($sPEFile = "")
+	If $sPEFile = "" Then $sPEFile = $file
+	Local $bResource = _GetAtlantisFilesResource($sPEFile)
+	If @error Then Return False
+	Return BinaryLen($bResource) > 0
+EndFunc
+
+Func _GetAtlantisFilesResource($sPEFile = "")
+	If $sPEFile = "" Then $sPEFile = $file
+
+	Local $bResource = _ReadPEResource($sPEFile, "FILES", "FILES")
+	If BinaryLen($bResource) > 0 Then Return $bResource
+
+	$bResource = _ReadPEResource($sPEFile, "FILES", 10)
+	If BinaryLen($bResource) > 0 Then Return $bResource
+
+	$bResource = _ReadPEResource($sPEFile, 10, "FILES")
+	If BinaryLen($bResource) > 0 Then Return $bResource
+
+	Return SetError(1, 0, Binary(''))
+EndFunc
+
+Func _ExtractAtlantisFilesResource()
+	Cout("Starting Atlantis FILES resource extraction")
+
+	Local $bResource = _GetAtlantisFilesResource($file)
+	If @error Or BinaryLen($bResource) = 0 Then
+		Cout("Atlantis FILES resource was not found")
+		Return False
+	EndIf
+
+	Local $bContainer = _Zlib_Uncompress($bResource)
+	If @error Or BinaryLen($bContainer) = 0 Then
+		Cout("Atlantis FILES resource zlib decompression failed")
+		Return False
+	EndIf
+
+	Local $iOffset = 1
+	Local $iTotal = BinaryLen($bContainer)
+	Local $iExtracted = 0
+
+	While $iOffset <= $iTotal
+		Local $iNameLen = Dec(Hex(BinaryMid($bContainer, $iOffset, 1)))
+		$iOffset += 1
+
+		If $iNameLen < 1 Then
+			Cout("Atlantis parser error: invalid zero-length filename at offset " & ($iOffset - 2))
+			Return False
+		EndIf
+
+		If ($iOffset + $iNameLen + 8 + 4 - 1) > $iTotal Then
+			Cout("Atlantis parser error: truncated record header")
+			Return False
+		EndIf
+
+		Local $bName = BinaryMid($bContainer, $iOffset, $iNameLen)
+		$iOffset += $iNameLen
+
+		; Skip FILETIME for now (8 bytes)
+		$iOffset += 8
+
+		Local $iFileSize = _BinaryLEToUInt(BinaryMid($bContainer, $iOffset, 4))
+		$iOffset += 4
+
+		If ($iOffset + $iFileSize - 1) > $iTotal Then
+			Cout("Atlantis parser error: truncated file payload")
+			Return False
+		EndIf
+
+		Local $bPayload = BinaryMid($bContainer, $iOffset, $iFileSize)
+		$iOffset += $iFileSize
+
+		Local $sEmbedded = BinaryToString($bName, 4)
+		If $sEmbedded = "" Then $sEmbedded = BinaryToString($bName, 1)
+		Local $sRelative = _SanitizeAtlantisEmbeddedPath($sEmbedded)
+		If $sRelative = "" Then
+			Cout("Atlantis parser error: unsafe embedded path encountered")
+			Return False
+		EndIf
+
+		Local $sTarget = $outdir & "\" & $sRelative
+		Local $iSlash = StringInStr($sTarget, "\", 0, -1)
+		If $iSlash > 0 Then DirCreate(StringLeft($sTarget, $iSlash - 1))
+
+		Local $hFile = FileOpen($sTarget, 18)
+		If $hFile = -1 Then
+			Cout("Atlantis extractor failed to create output file: " & $sTarget)
+			Return False
+		EndIf
+		FileWrite($hFile, $bPayload)
+		FileClose($hFile)
+
+		$iExtracted += 1
+	WEnd
+
+	If $iExtracted < 1 Then
+		Cout("Atlantis extractor produced no output files")
+		Return False
+	EndIf
+
+	LogExtractorWinner("atlantis-files")
+	Cout("Atlantis FILES extractor wrote " & $iExtracted & " file(s)")
+	Return True
+EndFunc
+
+Func _BinaryLEToUInt($bData)
+	Local $iValue = 0
+	Local $iLen = BinaryLen($bData)
+	For $i = 1 To $iLen
+		$iValue += Dec(Hex(BinaryMid($bData, $i, 1))) * (2 ^ (8 * ($i - 1)))
+	Next
+	Return $iValue
+EndFunc
+
+Func _ReadPEResource($sPEFile, $vName, $vType)
+	Local Const $LOAD_LIBRARY_AS_DATAFILE = 0x00000002
+	Local $aModule = DllCall("kernel32.dll", "handle", "LoadLibraryExW", "wstr", $sPEFile, "handle", 0, "dword", $LOAD_LIBRARY_AS_DATAFILE)
+	If @error Or Not IsArray($aModule) Or $aModule[0] = 0 Then Return SetError(1, 0, Binary(''))
+
+	Local $hModule = $aModule[0]
+	Local $aRes
+	If IsString($vName) And IsString($vType) Then
+		$aRes = DllCall("kernel32.dll", "handle", "FindResourceW", "handle", $hModule, "wstr", $vName, "wstr", $vType)
+	ElseIf IsString($vName) And IsNumber($vType) Then
+		$aRes = DllCall("kernel32.dll", "handle", "FindResourceW", "handle", $hModule, "wstr", $vName, "ptr", $vType)
+	ElseIf IsNumber($vName) And IsString($vType) Then
+		$aRes = DllCall("kernel32.dll", "handle", "FindResourceW", "handle", $hModule, "ptr", $vName, "wstr", $vType)
+	Else
+		$aRes = DllCall("kernel32.dll", "handle", "FindResourceW", "handle", $hModule, "ptr", $vName, "ptr", $vType)
+	EndIf
+
+	If @error Or Not IsArray($aRes) Or $aRes[0] = 0 Then
+		DllCall("kernel32.dll", "bool", "FreeLibrary", "handle", $hModule)
+		Return SetError(2, 0, Binary(''))
+	EndIf
+
+	Local $aSize = DllCall("kernel32.dll", "dword", "SizeofResource", "handle", $hModule, "handle", $aRes[0])
+	If @error Or Not IsArray($aSize) Or $aSize[0] = 0 Then
+		DllCall("kernel32.dll", "bool", "FreeLibrary", "handle", $hModule)
+		Return SetError(3, 0, Binary(''))
+	EndIf
+
+	Local $aLoaded = DllCall("kernel32.dll", "handle", "LoadResource", "handle", $hModule, "handle", $aRes[0])
+	If @error Or Not IsArray($aLoaded) Or $aLoaded[0] = 0 Then
+		DllCall("kernel32.dll", "bool", "FreeLibrary", "handle", $hModule)
+		Return SetError(4, 0, Binary(''))
+	EndIf
+
+	Local $aPtr = DllCall("kernel32.dll", "ptr", "LockResource", "handle", $aLoaded[0])
+	If @error Or Not IsArray($aPtr) Or $aPtr[0] = 0 Then
+		DllCall("kernel32.dll", "bool", "FreeLibrary", "handle", $hModule)
+		Return SetError(5, 0, Binary(''))
+	EndIf
+
+	Local $bResource = DllStructGetData(DllStructCreate("byte[" & $aSize[0] & "]", $aPtr[0]), 1)
+	DllCall("kernel32.dll", "bool", "FreeLibrary", "handle", $hModule)
+	Return $bResource
+EndFunc
+
+Func _Zlib_Uncompress($Data, $iGuess = 0)
+	If Not IsBinary($Data) Then $Data = StringToBinary($Data, 4)
+	If BinaryLen($Data) < 1 Then Return SetError(1, 0, Binary(''))
+
+	Local $hDll = DllOpen($bindir & "zlib1.dll")
+	If @error Then Return SetError(2, 0, Binary(''))
+
+	Local $aInput = DllStructCreate("byte[" & BinaryLen($Data) & "]")
+	DllStructSetData($aInput, 1, $Data)
+
+	If $iGuess < 1 Then $iGuess = BinaryLen($Data) * 16
+	If $iGuess < 65536 Then $iGuess = 65536
+
+	For $i = 1 To 8
+		Local $aOutput = DllStructCreate("byte[" & $iGuess & "]")
+		Local $ret = DllCall($hDll, "int:cdecl", "uncompress", "ptr", DllStructGetPtr($aOutput), "ulong*", DllStructGetSize($aOutput), "ptr", DllStructGetPtr($aInput), "ulong", DllStructGetSize($aInput))
+		If Not @error And IsArray($ret) Then
+			If $ret[0] = 0 Then
+				Local $bOut = DllStructGetData(DllStructCreate("byte[" & $ret[2] & "]", DllStructGetPtr($aOutput)), 1)
+				DllClose($hDll)
+				Return $bOut
+			ElseIf $ret[0] <> -5 Then
+				DllClose($hDll)
+				Return SetError(3, $ret[0], Binary(''))
+			EndIf
+		EndIf
+		$iGuess *= 2
+	Next
+
+	DllClose($hDll)
+	Return SetError(4, 0, Binary(''))
+EndFunc
+
+Func _SanitizeAtlantisEmbeddedPath($sPath)
+	If $sPath = "" Then Return ""
+
+	$sPath = StringReplace($sPath, "/", "\")
+	$sPath = StringRegExpReplace($sPath, "^[A-Za-z]:", "")
+	While StringLeft($sPath, 1) = "\"
+		$sPath = StringTrimLeft($sPath, 1)
+	WEnd
+	While StringInStr($sPath, "\\")
+		$sPath = StringReplace($sPath, "\\", "\")
+	WEnd
+
+	Local $aParts = StringSplit($sPath, "\", 2)
+	Local $sSafe = ""
+	For $i = 0 To UBound($aParts) - 1
+		Local $part = StringStripWS($aParts[$i], 3)
+		If $part = "" Or $part = "." Or $part = ".." Then ContinueLoop
+		$part = StringRegExpReplace($part, '[<>:"/\|?*]', "_")
+		If $part = "" Then ContinueLoop
+		$sSafe &= ($sSafe = "" ? "" : "\") & $part
+	Next
+	Return $sSafe
+EndFunc
+
 ; If detection fails, try to determine file type by extension
+Func _ShouldSkipBroadGameProbeForInstaller()
+	Local $s = StringLower($g_sPrimaryDetectMatch & @CRLF & $g_sStoredTridType & @CRLF & $g_sStoredUnixType)
+	If StringIsSpace($s) Then Return False
+
+	If StringInStr($s, "inno setup") Then Return True
+	If StringInStr($s, "nullsoft") Or StringInStr($s, "nsis") Then Return True
+	If StringInStr($s, "installshield") Then Return True
+	If StringInStr($s, "microsoft installer") Or StringInStr($s, "windows installer") Then Return True
+	If StringInStr($s, "msi") And StringInStr($s, "installer") Then Return True
+	If StringInStr($s, "wix toolset installer") Or StringInStr($s, "wix installer") Then Return True
+	If StringInStr($s, "advanced installer") Then Return True
+	If StringInStr($s, "installaware") Then Return True
+	If StringInStr($s, "setup factory") Then Return True
+	If StringInStr($s, "installer vise") Or StringInStr($s, "installer: vise") Or StringInStr($s, "installer - vise") Or StringInStr($s, "vise mindvision") Or StringInStr($s, "vise32ex.dll") Then Return True
+	If StringInStr($s, "gentee installer") Then Return True
+	If StringInStr($s, "install4j") Then Return True
+	If StringInStr($s, "wise installer") Then Return True
+	If StringInStr($s, "squirrel") Then Return True
+	If StringInStr($s, "createinstall") Then Return True
+	If StringInStr($s, "excelsior installer") Then Return True
+	If StringInStr($s, "ghost installer studio") Then Return True
+	If StringInStr($s, "install creator") Or StringInStr($s, "installscript setup launcher") Then Return True
+
+	Return False
+EndFunc
+
+Func _ShouldSkipNonFatalProbesForPrimaryMatch()
+	If $g_sPrimaryDetectMatch = "" Then Return False
+
+	Local $bKnownMediaExt = StringInStr("|mp3|aac|m4a|flac|ogg|oga|wav|wma|mp4|m4v|mkv|avi|wmv|mpg|mpeg|ts|mov|bik|smk|", "|" & StringLower($fileext) & "|") > 0
+	If Not $g_bPrimaryStrongHit And Not $bKnownMediaExt Then Return False
+
+	Local $sSaved = $g_sPrimaryDetectMatch
+	If StringInStr($sSaved, "NOT EXE - .mp4") Or StringInStr($sSaved, "NOT EXE - .m4v") Or _
+		 StringInStr($sSaved, "MP4 Video") Or StringInStr($sSaved, "MP4 Base Media") Or _
+		 StringInStr($sSaved, "ISO base media container") Or StringInStr($sSaved, "MPEG-4") Or _
+		 StringInStr($sSaved, "QuickTime Movie") Or StringInStr($sSaved, "Matroska") Or _
+		 StringInStr($sSaved, "Windows Media (generic)") Or StringInStr($sSaved, "MPEG-2 Transport Stream") Or _
+		 StringInStr($sSaved, "Bink video") Or StringInStr($sSaved, "Smacker movie/video") Or _
+		 StringInStr($sSaved, "MP3") Or _
+		 StringInStr($sSaved, "AAC") Or StringInStr($sSaved, "FLAC") Or _
+		 StringInStr($sSaved, "Vorbis") Or StringInStr($sSaved, "Dolby Digital stream") Or _
+		 StringInStr($sSaved, "Audio file", 0) Then
+		Return True
+	EndIf
+
+	Return False
+EndFunc
+
+Func ResolveStrictPipeline($bApplyPrimaryAndTrid = True, $bApplyUnix = True)
+	If Not $extract Then Return False
+	If $g_bArchiveIntegrityError Then
+		Cout("Strict fallback: skipped because a definitive archive corruption/broken-volume failure was already detected")
+		Return False
+	EndIf
+
+	Cout("Strict fallback: resolving stored detector hints")
+	$g_bStrictPipeline = False
+
+	If $bApplyPrimaryAndTrid And $g_sPrimaryDetectMatch <> "" Then
+		Cout("Strict fallback: applying primary detector match")
+		Local $sSaved = $g_sPrimaryDetectMatch
+		; Reuse existing routing logic now that strict mode is disabled
+		If StringInStr($sSaved, "Inno Setup") Then
+			checkInno()
+		ElseIf StringInStr($sSaved, "WinAce / SFX Factory") Then
+			extract($TYPE_ACE, t('TERM_SFX') & " ACE " & t('TERM_ARCHIVE'))
+		ElseIf StringInStr($sSaved, "Actual Installer") Then
+			extract($TYPE_ACTUAL, 'Actual Installer ' & t('TERM_PACKAGE'))
+		ElseIf StringInStr($sSaved, "Advanced Installer") Then
+			extract($TYPE_AI, 'Advanced Installer ' & t('TERM_PACKAGE'))
+		ElseIf StringInStr($sSaved, "FreeArc") Then
+			extract($TYPE_FREEARC, 'FreeArc ' & t('TERM_ARCHIVE'))
+		ElseIf StringInStr($sSaved, "CreateInstall") Then
+			extract($TYPE_CI, 'CreateInstall ' & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "Excelsior Installer") Then
+			extract($TYPE_EI, 'Excelsior Installer ' & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "Ghost Installer Studio") Then
+			extract($TYPE_GHOST, 'Ghost Installer Studio ' & t('TERM_INSTALLER'))
+		ElseIf _IsSetupFactoryDetectorHit($sSaved) Then
+			Cout("Strict fallback: detector indicates Setup Factory")
+			CheckTotalObserver('Setup Factory ' & t('TERM_INSTALLER'))
+			checkIE()
+		ElseIf _IsInstallExplorerDetectorHit($sSaved) Then
+			Cout("Strict fallback: detector indicates InstallExplorer-compatible installer")
+			checkIE()
+		ElseIf StringInStr($sSaved, "install4j") Then
+			BmsExtract("install4j")
+		ElseIf StringInStr($sSaved, "InstallAware") Then
+			extract($TYPE_7Z, 'InstallAware ' & t('TERM_INSTALLER') & ' ' & t('TERM_PACKAGE'))
+		ElseIf StringInStr($sSaved, "Install Creator/Pro") Then
+			extract($TYPE_CIC, 'Clickteam Install Creator ' & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "InstallScript Setup Launcher") Then
+			extract($TYPE_ISCRIPT, "InstallScript " & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "InstallShield") Then
+			extract($TYPE_ISEXE, "InstallShield " & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "KGB SFX") Then
+			extract($TYPE_KGB, t('TERM_SFX') & ' KGB ' & t('TERM_PACKAGE'))
+		ElseIf StringInStr($sSaved, "Microsoft Visual C++ 7.0") And StringInStr($sSaved, "Custom") And Not StringInStr($sSaved, "Hotfix") Then
+			extract($TYPE_VSSFX, 'Visual C++ ' & t('TERM_SFX') & ' ' & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "Microsoft Visual C++ 6.0") And StringInStr($sSaved, "Custom") Then
+			extract($TYPE_VSSFX_PATH, 'Visual C++ ' & t('TERM_SFX') & '' & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "www.molebox.com") Then
+			extract($TYPE_MOLE, 'Mole Box ' & t('TERM_CONTAINER'))
+		ElseIf StringInStr($sSaved, "Netopsystems AG INSTALLER FEAD") Then
+			extract($TYPE_FEAD, 'Netopsystems FEAD ' & t('TERM_PACKAGE'))
+		ElseIf StringInStr($sSaved, "Nullsoft") Then
+			Cout("Strict fallback: deferring NSIS/Nullsoft to generic 7-Zip for reference parity")
+		ElseIf StringInStr($sSaved, "RAR SFX") Then
+			Cout("Strict fallback: deferring RAR SFX to generic 7-Zip for reference parity")
+		ElseIf StringInStr($sSaved, "RoboForm Installer") Then
+			extract($TYPE_ROBO, 'RoboForm ' & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "WiX Installer") Or StringInStr($sSaved, "WiX Toolset Installer") Then
+			extract($TYPE_WIX, "WiX " & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "Microsoft Windows Installer") Or StringInStr($sSaved, "MSI Installer") Then
+			extract($TYPE_MSI, 'Windows Installer (MSI) ' & t('TERM_PACKAGE'))
+		ElseIf StringInStr($sSaved, "SPx Method") Or StringInStr($sSaved, "Microsoft SFX CAB") Then
+			Local $arcdisp = t('TERM_SFX') & " Microsoft CAB " & t('TERM_ARCHIVE')
+			If StringInStr($sSaved, "rename file *.exe as *.cab") Then
+				CreateRenamedCopy("cab")
+				check7z($arcdisp)
+			Else
+				extract($TYPE_CAB, $arcdisp)
+			EndIf
+		ElseIf StringInStr($sSaved, "Overlay :  SWF flash object ver") Then
+			extract($TYPE_SWFEXE, 'Shockwave Flash ' & t('TERM_CONTAINER'))
+		ElseIf StringInStr($sSaved, "VMware ThinApp") Or StringInStr($sSaved, "Thinstall") Or StringInStr($sSaved, "ThinyApp Packager") Then
+			extract($TYPE_THINSTALL, "ThinApp/Thinstall" & t('TERM_ARCHIVE'))
+		ElseIf StringInStr($sSaved, "Wise Installer") Or StringInStr($sSaved, "PEncrypt 4.0") Then
+			extract($TYPE_WISE, 'Wise Installer ' & t('TERM_PACKAGE'))
+		ElseIf StringInStr($sSaved, "ZIP SFX") Or StringInStr($sSaved, "WinZip") Then
+			extract($TYPE_ZIP, t('TERM_SFX') & ' ZIP ' & t('TERM_ARCHIVE'))
+		ElseIf StringInStr($sSaved, "Enigma Virtual Box") Then
+			extract($TYPE_ENIGMA, 'Enigma Virtual Box ' & t('TERM_PACKAGE'))
+		ElseIf StringInStr($sSaved, "PyInstaller") Then
+			extract($TYPE_7Z, "PyInstaller " & t('TERM_PACKAGE'))
+		ElseIf StringInStr($sSaved, ".dmg  Mac OS") Then
+			extract($TYPE_7Z, "DMG " & t('TERM_IMAGE'))
+		ElseIf StringInStr($sSaved, ".pak  Chromium format") Then
+			extract($TYPE_7Z, "Chromium Pak " & t('TERM_ARCHIVE'))
+		ElseIf StringInStr($sSaved, "Explorer cache file") Then
+			extract($TYPE_7Z, "Explorer Thumbnail " & t('TERM_DATABASE'))
+		ElseIf StringInStr($sSaved, "MSCF Cab file detected") Or StringInStr($sSaved, "VirtualBox Installer") Then
+			extract($TYPE_MSCF, "MSCF " & t('TERM_INSTALLER'))
+		ElseIf StringInStr($sSaved, "aspack") Then
+			unpack($PACKER_ASPACK)
+		ElseIf StringInStr($sSaved, "NOT EXE - .mp4") Or StringInStr($sSaved, "NOT EXE - .m4v") Or _
+			 StringInStr($sSaved, "MPEG-4") Or StringInStr($sSaved, "QuickTime Movie") Or _
+			 StringInStr($sSaved, "Matroska") Or StringInStr($sSaved, "Windows Media (generic)") Or _
+			 StringInStr($sSaved, "MPEG-2 Transport Stream") Or StringInStr($sSaved, "Bink video") Or _
+			 StringInStr($sSaved, "Smacker movie/video") Then
+			If StringInStr($sSaved, "Bink video") Or StringInStr($sSaved, "Smacker movie/video") Then
+				extract($TYPE_VIDEO_CONVERT, t('TERM_VIDEO') & ' ' & t('TERM_FILE'))
+			Else
+				extract($TYPE_VIDEO, t('TERM_VIDEO') & ' ' & t('TERM_FILE'))
+			EndIf
+		ElseIf StringInStr($sSaved, "MP3") Or StringInStr($sSaved, "AAC") Or StringInStr($sSaved, "FLAC") Or _
+			 StringInStr($sSaved, "Vorbis") Or StringInStr($sSaved, "Dolby Digital stream") Or _
+			 StringInStr($sSaved, "Audio file", 0) Then
+			extract($TYPE_AUDIO, t('TERM_AUDIO') & ' ' & t('TERM_FILE'))
+		ElseIf StringInStr($sSaved, "DOCTYPE : html") Or StringInStr($sSaved, "HTML") Then
+			terminate($STATUS_NOTPACKED, $file, $fileext, $sSaved)
+		ElseIf StringInStr($sSaved, "upx") And Not StringInStr($sSaved, "sign like") Then
+			unpack($PACKER_UPX)
+		ElseIf StringInStr($sSaved, "Astrum InstallWizard") Or StringInStr($sSaved, "clickteam") Or _
+				StringInStr($sSaved, "NE <- Windows 16bit") Or StringInStr($sSaved, "Enigma Protector") Then
+			terminate($STATUS_NOTSUPPORTED, $file, $sSaved, $sSaved)
+		ElseIf (StringInStr($sSaved, "Not packed") And Not StringInStr($sSaved, "Microsoft Visual C++")) Or _
+				StringInStr($sSaved, "ELF executable") Or StringInStr($sSaved, "Microsoft Visual C# / Basic.NET") Or _
+				StringInStr($sSaved, "Autoit") Or StringInStr($sSaved, "LE <- Linear Executable") Or _
+				StringInStr($sSaved, "NOT EXE - Empty file") Or StringInStr($sSaved, "Native - System driver") Or _
+				StringInStr($sSaved, "Denuvo protector") Or StringInStr($sSaved, "Kaspersky AV Pack") Or _
+				StringInStr($sSaved, "TASM / MASM / FASM - assembler") Then
+			terminate($STATUS_NOTPACKED, $file, $sSaved, $sSaved)
+		ElseIf _ShouldTryAtlantisFallback($sSaved, $g_sPrimaryDetectScanner, $g_sPrimaryDetectRaw) Then
+			Cout("Strict fallback: Delphi/VCL detector hit qualifies for Atlantis FILES extractor")
+			LogDetectionWinner($g_sPrimaryDetectScanner, "Delphi/VCL custom installer candidate (FILES resource)")
+			If extract($TYPE_ATLANTIS, "Atlantis FILES custom installer", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_ATLANTIS, "Atlantis FILES custom installer")
+		Else
+			; Fallback to existing user definitions
+			UserDefCompare($aExeinfoDefinitions, $sSaved, "Exeinfo")
+		EndIf
+	EndIf
+
+	If $bApplyPrimaryAndTrid And $g_sStoredTridType <> "" Then
+		Cout("Strict fallback: applying TrID match(es)")
+		Local $aStoredTrid = StringSplit(StringStripCR($g_sStoredTridType), @LF, 2)
+		For $iTrid = 0 To UBound($aStoredTrid) - 1
+			If Not StringIsSpace($aStoredTrid[$iTrid]) Then tridcompare($aStoredTrid[$iTrid])
+		Next
+	EndIf
+
+	If $bApplyUnix And $g_sStoredUnixType <> "" Then
+		Cout("Strict fallback: applying unix file tool match")
+		filecompare($g_sStoredUnixType)
+	EndIf
+
+	$g_bStrictPipeline = True
+	Return False
+EndFunc
+
 Func CheckExt()
 	Local $aDefinitions, $aReturn
 	For $dir In $aDefDirs
@@ -2189,6 +3645,54 @@ Func CheckExt()
 	Next
 EndFunc
 
+; Perform non-fatal extension-based extraction attempts before detector-based routing.
+Func _TryExtExtract($arctype, $arcdisp = 0, $additionalParameters = "")
+	If extract($arctype, $arcdisp, $additionalParameters, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $arctype, $arcdisp)
+	If $g_bPasswordFailureAbort Then
+		Cout("Password failure detected during extension-based attempt; stopping further fallback retries")
+		terminate($STATUS_PASSWORD, $file, $arctype, $arcdisp)
+	EndIf
+	If $g_bArchiveIntegrityError Then
+		Cout("Definitive archive corruption/broken-volume failure detected during extension-based attempt; stopping further fallback retries")
+		terminate($STATUS_FAILED, $file, $arctype, $arcdisp)
+	EndIf
+	Return False
+EndFunc
+
+Func _TryExtDiskImage($arctype, $arcdisp = 0, $additionalParameters = "")
+	If extractDiskImage($arctype, $arcdisp, $additionalParameters, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $arctype, $arcdisp)
+	Return False
+EndFunc
+
+Func _TryExtCheck7z($arcdisp = 0, $bIsDiskImage = False)
+	If check7z($arcdisp, $bIsDiskImage, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_7Z, $arcdisp)
+	If $g_bArchiveIntegrityError Then
+		Cout("Definitive archive corruption/broken-volume failure detected during 7-Zip probe; stopping further fallback retries")
+		terminate($STATUS_FAILED, $file, $TYPE_7Z, $arcdisp)
+	EndIf
+	Return False
+EndFunc
+
+Func _TryExtCheckAlz()
+	If CheckAlz(True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_ALZ, 'ALZ ' & t('TERM_ARCHIVE'))
+	Return False
+EndFunc
+
+Func _TryExtExtractEcm()
+	; Prefer unecm for .ecm files when available, but keep the existing generic
+	; detector/7-Zip/QuickBMS fallback path if unecm is missing or non-fatally fails.
+	If extract($TYPE_ECM, 'ECM ' & t('TERM_FILE'), '', True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_ECM, 'ECM ' & t('TERM_FILE'))
+	If $g_bPasswordFailureAbort Then
+		Cout("Password failure detected during ECM attempt; stopping further fallback retries")
+		terminate($STATUS_PASSWORD, $file, $TYPE_ECM, 'ECM ' & t('TERM_FILE'))
+	EndIf
+	If $g_bArchiveIntegrityError Then
+		Cout("Definitive archive corruption/broken-volume failure detected during ECM attempt; stopping further fallback retries")
+		terminate($STATUS_FAILED, $file, $TYPE_ECM, 'ECM ' & t('TERM_FILE'))
+	EndIf
+	Return False
+EndFunc
+
 ; Perform special actions for some file types
 Func InitialCheckExt()
 	If Not $extract Then Return
@@ -2196,22 +3700,139 @@ Func InitialCheckExt()
 	Switch $fileext
 		; Split files have no additional file magic and will be misdetected
 		Case "001"
-			If FileExists($filedir & "\" & $filename & ".002") Then check7z()
+			If FileExists($filedir & "\" & $filename & ".002") Then _TryExtCheck7z()
+
 		; Compound compressed files that require multiple actions
 		Case "ipk", "tbz2", "tgz", "tz", "tlz", "txz"
-			extract($TYPE_CTAR, 'Compressed Tar ' & t('TERM_ARCHIVE'))
+			_TryExtExtract($TYPE_CTAR, 'Compressed Tar ' & t('TERM_ARCHIVE'))
+
 		; Disk images - file type identification is not always reliable
-		Case "bin", "cdi", "mdf"
-			CheckIso()
-			check7z(t('TERM_DISK_IMAGE'), True)
-		Case "dmg"
-			extract($TYPE_7Z, 'DMG ' & t('TERM_IMAGE'))
+		Case "ecm"
+			_TryExtExtractEcm()
+
+		Case "bin"
+			; Try generic archive handling before ISO/WCX probing.
+			; This avoids sending ZIP/RAR/7z content in .bin files through QuickBMS first.
+			If _TryExtCheck7z() Then Return
+			If CheckIso(True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_QBMS, t('TERM_DISK_IMAGE'))
+
+		Case "cdi", "mdf"
+			If CheckIso(True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_QBMS, t('TERM_DISK_IMAGE'))
+			_TryExtCheck7z(t('TERM_DISK_IMAGE'), True)
+			
 		Case "cue", "gdi", "iso", "mds"
-			check7z(t('TERM_DISK_IMAGE'), True)
-			CheckIso()
+			If Not _TryExtCheck7z(t('TERM_DISK_IMAGE'), True) Then
+				If CheckIso(True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_QBMS, t('TERM_DISK_IMAGE'))
+			EndIf
+
+		; Direct extension-first routing for exact/strong extensions.
+		; These are non-fatal probes. If they fail, normal DIE/TrID detection continues.
+		Case "7z"
+			_TryExtExtract($TYPE_7Z, '7-Zip ' & t('TERM_ARCHIVE'))
+		Case "apk"
+			_TryExtExtract($TYPE_7Z, "Android " & t('TERM_PACKAGE'))
+		Case "ar"
+			_TryExtExtract($TYPE_7Z, 'AR ' & t('TERM_ARCHIVE'))
+		Case "arj"
+			_TryExtExtract($TYPE_7Z, 'ARJ ' & t('TERM_ARCHIVE'))
+		Case "asar"
+			_TryExtExtract($TYPE_7Z, 'ASAR ' & t('TERM_ARCHIVE'))
+		Case "bz2"
+			_TryExtExtract($TYPE_7Z, 'bzip2 ' & t('TERM_COMPRESSED'), "bz2")
+		Case "cpio"
+			_TryExtExtract($TYPE_7Z, 'CPIO ' & t('TERM_ARCHIVE'))
+		Case "deb"
+			_TryExtExtract($TYPE_7Z, 'Debian ' & t('TERM_PACKAGE'))
+		Case "dmg"
+			_TryExtExtract($TYPE_7Z, 'DMG ' & t('TERM_IMAGE'))
+		Case "gz", "gzip"
+			_TryExtExtract($TYPE_7Z, 'gzip ' & t('TERM_COMPRESSED'), "gz")
+		Case "lha", "lzh"
+			_TryExtExtract($TYPE_7Z, 'LZH ' & t('TERM_COMPRESSED'))
+		Case "rpm"
+			_TryExtExtract($TYPE_7Z, 'RPM ' & t('TERM_PACKAGE'))
+		Case "tar"
+			_TryExtExtract($TYPE_7Z, 'Tar ' & t('TERM_ARCHIVE'), "tar")
+		Case "wim"
+			_TryExtExtract($TYPE_7Z, 'WIM ' & t('TERM_IMAGE'))
+		Case "xz"
+			_TryExtExtract($TYPE_7Z, 'XZ ' & t('TERM_COMPRESSED'), "xz")
+		Case "z"
+			_TryExtExtract($TYPE_7Z, 'LZW ' & t('TERM_COMPRESSED'), "Z")
+		Case "ace"
+			_TryExtExtract($TYPE_ACE, 'ACE ' & t('TERM_ARCHIVE'))
+		Case "alz"
+			_TryExtCheckAlz()
+		Case "bcm"
+			_TryExtExtract($TYPE_BCM, 'BCM ' & t('TERM_COMPRESSED'))
+		Case "cab"
+			_TryExtExtract($TYPE_CAB, 'Microsoft CAB ' & t('TERM_ARCHIVE'))
+		Case "chd"
+			_TryExtDiskImage($TYPE_CHD, "MAME " & t('TERM_DISK_IMAGE'))
+		Case "chm"
+			_TryExtExtract($TYPE_CHM, 'Compiled HTML ' & t('TERM_HELP'))
+		Case "daa", "gbi"
+			_TryExtDiskImage($TYPE_DAA, 'DAA/GBI ' & t('TERM_DISK_IMAGE'))
+		Case "dgca"
+			_TryExtExtract($TYPE_DGCA, 'DGCA ' & t('TERM_ARCHIVE'))
+		Case "farc", "arc"
+			_TryExtExtract($TYPE_FREEARC, 'FreeArc ' & t('TERM_ARCHIVE'))
+		Case "hlp"
+			_TryExtExtract($TYPE_HLP, 'Windows ' & t('TERM_HELP'))
+		Case "isz"
+			_TryExtDiskImage($TYPE_ISZ, "Zipped ISO " & t('TERM_DISK_IMAGE'))
+		Case "kgb"
+			_TryExtExtract($TYPE_KGB, 'KGB ' & t('TERM_ARCHIVE'))
+		Case "lz"
+			_TryExtExtract($TYPE_LZ, "LZIP " & t('TERM_COMPRESSED'))
+		Case "lzo"
+			_TryExtExtract($TYPE_LZO, 'LZO ' & t('TERM_COMPRESSED'))
+		Case "lzx"
+			_TryExtExtract($TYPE_LZX, 'LZX ' & t('TERM_COMPRESSED'))
+		Case "mht", "mhtml"
+			_TryExtExtract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'), "mhtml")
+		Case "msi"
+			_TryExtExtract($TYPE_MSI, 'Windows Installer (MSI) ' & t('TERM_PACKAGE'))
+		Case "msm"
+			_TryExtExtract($TYPE_MSM, 'Windows Installer (MSM) ' & t('TERM_MERGE_MODULE'))
+		Case "msp"
+			_TryExtExtract($TYPE_MSP, 'Windows Installer (MSP) ' & t('TERM_PATCH'))
+		Case "msu"
+			_TryExtExtract($TYPE_MSU, 'Windows Update ' & t('TERM_PACKAGE'))
+		Case "nbh"
+			_TryExtExtract($TYPE_NBH, 'NBH ' & t('TERM_IMAGE'))
+		Case "pea"
+			_TryExtExtract($TYPE_PEA, 'Pea ' & t('TERM_ARCHIVE'))
+		Case "pdf"
+			_TryExtExtract($TYPE_PDF, 'PDF ' & t('TERM_FILE'))
+		Case "rar"
+			_TryExtExtract($TYPE_RAR, 'RAR ' & t('TERM_ARCHIVE'))
+		Case "rpa"
+			_TryExtExtract($TYPE_RPA, "Ren'Py " & t('TERM_ARCHIVE'))
+		Case "sfark"
+			_TryExtExtract($TYPE_SFARK, 'sfArk ' & t('TERM_COMPRESSED'))
+		Case "sis"
+			_TryExtExtract($TYPE_SIS, 'SymbianOS ' & t('TERM_INSTALLER'))
+		Case "swf"
+			_TryExtExtract($TYPE_SWF, 'Shockwave Flash ' & t('TERM_CONTAINER'))
+		Case "ttarch"
+			_TryExtExtract($TYPE_TTARCH, "Telltale " & t('TERM_GAME') & t('TERM_ARCHIVE'))
+		Case "uha"
+			_TryExtExtract($TYPE_UHA, 'UHARC ' & t('TERM_ARCHIVE'))
+		Case "uif"
+			_TryExtDiskImage($TYPE_UIF, 'UIF ' & t('TERM_DISK_IMAGE'))
 		Case "unitypackage"
-			extract($TYPE_UNITYPACKAGE, "Unity Engine Asset Package")
+			_TryExtExtract($TYPE_UNITYPACKAGE, "Unity Engine Asset Package")
+		Case "warc"
+			_TryExtExtract($TYPE_7Z, "Web " & t('TERM_ARCHIVE'))
+		Case "zip"
+			_TryExtExtract($TYPE_ZIP, 'ZIP ' & t('TERM_ARCHIVE'))
+		Case "zoo"
+			_TryExtExtract($TYPE_ZOO, 'ZOO ' & t('TERM_ARCHIVE'))
+		Case "zpaq"
+			_TryExtExtract($TYPE_ZPAQ, 'ZPAQ ' & t('TERM_ARCHIVE'))
 	EndSwitch
+
 EndFunc
 
 ; Check for unicode characters in path
@@ -2267,10 +3888,14 @@ EndFunc
 
 ; Extract known archive formats
 Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess = False, $returnFail = False)
+	$g_bInnoExtractUsable = False
+	$g_bSymlinkOnlyWarning = False
+	$g_bArchiveIntegrityError = False
 	$success = $RESULT_UNKNOWN
+	$g_bPasswordFailureAbort = False
 
 	Cout("Starting " & $arctype & " extraction")
-	If $arcdisp <> 0 Then Cout("File type is: " & $arcdisp)
+	If $arcdisp <> 0 And $arcdisp <> -1 And $arcdisp <> "" Then Cout("File type is: " & $arcdisp)
 
 	If $arcdisp == 0 Then $arcdisp = "." & $fileext & " " & t('TERM_FILE')
 	If $arcdisp <> -1 Then _CreateTrayMessageBox(t('EXTRACTING') & @CRLF & $arcdisp)
@@ -2286,27 +3911,41 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 
 	; Extract archive based on filetype
 	Switch $arctype
+		Case $TYPE_ATLANTIS
+			If _ExtractAtlantisFilesResource() Then
+				$success = $RESULT_SUCCESS
+			Else
+				$success = $RESULT_FAILED
+			EndIf
+
 		Case $TYPE_7Z
 			Local $sPassword = _FindArchivePassword($7z & ' l -p -slt "' & $file & '"', $7z & ' t -p"%PASSWORD%" "' & $file & '"', "Encrypted = +", "Wrong password?", 0, "Everything is Ok")
-			_Run($7z & ' x ' & ($sPassword == 0? '"': '-p"' & $sPassword & '" "') & $file & '"', $outdir, @SW_HIDE, True, True, True, True)
+			Local $bPasswordRequired7z = @extended
+			If $bPasswordRequired7z Then terminate($STATUS_PASSWORD, $file, $arctype, $arcdisp)
+			_Run($7z & ' x -aou -y ' & ($sPassword == 0? '"': '-p"' & $sPassword & '" "') & $file & '"', $outdir, @SW_HIDE, True, True, True, True)
 			If @error = 3 Then terminate($STATUS_MISSINGPART)
 			If @extended Then terminate($STATUS_PASSWORD, $file, $arctype, $arcdisp)
 
-			If FileExists($outdir & "\.text") Then
+			If $g_bArchiveIntegrityError Then
+				Cout("Definitive 7-Zip archive corruption/broken-volume failure detected; skipping SFX/script and nested post-processing")
+			ElseIf $additionalParameters == "mhtml" Then
+				Cout("Restoring missing extensions in extracted MHTML files")
+				AppendExtensions($outdir)
+			ElseIf FileExists($outdir & "\.text") Then
 				; Generic .exe extraction should not be considered successful
 				$success = $RESULT_FAILED
 			ElseIf StringInStr($sFileType, "RPM Linux Package", 0) Then
 				; Extract inner CPIO for RPMs
 				Local $sPath = $outdir & "\" & $filename & ".cpio"
 				If FileExists($sPath) Then
-					_Run($7z & ' x "' & $sPath & '"', $outdir)
+					_Run($7z & ' x -aou -y "' & $sPath & '"', $outdir)
 					FileDelete($sPath)
 				EndIf
 			ElseIf StringInStr($sFileType, "Debian Linux Package", 0) Then
 				; Extract inner tarball for DEBs
 				Local $sPath = $outdir & "\data.tar"
 				If FileExists($sPath) Then
-					_Run($7z & ' x "' & $sPath & '"', $outdir)
+					_Run($7z & ' x -aou -y "' & $sPath & '"', $outdir)
 					FileDelete($sPath)
 				EndIf
 			ElseIf $additionalParameters == "bz2" Or $additionalParameters == "gz" Or $additionalParameters == "xz" Or $additionalParameters == "Z" Then
@@ -2315,7 +3954,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 				If FileExists($sPath) Then
 					Local $sReturn = TridLib_Analyse_Simple($sPath)
 					If StringInStr($sReturn, "Tape ARchive") Or StringRight($sPath, 3) = "tar" Then
-						_Run($7z & ' x "' & $sPath & '"', $outdir)
+						_Run($7z & ' x -aou -y -o"' & $outdir & '" "' & $sPath & '"', $outdir)
 						FileDelete($sPath)
 					EndIf
 				EndIf
@@ -2323,7 +3962,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 				Cout("Trying to extract sfx script")
 				_CreateTrayMessageBox(t('SCANNING_FILE', "7z SFX Archives splitter"))
 
-				Run(_MakeCommand($7zsplit & ' "' & $file & '"'), $outdir, @SW_HIDE)
+				Run(_MakeCommand(Quote($bindir & $7zsplit) & ' "' & $file & '"'), $outdir, @SW_HIDE)
 				WinWait("7z SFX Archives splitter")
 				ControlClick("7z SFX Archives splitter", "", "Button8")
 				ControlClick("7z SFX Archives splitter", "", "Button1")
@@ -2333,7 +3972,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 					Sleep(100)
 					If WinExists("7z SFX Archives splitter warning") Then WinClose("7z SFX Archives splitter warning")
 					$TimerDiff = TimerDiff($TimerStart)
-					If $TimerDiff > $Timeout Then ExitLoop
+					If $TimerDiff > ($Timeout * 1000) Then ExitLoop
 				Until FileExists($filedir & "\" & $filename & ".txt") Or WinExists("7z SFX Archives splitter error")
 
 				ProcessClose("7ZSplit.exe")
@@ -2389,6 +4028,10 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			ProcessWait($filenamefull, $Timeout)
 			ProcessWaitClose($filenamefull, $Timeout)
 
+		Case $TYPE_ALZ
+			If Not HasPlugin($alz, $returnFail) Then Return
+			_Run($alz & ' -d "' & $outdir & '" "' & $file & '"', $outdir, @SW_HIDE, True, True, True, True)
+
 		Case $TYPE_ARC_CONV
 			If Not HasPlugin($arc_conv, $returnFail) Then Return
 
@@ -2424,13 +4067,17 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			$ret2 = $outdir & '\boot.img'
 			FileCopy($bindir & $bootimg, $outdir)
 			_FileMove($file, $ret2)
-			_Run($cmd & '"' & $ret & ' --unpack-bootimg"', $outdir, @SW_MINIMIZE, False, False)
+			_Run(Quote($ret, True) & ' --unpack-bootimg', $outdir, @SW_MINIMIZE, True, False)
 			_FileMove($ret2, $file)
 			FileDelete($ret)
 
 		Case $TYPE_CAB
-			If StringInStr($sFileType, 'Type 1', 0) Then
-				RunWait(Warn_Execute(Quote($file & '" /q /x:"' & $outdir)), $outdir)
+			; Some InstallShield data*.cab files are misdetected as Microsoft CAB.
+			; If a matching data*.cab/data*.hdr set is present, try unshield first.
+			If _IsInstallShieldCabCandidate() And TryInstallShieldCabFallback($arcdisp) Then
+				$success = $RESULT_SUCCESS
+			ElseIf StringInStr($sFileType, 'Type 1', 0) Then
+				RunWait(Warn_Execute(Quote($file) & ' /q /x:' & Quote($outdir)), $outdir)
 			Else
 				check7z($arcdisp)
 				HasPlugin($expand)
@@ -2439,10 +4086,22 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			EndIf
 
 		Case $TYPE_CHD
-			_Run($chd & ' extracthd -i "' & $file & '" -o "' & $outdir & '\' & $filename & '.img"', $outdir)
+			_Run('""' & $chd & '" extracthd -i "' & $file & '" -o "' & $outdir & '\' & $filename & '.img"', $outdir)
+			Local $sChdOut = $outdir & '\' & $filename & '.img'
+			If FileExists($sChdOut) And FileGetSize($sChdOut) > 0 Then
+				LogExtractorWinner("chdman")
+				If $returnSuccess Then
+					Cout("Extraction attempt result: success (1)")
+					$success = $RESULT_UNKNOWN
+					Return 1
+				EndIf
+				Cout("Extraction evaluated result: success (1)")
+				Cout("Extraction final result: success (1)")
+				terminate($STATUS_SUCCESS, $filenamefull, $arctype, $arcdisp)
+			EndIf
 
 		Case $TYPE_CHM
-			_Run($7z & ' x "' & $file & '"', $outdir)
+			_Run($7z & ' x -aou -y -o"' & $outdir & '" "' & $file & '"', $outdir)
 			Local $aCleanup[] = ['#*', '$*']
 			Cleanup($aCleanup)
 			$hSearch = FileFindFirstFile($outdir & '\*')
@@ -2462,7 +4121,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			Local $hFile = FileOpen($sTempFile, $FO_CREATEPATH + $FO_OVERWRITE)
 			FileWrite($hFile, "1" & @LF & $file & @LF & $outdir & @LF & "3" & @LF & "1")
 			FileClose($hFile)
-			$run = Run(_MakeCommand($ci & ' ' & $sTempFile, False), $outdir, @SW_SHOW)
+			$run = Run(_MakeCommand(Quote($bindir & $ci) & ' "' & $sTempFile & '"', False), $outdir, @SW_SHOW)
 			WinWait("CreateInstall Setup Extractor", "Click Finish to close the program", $Timeout)
 			ControlClick("CreateInstall Setup Extractor", "", "Button1")
 			ProcessClose($run)
@@ -2478,7 +4137,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			$oldfiles = ReturnFiles($outdir)
 
 			; Decompress archive with 7-zip
-			_Run($7z & ' x "' & $file & '"', $outdir)
+			_Run($7z & ' x -aou -y -o"' & $outdir & '" "' & $file & '"', $outdir)
 
 			; Check for new files
 			Local $aFiles = _FileListToArray($outdir, "*", $FLTA_FILES)
@@ -2492,13 +4151,15 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 				Local $return = FetchStdout($7z & ' l "' & $outdir & '\' & $fname & '"', $outdir, @SW_HIDE)
 				If Not StringInStr($return, "Listing archive:", 0) Then ContinueLoop
 
-				_Run($7z & ' x "' & $outdir & '\' & $fname & '"', $outdir, @SW_HIDE)
+				_Run($7z & ' x -aou -y "' & $outdir & '\' & $fname & '"', $outdir, @SW_HIDE)
 				FileDelete($outdir & '\' & $fname)
 			Next
 
 		Case $TYPE_DGCA
 			HasPlugin($dgca)
 			Local $sPassword = _FindArchivePassword($dgca & ' e "' & $file & '"', $dgca & ' l -p%PASSWORD% "' & $file & '"', "Archive encrypted.", 0, -2, "-------------------------")
+			Local $bPasswordRequiredDgca = @extended
+			If $bPasswordRequiredDgca Then terminate($STATUS_PASSWORD, $file, $arctype, $arcdisp)
 			_Run($dgca & ' e ' & ($sPassword == 0? '"': '-p' & $sPassword & ' "') & $file & '" "' & $outdir & '"', $outdir, @SW_HIDE, True, True, False, False)
 			If @extended Then terminate($STATUS_PASSWORD, $file, $arctype, $arcdisp)
 
@@ -2510,6 +4171,11 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 		Case $TYPE_DCP
 			HasPlugin($dcp)
 			_Run($dcp & ' "' & $file & '"', $outdir)
+
+		Case $TYPE_ECM
+			LogExtractorWinner("unecm")
+			If Not HasPlugin($unecm, $returnFail) Then Return False
+			_Run($unecm & ' "' & $file & '" "' & $outdir & '\' & $filename & '"', $outdir, @SW_HIDE, True, True, False)
 
 		Case $TYPE_EI
 			Warn_Execute($file & ' /batch /no-reg /no-postinstall /dest "' & $outdir & '"')
@@ -2544,7 +4210,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			Local $tmp = $tempoutdir & $filename
 			If FileExists($tmp) Then
 				Cout("Installer uses gz compression. Unpacking inner archive.")
-				_Run($7z & ' x "' & $tmp & '"', $tempoutdir, @SW_HIDE, True, True, True, False)
+				_Run($7z & ' x -aou -y "' & $tmp & '"', $tempoutdir, @SW_HIDE, True, True, True, False)
 				_FileDelete($tmp)
 			EndIf
 
@@ -2563,7 +4229,8 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			Cleanup("*.ogg")
 
 		Case $TYPE_GARBRO
-			_Run($garbro & ' x -ocu -if png -o "' & $outdir & '" "' & $file & '"', $outdir, @SW_MINIMIZE)
+			Local $sGarbroExtractCmd = Quote($garbro, True) & ' x -ocu -if png -o "' & $outdir & '" "' & $file & '" || ' & Quote($garbro, True) & ' extract -ocu -if png -o "' & $outdir & '" "' & $file & '"'
+			_Run(@ComSpec & ' /d /c ' & $sGarbroExtractCmd, $outdir, @SW_MINIMIZE)
 
 		Case $TYPE_GHOST
 			$ret = $outdir & "\" & $filename & ".exe"
@@ -2583,7 +4250,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			While Not StringInStr($return, "file saved")
 				Sleep(200)
 				$return = ControlGetText($aReturn[0], "", "TEdit5")
-				If TimerDiff($TimerStart) > $Timeout Then ExitLoop
+				If TimerDiff($TimerStart) > ($Timeout * 1000) Then ExitLoop
 			WEnd
 
 			CloseExeInfo($aReturn)
@@ -2613,7 +4280,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 
 		Case $TYPE_INNO
 			If Not $additionalParameters Then
-				_Run($innounp & ' -x -m -a "' & $file & '"', $outdir)
+				_Run($innounp & ' -x -m -a -y -b -d"' & $outdir & '" "' & $file & '"', $outdir)
 
 				; Inno setup files can contain multiple versions of files, they are named ',1', ',2',... after extraction
 				; rename the first file(s), so extracted programs do not fail with 'not found' exceptions
@@ -2643,13 +4310,27 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 
 				Local $aCleanup[] = ["install_script.iss", "setup.iss"]
 				Cleanup($aCleanup)
+
+				; Inno success must be based on extracted output, not only tool log wording.
+				If _DirGetSize($outdir, $initdirsize + 1) > $initdirsize Or FileGetTime($outdir, 0, 1) <> $dirmtime Then
+					Cout("Inno extraction success (output detected)")
+					LogExtractorWinner("innounp")
+					$success = $RESULT_SUCCESS
+				EndIf
 			EndIf
 
-			If $additionalParameters Or $success == $RESULT_FAILED Then
+			If ($additionalParameters Or $success == $RESULT_FAILED) And $g_bInnoExtractUsable Then
 				_Run($innoextract & ' -e --progress=1 --collisions rename -d "' & $outdir & '" "' & $file & '"', $filedir)
 				Local $aCleanup[] = ["embedded", "tmp", "commonappdata", "cf", "cf32", "group", "userappdata", "userdocs"]
 				Cleanup($aCleanup)
 				MoveFiles($outdir & "\app", $outdir, True, "", True)
+
+				; Fallback innoextract path: mark success if files were actually produced.
+				If _DirGetSize($outdir, $initdirsize + 1) > $initdirsize Or FileGetTime($outdir, 0, 1) <> $dirmtime Then
+					Cout("Inno fallback extraction success (output detected)")
+					LogExtractorWinner("innoextract")
+					$success = $RESULT_SUCCESS
+				EndIf
 			EndIf
 
 		Case $TYPE_ISCAB
@@ -2698,79 +4379,21 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			EndIf
 
 		Case $TYPE_ISEXE
-			CheckTotalObserver($arcdisp)
-			CheckInstallShieldCab()
-
-			Local $aOptions = ["InstallShield " & t('TERM_INSTALLER'), t('METHOD_EXTRACTION_RADIO', 'isxunpack'), t('METHOD_SWITCH_RADIO', 'InstallShield /b'), t('METHOD_NOT_INSTALLER_RADIO', "InstallShield")]
-			$iChoice = GUI_MethodSelect($aOptions, $arcdisp)
-
-			Switch $iChoice
-				; Extract using isxunpack
-				Case 1
-					_FileMove($file, $outdir)
-					Run(_MakeCommand($isxunp & ' "' & $outdir & '\' & $filenamefull & '"', True), $outdir)
-					WinWait(@ComSpec)
-					WinActivate(@ComSpec)
-					Send("{ENTER}")
-					ProcessWaitClose($isxunp)
-					_FileMove($outdir & '\' & $filenamefull, $filedir)
-
-				; Try to extract MSI using cache switch
-				Case 2
-					; Run installer and wait for temp files to be copied
-					_CreateTrayMessageBox(t('INIT_WAIT'))
-					DirCreate($tempoutdir)
-					ShellExecute($file, '/b"' & $tempoutdir, $filedir)
-
-					; TODO: Rewrite
-					; Wait for matching windows for up to 30 seconds (60 * .5)
-					Opt("WinTitleMatchMode", 4)
-					Local $success
-					For $i = 1 To $Timeout / 500
-						If WinExists("classname=MsiDialogCloseClass") Then
-							; Search temp directory for MSI support and copy to tempoutdir
-							Local $msihandle = FileFindFirstFile($tempoutdir & "*.msi")
-							If Not @error Then
-								While 1
-									Local $msiname = FileFindNextFile($msihandle)
-									If @error Then ExitLoop
-									Local $tsearch = _FileSearchFirst(@TempDir, $msiname)
-									If @error Then ContinueLoop
-
-									Local $isdir = StringLeft($tsearch[1], StringInStr($tsearch[1], '\', 0, -1) - 1)
-									Local $ishandle = FileFindFirstFile($isdir & "\*")
-									$fname = FileFindNextFile($ishandle)
-									Do
-										If $fname <> $msiname Then FileCopy($isdir & "\" & $fname, $tempoutdir)
-										$fname = FileFindNextFile($ishandle)
-									Until @error
-									FileClose($ishandle)
-								WEnd
-								FileClose($msihandle)
-							EndIf
-
-							; Move files to outdir
-							_DeleteTrayMessageBox()
-							Prompt(64, 'INIT_COMPLETE')
-							MoveFiles($tempoutdir, $outdir, False, "", True)
-							$success = $RESULT_SUCCESS
-							ExitLoop
-						EndIf
-
-						Sleep(500)
-					Next
-					$run = 0
-
-					; Not a supported installer
-					If $success <> $RESULT_SUCCESS Then
-						_DeleteTrayMessageBox()
-						Prompt(64, 'INIT_COMPLETE')
-					EndIf
-
-				; Not InstallShield
-				Case 3
-					Return False
-			EndSwitch
+			Cout("Starting safe InstallShield pipeline")
+			If TryInstallShieldCabFallback($arcdisp) Then
+				$success = $RESULT_SUCCESS
+			ElseIf TryISxFallback($tempoutdir) Then
+				$success = $RESULT_SUCCESS
+			ElseIf extract($TYPE_QBMS, $arcdisp, $observer, True, True) Then
+				LogExtractorWinner("TotalObserver")
+				$success = $RESULT_SUCCESS
+			ElseIf TryIsXUnpackFallback($tempoutdir) Then
+				$success = $RESULT_SUCCESS
+			ElseIf TryInstallShieldBFallback($tempoutdir) Then
+				$success = $RESULT_SUCCESS
+			Else
+				$success = $RESULT_FAILED
+			EndIf
 
 		Case $TYPE_ISZ
 			_CreateTrayMessageBox(t('EXTRACTING') & @CRLF & 'ISZ ' & t('TERM_DISK_IMAGE') & ' (' & t('TERM_STAGE') & ' 1)')
@@ -2825,7 +4448,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 				If Not @error Then
 					For $i = 1 To $aFiles[0]
 						Cout("Extracting cab file " & $aFiles[$i])
-						_Run($7z & ' x "' & $aFiles[$i] & '"', $tempoutdir, @SW_HIDE, True, True, True, False)
+						_Run($7z & ' x -aou -y "' & $aFiles[$i] & '"', $tempoutdir, @SW_HIDE, True, True, True, False)
 						If $success == $RESULT_SUCCESS Then Cleanup($aFiles[$i])
 					Next
 				EndIf
@@ -2839,49 +4462,101 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			EndIf
 
 		Case $TYPE_MSI
-			; Try Lessmsi first
-			$ret = CheckLessmsi()
-			If $ret Then
-				_Run($msi_lessmsi & ' x "' & $file & '" "' & $outdir & '\"', $outdir, @SW_HIDE, True, True, True)
-				MoveFiles($outdir & "\SourceDir", $outdir, False, "", True)
-				If $success == $RESULT_UNKNOWN And DirGetSize($outdir) == $initdirsize Then $success = $RESULT_FAILED
+			; Production MSI pipeline (strict order):
+			;   1) lessmsi real extract (primary)
+			;   2) 7-Zip fallback
+			;   3) msiexec administrative extract fallback
+			$success = $RESULT_FAILED
+			Local $sLessmsiList = ""
+			Local $bLessmsiTried = False
+
+			If HasNetFramework(4, False) Then
+				DirCreate($tempoutdir)
+				Cout("MSI pipeline: trying lessmsi extract (primary)")
+				$bLessmsiTried = True
+				RunWait(@ComSpec & ' /d /c ' & $msi_lessmsi & ' x "' & $file & '" "' & $tempoutdir & '"', $filedir, @SW_HIDE)
+
+				; Optional diagnostics only - do not gate extraction on list output.
+					$sLessmsiList = FetchStdout($msi_lessmsi & ' l -t File "' & $file & '"', $outdir)
+				If StringInStr($sLessmsiList, "File,Component_,FileName") Then
+					Cout("MSI pipeline: lessmsi list diagnostics OK")
+				Else
+					Cout("MSI pipeline: lessmsi list diagnostics returned no file table")
+				EndIf
+
+				; Normalize lessmsi output if it created SourceDir-style admin folders
+				If FileExists($tempoutdir & '\SourceDir') Then
+					MoveFiles($tempoutdir & '\SourceDir', $tempoutdir, False, "", True)
+					DirRemove($tempoutdir & '\SourceDir', True)
+				ElseIf FileExists($tempoutdir & '\' & $filename & '\SourceDir') Then
+					MoveFiles($tempoutdir & '\' & $filename & '\SourceDir', $tempoutdir, False, "", True)
+					DirRemove($tempoutdir & '\' & $filename, True)
+				EndIf
+
+				If DirGetSize($tempoutdir) > 0 Then
+					MoveFiles($tempoutdir, $outdir, False, "", True)
+					If DirGetSize($outdir) > $initdirsize Then
+						$success = $RESULT_SUCCESS
+						Cout("MSI pipeline: lessmsi extract success (files detected)")
+						LogExtractorWinner("lessmsi")
+					Else
+						Cout("MSI pipeline: lessmsi extract produced no usable files in output dir")
+					EndIf
+				Else
+					Cout("MSI pipeline: lessmsi extract produced no files")
+				EndIf
+			Else
+				Cout("MSI pipeline: .NET 4 missing, skipping lessmsi")
 			EndIf
 
-			; If lessmsi fails or .NET framework is not available, the user can choose between legacy extractors
-			If Not $ret Or $success == $RESULT_FAILED Then
-				$success = $RESULT_UNKNOWN
-				Local $aReturn = ['MSI ' & t('TERM_INSTALLER'), t('METHOD_EXTRACTION_RADIO', 'jsMSI Unpacker'), t('METHOD_EXTRACTION_RADIO', 'MsiX'), t('METHOD_EXTRACTION_RADIO', 'MSI TC Packer'), t('METHOD_ADMIN_RADIO', 'MSI')]
-				$iChoice = GUI_MethodSelect($aReturn, $arcdisp)
+			; Fallback 1: 7-Zip
+			If $success == $RESULT_FAILED Then
+				If $bLessmsiTried Then
+					Cout("MSI pipeline: lessmsi failed, trying 7-Zip fallback")
+				Else
+					Cout("MSI pipeline: lessmsi unavailable, trying 7-Zip fallback")
+				EndIf
+				DirCreate($tempoutdir)
+				_Run($7z & ' x -aou -y "' & $file & '"', $tempoutdir, @SW_HIDE, True, True, True)
+				If $appendext Then AppendExtensions($tempoutdir)
+				MoveFiles($tempoutdir, $outdir, False, "", True)
+				Sleep(300)
+				If DirGetSize($outdir) > $initdirsize Then
+					$success = $RESULT_SUCCESS
+					Cout("MSI pipeline: 7-Zip success (files detected)")
+					LogExtractorWinner("7z")
+				Else
+					$success = $RESULT_FAILED
+				EndIf
+			EndIf
 
-				Switch $iChoice
-					Case 1 ; jsMSI Unpacker
-						_Run($msi_jsmsix & ' "' & $file & '"|"' & $outdir & '"', $filedir, @SW_HIDE, False, False)
-						_FileRead($outdir & "\MSI Unpack.log", True)
-						Cleanup("*.cab")
+			; Fallback 2: Administrative install via msiexec
+			If $success == $RESULT_FAILED Then
+				Cout("MSI pipeline: 7-Zip failed, trying msiexec administrative install")
+				RunWait(@ComSpec & ' /d /c msiexec.exe /a "' & $file & '" /qn TARGETDIR="' & $outdir & '"', $filedir, @SW_HIDE)
 
-					Case 2 ; MsiX
-						Local $appendargs = $appendext? '/ext': ''
-						_Run($msi_msix & ' "' & $file & '" /out "' & $outdir & '" ' & $appendargs, $filedir)
+				; msiexec /a often extracts into SourceDir or into a nested <filename>\SourceDir tree.
+				; Normalize that output into $outdir so UniExtract sees a usable result.
+				Local $sMsiAdminRoot = $outdir & '\SourceDir'
+				Local $sMsiAdminNested = $outdir & '\' & $filename & '\SourceDir'
+				If FileExists($sMsiAdminRoot) Then
+					Cout("MSI pipeline: normalizing msiexec SourceDir output")
+					MoveFiles($sMsiAdminRoot, $outdir, False, "", True)
+					DirRemove($sMsiAdminRoot, True)
+				ElseIf FileExists($sMsiAdminNested) Then
+					Cout("MSI pipeline: normalizing nested msiexec SourceDir output")
+					MoveFiles($sMsiAdminNested, $outdir, False, "", True)
+					DirRemove($outdir & '\' & $filename, True)
+				EndIf
 
-					Case 3 ; MSI Total Commander plugin
-						DirCreate($tempoutdir)
-						_Run($quickbms & ' "' & $bindir & $msi_plug & '" "' & $file & '" "' & $tempoutdir & '"', $outdir, @SW_MINIMIZE, True, False)
-
-						; Extract files from extracted CABs
-						Local $aFiles = _FileListToArrayRec($tempoutdir, "*.cab", $FLTAR_FILES, $FLTAR_RECUR, $FLTAR_NOSORT, $FLTAR_FULLPATH)
-						If Not @error Then
-							For $i = 1 To $aFiles[0]
-								_Run($7z & ' x "' & $aFiles[$i] & '"', $outdir)
-								Cleanup($aFiles[$i])
-							Next
-						EndIf
-
-						If $appendext Then AppendExtensions($tempoutdir)
-						MoveFiles($tempoutdir, $outdir, False, "", True)
-
-					Case 4 ; Administrative install
-						RunWait(Warn_Execute('msiexec.exe /a "' & $file & '" /qb TARGETDIR="' & $outdir & '"'), $filedir, @SW_SHOW)
-				EndSwitch
+				Sleep(500)
+				If DirGetSize($outdir) > $initdirsize Then
+					$success = $RESULT_SUCCESS
+					Cout("MSI pipeline: msiexec success (files detected)")
+					LogExtractorWinner("msiexec /a")
+				Else
+					$success = $RESULT_FAILED
+				EndIf
 			EndIf
 
 		Case $TYPE_MSM ; Test
@@ -2896,7 +4571,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 				Case 1 ; 7-Zip
 					DirCreate($tempoutdir)
 
-					_Run($7z & ' x "' & $file & '"', $tempoutdir)
+					_Run($7z & ' x -aou -y "' & $file & '"', $tempoutdir)
 
 					AppendExtensions($tempoutdir)
 					MoveFiles($tempoutdir, $outdir, False, "", True)
@@ -2954,7 +4629,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 
 		Case $TYPE_NSIS
 			; Rename duplicates and extract
-			_Run($7z & ' x -aou' & ' "' & $file & '"', $outdir)
+			_Run($7z & ' x -aou -y' & ' "' & $file & '"', $outdir)
 
 			If $success == $RESULT_FAILED Then checkIE()
 
@@ -2965,10 +4640,19 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			CheckBin()
 
 		Case $TYPE_PDF
-			_Run($pdfdetach & ' -saveall "' & $file & '"', $outdir, @SW_HIDE, True, True, False, False)
-			_Run($pdftohtml & ' "' & $file & '" "' & $outdir & '\' & $filename & '-HTML"', $outdir, @SW_HIDE, True, True, False, False)
-			_Run($pdftopng & ' "' & $file & '" "' & $outdir & '\' & $filename & '-' & t('TERM_PAGE') & '"', $outdir, @SW_HIDE, True, True, False, False)
-			_Run($pdftotext & ' "' & $file & '" "' & $outdir & '\' & $filename & '.txt"', $outdir, @SW_HIDE, True, True, False, False)
+			Local $sPdfFile = _PdfDecryptWithQpdf($file, $tempoutdir)
+			Local $iPdfDecryptError = @error, $bPdfDecrypted = @extended
+			If Not $iPdfDecryptError Then
+				_Run($pdfdetach & ' -saveall "' & $sPdfFile & '"', $outdir, @SW_HIDE, True, True, False, False)
+				_Run($pdftohtml & ' "' & $sPdfFile & '" "' & $outdir & '\' & $filename & '-HTML"', $outdir, @SW_HIDE, True, True, False, False)
+				_Run($pdftopng & ' "' & $sPdfFile & '" "' & $outdir & '\' & $filename & '-' & t('TERM_PAGE') & '"', $outdir, @SW_HIDE, True, True, False, False)
+				_Run($pdftotext & ' "' & $sPdfFile & '" "' & $outdir & '\' & $filename & '.txt"', $outdir, @SW_HIDE, True, True, False, False)
+				If $bPdfDecrypted Then FileDelete($sPdfFile)
+			ElseIf $g_bPasswordFailureAbort Then
+				; A password-protected PDF can fail before any extractor command runs.
+				; Remove the PDF temp folder now; extract() terminates immediately on password abort.
+				If FileExists($tempoutdir) Then DirRemove($tempoutdir, 1)
+			EndIf
 
 		Case $TYPE_PEA
 			DirCreate($tempoutdir)
@@ -2983,7 +4667,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 
 		Case $TYPE_QBMS
 			Local $sPlugin = $additionalParameters? $bindir & $additionalParameters: $bms
-			_Run($quickbms & ' -K "' & $sPlugin & '" "' & $file & '" "' & $outdir & '"', $outdir, @SW_MINIMIZE, True, False)
+			_Run($quickbms & ' -Y -K "' & $sPlugin & '" "' & $file & '" "' & $outdir & '"', $outdir, @SW_MINIMIZE, True, False)
 			If FileExists($bms) Then FileDelete($bms)
 
 			If $additionalParameters == $ie Then
@@ -3001,8 +4685,12 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			DirRemove($tempoutdir)
 
 		Case $TYPE_RAR
+			LogExtractorWinner("UnRAR")
 			Local $sPassword = _FindArchivePassword($rar & ' lt -p- "' & $file & '"', $rar & ' t -p"%PASSWORD%" "' & $file & '"', "encrypted", 0, 0)
-			_Run($rar & ' x -kb ' & ($sPassword == 0? '"': '-p"' & $sPassword & '" "') & $file & '"', $outdir, @SW_SHOW)
+			Local $bPasswordRequiredRar = @extended
+			If $bPasswordRequiredRar Then terminate($STATUS_PASSWORD, $file, $arctype, $arcdisp)
+			Local $sUnrarPasswordSwitch = ($sPassword == 0? ($silentmode? '-p- "': '"'): '-p"' & $sPassword & '" "')
+			_Run($rar & ' x -o+ -kb ' & $sUnrarPasswordSwitch & $file & '"', $outdir, @SW_SHOW)
 			If @error = 3 Then terminate($STATUS_MISSINGPART)
 			If @extended Then terminate($STATUS_PASSWORD, $file, $arctype, $arcdisp)
 
@@ -3011,7 +4699,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			_Run($rgss & ' -p -o="' & $outdir & '" "' & $file & '"', $outdir, @SW_HIDE)
 
 		Case $TYPE_ROBO ; Test
-			RunWait(Warn_Execute($file & ' /unpack="' & $outdir & '"'), $filedir)
+			RunWait(Warn_Execute(Quote($file) & ' /unpack="' & $outdir & '"'), $filedir)
 
 		Case $TYPE_RPA
 			_Run($rpa & ' -m -v --continue-on-error -p "' & $outdir & '" "' & $file & '"', @ScriptDir, True, True, True)
@@ -3030,6 +4718,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			DirRemove(@MyDocumentsDir & "\SISContents", 0)
 
 		Case $TYPE_SQLITE
+			LogExtractorWinner("sqlite3")
 			Local $return = FetchStdout($sqlite & ' "' & $file & '" .dump"', $filedir, @SW_HIDE, 0)
 			Local $hFile = FileOpen($outdir & '\' & $filename & '.sql', $FO_CREATEPATH + $FO_OVERWRITE)
 			FileWrite($hFile, $return)
@@ -3104,28 +4793,30 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 				$success = $RESULT_FAILED
 			EndIf
 
-		Case $TYPE_THINSTALL ; Test
-			HasPlugin($thinstall)
-
-			$pid = Run(Warn_Execute($file), $filedir)
-			Do
-				Sleep(100)
-			Until ProcessExists($pid)
-			Sleep(1000)
-			Run($thinstall)
-			WinWait("h4sh3m Virtual Apps Dependency Extractor")
-			WinActivate("h4sh3m Virtual Apps Dependency Extractor")
-			ControlSetText("h4sh3m Virtual Apps Dependency Extractor", "", "TEdit1", $pid)
-			ControlClick("h4sh3m Virtual Apps Dependency Extractor", "", "TBitBtn3")
-			WinWait("h4sh3m Virtual App's Extractor", "", 60)
-			WinActivate("h4sh3m Virtual App's Extractor")
-			ControlSetText("h4sh3m Virtual App's Extractor", "", "TEdit1", $outdir)
-			ControlClick("h4sh3m Virtual App's Extractor", "", "TBitBtn1")
-			WinWait("Done")
-			ControlClick("Done", "", "Button1")
-			WinClose("h4sh3m Virtual Apps Dependency Extractor")
-			Sleep(1000)
-			ProcessClose($pid)
+		Case $TYPE_THINSTALL ; h4sh3m plugin disabled in this fork
+			Cout("Thinstall/ThinApp extraction skipped: h4sh3m plugin disabled in this fork")
+			$success = $RESULT_FAILED
+;~			HasPlugin($thinstall)
+;~
+;~			$pid = Run(Warn_Execute(Quote($file)), $filedir)
+;~			Do
+;~				Sleep(100)
+;~			Until ProcessExists($pid)
+;~			Sleep(1000)
+;~			Run($thinstall)
+;~			WinWait("h4sh3m Virtual Apps Dependency Extractor")
+;~			WinActivate("h4sh3m Virtual Apps Dependency Extractor")
+;~			ControlSetText("h4sh3m Virtual Apps Dependency Extractor", "", "TEdit1", $pid)
+;~			ControlClick("h4sh3m Virtual Apps Dependency Extractor", "", "TBitBtn3")
+;~			WinWait("h4sh3m Virtual App's Extractor", "", 60)
+;~			WinActivate("h4sh3m Virtual App's Extractor")
+;~			ControlSetText("h4sh3m Virtual App's Extractor", "", "TEdit1", $outdir)
+;~			ControlClick("h4sh3m Virtual App's Extractor", "", "TBitBtn1")
+;~			WinWait("Done")
+;~			ControlClick("Done", "", "Button1")
+;~			WinClose("h4sh3m Virtual Apps Dependency Extractor")
+;~			Sleep(1000)
+;~			ProcessClose($pid)
 
 		Case $TYPE_TTARCH
 			If $ttarchfailed Then Return 0
@@ -3175,7 +4866,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			; Newer files contain 'archtemp.tar', old version are standard tar.gz archives
 			Local $sFile = $tempoutdir & "archtemp.tar"
 			If FileExists($sFile) Then
-				_Run($7z & ' x "' & $sFile & '"', $tempoutdir)
+				_Run($7z & ' x -aou -y "' & $sFile & '"', $tempoutdir)
 				FileDelete($sFile)
 			EndIf
 
@@ -3323,11 +5014,11 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 
 		Case $TYPE_VSSFX ; Test
 			_FileMove($file, $outdir)
-			RunWait(Warn_Execute($outdir & '\' & $filenamefull & ' /extract'), $outdir)
+			RunWait(Warn_Execute(Quote($outdir & '\' & $filenamefull) & ' /extract'), $outdir)
 			_FileMove($outdir & '\' & $filenamefull, $filedir)
 
 		Case $TYPE_VSSFX_PATH ; Test
-			RunWait(Warn_Execute($file & ' /extract:"' & $outdir & '" /quiet'), $outdir)
+			RunWait(Warn_Execute(Quote($file) & ' /extract:"' & $outdir & '" /quiet'), $outdir)
 
 		Case $TYPE_WISE
 			_Run($wise_ewise & ' "' & $file & '" "' & $outdir & '"', $filedir)
@@ -3348,7 +5039,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 					; Extract using the /x switch
 					Case 2
 						Warn_Execute($file & ' /x ' & $outdir)
-						ShellExecuteWait($file, ' /x ' & $outdir, $filedir)
+						ShellExecuteWait($file, ' /x "' & $outdir & '"', $filedir)
 
 					; Attempt to extract MSI
 					Case 3
@@ -3360,7 +5051,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 					; Extract using unzip, falling back to 7-Zip
 					Case 4
 						_Run($zip & ' -x "' & $file & '"', $outdir)
-						If $success == $RESULT_FAILED Then _Run($7z & ' x "' & $file & '"', $outdir)
+						If $success == $RESULT_FAILED Then _Run($7z & ' x -aou -y "' & $file & '"', $outdir)
 					; Not a Wise installer
 					Case 5
 						Return False
@@ -3371,8 +5062,13 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			EndIf
 
 		Case $TYPE_WIX
-			HasNetFramework(4)
-			_Run($wix & ' -x "' & $outdir & '" "' & $file & '"', $outdir, @SW_MINIMIZE, True, True, False)
+			If Not HasNetFramework(4, Not $returnFail) Then
+				$success = $RESULT_FAILED
+			ElseIf Not HasPlugin($wix, $returnFail) Then
+				$success = $RESULT_FAILED
+			Else
+				_Run($wix & ' -x "' & $outdir & '" "' & $file & '"', $outdir, @SW_MINIMIZE, True, True, False)
+			EndIf
 
 		Case $TYPE_WOLF
 			HasPlugin($wolf)
@@ -3383,8 +5079,13 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 
 		Case $TYPE_ZIP
 			If Not extract($TYPE_7Z, -1, $additionalParameters, False, True) Then
-				If $arcdisp > -1 Then _CreateTrayMessageBox(t('EXTRACTING') & @CRLF & $arcdisp)
-				_Run($zip & ' -x "' & $file & '"', $outdir, @SW_MINIMIZE, True, False)
+				If $g_bArchiveIntegrityError Then
+					Cout("Definitive archive corruption/broken-volume failure detected after 7-Zip ZIP attempt; skipping unzip fallback")
+					$success = $RESULT_FAILED
+				Else
+					If $arcdisp > -1 Then _CreateTrayMessageBox(t('EXTRACTING') & @CRLF & $arcdisp)
+					_Run($zip & ' -x "' & $file & '"', $outdir, @SW_MINIMIZE, True, False)
+				EndIf
 			EndIf
 
 		Case $TYPE_ZOO
@@ -3402,13 +5103,17 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			If @error Then Cout("Unknown arctype: " & $arctype & ". Feature not implemented!")
 	EndSwitch
 
+	If $g_bPasswordFailureAbort Then
+		Cout("Password failure detected; stopping this file and skipping further extractor fallbacks")
+		terminate($STATUS_PASSWORD, $file, $arctype, $arcdisp)
+	EndIf
+
 	Opt("WinTitleMatchMode", 1)
 	If Not $returnFail Then _DeleteTrayMessageBox()
 
 
 	; -----Success evaluation----- ;
 
-	Cout("Extraction finished, success: " & $success)
 	If FileExists($tempoutdir) Then DirRemove($tempoutdir)
 	$outdir &= "\"
 
@@ -3425,29 +5130,58 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			; Otherwise, check directory size
 			If ($initdirsize > -1 And _DirGetSize($outdir, $initdirsize + 1) <= $initdirsize) Or (FileGetTime($outdir, 0, 1) == $dirmtime) Then
 				If $arctype = "ace" And $fileext = "exe" Then Return False
+				If $g_bSymlinkOnlyWarning Then Cout("Symlink-related warnings were present, but no usable output was created")
 				$success = $RESULT_FAILED
+			ElseIf $g_bSymlinkOnlyWarning Then
+				Cout("Symlink-related warnings were non-fatal; usable output was detected")
 			EndIf
 	EndSwitch
 
-	If $success = $RESULT_FAILED Then
-		If Not $returnFail Then terminate($STATUS_FAILED, $file, $arctype, $arcdisp)
-		$success = $RESULT_UNKNOWN
-		Return 0
+	If $g_bArchiveIntegrityError And $success <> $RESULT_FAILED And $success <> $RESULT_CANCELED And $success <> $RESULT_NOFREESPACE Then
+		Cout("Fatal archive integrity errors were detected earlier; ignoring usable output and marking extraction failed")
+		$success = $RESULT_FAILED
 	EndIf
 
-	If Not $returnSuccess Then terminate($STATUS_SUCCESS, $filenamefull, $arctype, $arcdisp)
-	$success = $RESULT_UNKNOWN
-	Return 1
+	If $success = $RESULT_FAILED Or $success = $RESULT_CANCELED Then
+		If $returnFail Then
+			Cout("Extraction attempt result: " & _ResultToText($success) & " (" & $success & ")")
+			$success = $RESULT_UNKNOWN
+			Return 0
+		EndIf
+		Cout("Extraction final result: " & _ResultToText($success) & " (" & $success & ")")
+		terminate($STATUS_FAILED, $file, $arctype, $arcdisp)
+	EndIf
+
+	If $success = $RESULT_UNKNOWN Then
+		Cout("No explicit tool success marker was found, but usable output exists")
+		$success = $RESULT_SUCCESS
+	EndIf
+
+	If $success = $RESULT_SUCCESS And $arctype = $TYPE_ALZ And $g_sExtractorWinner = "" Then LogExtractorWinner("unalz")
+	Cout("Extraction evaluated result: " & _ResultToText($success) & " (" & $success & ")")
+	
+	If $returnSuccess Then
+		Cout("Extraction attempt result: " & _ResultToText($success) & " (" & $success & ")")
+		$success = $RESULT_UNKNOWN
+		Return 1
+	EndIf
+
+	Cout("Extraction final result: " & _ResultToText($success) & " (" & $success & ")")
+	terminate($STATUS_SUCCESS, $filenamefull, $arctype, $arcdisp)
 EndFunc
 
 ; Extract disk images and convert then if necessary
-Func extractDiskImage($arctype, $arcdisp = 0, $additionalParameters = "")
+Func extractDiskImage($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess = False, $returnFail = False)
 	Cout("Extracting disk image")
-	extract($arctype, $arcdisp, $additionalParameters, True)
+	If Not extract($arctype, $arcdisp, $additionalParameters, True, True) Then
+		If $returnFail Then Return False
+		terminate($STATUS_FAILED, $file, $arctype, $arcdisp)
+	EndIf
 
 	Local $sFile = _FileSearchFirstMultiExtension($outdir, $filename, "iso;cue;bin;mdf;mds;ccd;nrg;img")
 	If @error Then
 		Cout("The disk image was extracted directly, no conversion necessary")
+		If $returnSuccess Then Return True
 		terminate($STATUS_SUCCESS, $filenamefull, $arctype, $arcdisp)
 	EndIf
 
@@ -3455,12 +5189,19 @@ Func extractDiskImage($arctype, $arcdisp = 0, $additionalParameters = "")
 	_CreateTrayMessageBox(t('EXTRACTING') & @CRLF & StringUpper($arctype) & " " & t('TERM_DISK_IMAGE') & ' (' & t('TERM_STAGE') & ' 2)')
 	$file = $sFile
 
+	Local $bStage2Success = False
 	If CheckIso(True, True) Or check7z(t('TERM_DISK_IMAGE'), False, True, True) Then
+		$bStage2Success = True
 		_FileDelete($sFile)
 	Else
 		AddWarning(t('WARN_CONVERSION_FAILED'))
 	EndIf
 
+	If $returnSuccess Then Return $bStage2Success
+	If Not $bStage2Success Then
+		If $returnFail Then Return False
+		terminate($STATUS_FAILED, $filenamefull, $arctype, $arcdisp)
+	EndIf
 	terminate($STATUS_SUCCESS, $filenamefull, $arctype, $arcdisp)
 EndFunc
 
@@ -3555,7 +5296,7 @@ Func BmsExtract($sName, $hDB = 0)
 		Local $hFile = FileOpen($bms, $FO_OVERWRITE)
 		FileWrite($hFile, $aReturn[2])
 		FileClose($hFile)
-		Local $return = FetchStdout($quickbms & ' -l "' & $bms & '" "' & $file & '"', $filedir, @SW_HIDE, -1)
+		Local $return = FetchStdout($quickbms & ' -Y -l "' & $bms & '" "' & $file & '"', $filedir, @SW_HIDE, -1)
 
 		If Not StringInStr($return, "0 files found") And Not StringInStr($return, "Error") And Not StringInStr($return, "invalid") _
 		And Not StringInStr($return, "expected: ") And $return <> "" Then
@@ -3609,7 +5350,15 @@ Func unpack($packer)
 	Local $sPath = $outdir & "\" & $sName & "." & $fileext
 	If FileExists($sPath) Then $sPath = _TempFile($outdir, $sName & "_", $fileext)
 
-	If Not Prompt(32 + 4, 'UNPACK_PROMPT', CreateArray($packer, PathGetFileName($sPath))) Then Return
+	; In batch/context-menu multi-file mode, do not suppress packer normalization.
+	; If DIE detects the original file as UPX/ASPack-packed, unpacking is a
+	; normalization step, not an optional extractor fallback.  Suppressing this
+	; prompt made non-silent batch skip UPX unpacking and then fall through to
+	; unrelated 7-Zip PE/resource extraction.  After unpacking, StartExtraction()
+	; re-runs normal detection on the unpacked file, so any real archive/installer
+	; inside is still handled by its proper extractor.
+	Local $bBatchAutoUnpack = __IsBatchModeActive()
+	If Not $bBatchAutoUnpack And Not Prompt(32 + 4, 'UNPACK_PROMPT', CreateArray($packer, PathGetFileName($sPath))) Then Return
 	_CreateTrayMessageBox(t('EXTRACTING') & @CRLF & $packer & " " & t('TERM_COMPRESSED'))
 
 	; Unpack file
@@ -3629,8 +5378,11 @@ Func unpack($packer)
 
 	; Success evaluation
 	If FileExists($sPath) Then
-		; Prompt if unpacked file should be scanned
-		If Prompt(32 + 4, 'UNPACK_AGAIN', CreateArray($filenamefull, PathGetFileName($sPath))) Then
+		; In batch mode, always continue with normal detection of the unpacked file.
+		; This makes silent and non-silent batch deterministic and lets DIE/normal
+		; detection decide whether the unpacked file is a real archive/installer or
+		; just an unsupported executable.
+		If $bBatchAutoUnpack Or Prompt(32 + 4, 'UNPACK_AGAIN', CreateArray($filenamefull, PathGetFileName($sPath))) Then
 			$file = $sPath
 			StartExtraction()
 		Else
@@ -3854,7 +5606,7 @@ Func HasFFMPEG()
 				; Make sure the executable is really FFmpeg
 				GUICtrlSetState($idDownload, $GUI_DISABLE)
 				GUICtrlSetState($idSelectFile, $GUI_DISABLE)
-				Local $ret = FetchStdout($sPath, @WorkingDir, @SW_HIDE, 0, True, True, False)
+				Local $ret = FetchStdout(Quote($sPath), @WorkingDir, @SW_HIDE, 0, True, True, False)
 				FileChangeDir($tmp)
 				GUICtrlSetState($idDownload, $GUI_ENABLE)
 				GUICtrlSetState($idSelectFile, $GUI_ENABLE)
@@ -4094,6 +5846,436 @@ Func _RegWrite($sKey, $sValueName, $sType = "REG_SZ", $sValue = "")
 	Return SetError($iError, 0, False)
 EndFunc
 
+; -------------------------- Logging summary helpers ---------------------------
+
+Func _NormalizeOneLine($sText)
+	$sText = StringReplace($sText, @CR, " ")
+	$sText = StringReplace($sText, @LF, " ")
+	While StringInStr($sText, "  ")
+		$sText = StringReplace($sText, "  ", " ")
+	WEnd
+	Return StringStripWS($sText, 3)
+EndFunc
+
+Func _PipelineHtmlEscape($sText)
+	$sText = String($sText)
+	$sText = StringReplace($sText, "&", "&amp;")
+	$sText = StringReplace($sText, "<", "&lt;")
+	$sText = StringReplace($sText, ">", "&gt;")
+	$sText = StringReplace($sText, '"', "&quot;")
+	Return $sText
+EndFunc
+
+Func _PipelineStatusClass($sStatus)
+	Local $s = StringLower(_NormalizeOneLine($sStatus))
+	If $s = "success" Or $s = "ok" Then Return "ok"
+	If $s = "failed" Or $s = "fail" Or $s = "password" Or $s = "corrupted" Or $s = "canceled" Or $s = "nofreespace" Then Return "fail"
+	If $s = "warn" Or $s = "warning" Or $s = "partial" Or $s = "run" Or $s = "unknown" Then Return "warn"
+	If $s = "skipped" Then Return "info"
+	Return "info"
+EndFunc
+
+Func _PipelineCommandExePath($sCommand)
+	Local $aExe = StringRegExp($sCommand, '"([^"|<>]+\.exe)"', 3)
+	If Not IsArray($aExe) Then $aExe = StringRegExp($sCommand, '([^\s"|<>]+\.exe)', 3)
+	If IsArray($aExe) Then
+		For $i = 0 To UBound($aExe) - 1
+			Local $sExe = StringReplace($aExe[$i], "/", "\")
+			Local $sBase = $sExe
+			Local $iPos = StringInStr($sBase, "\", 0, -1)
+			If $iPos > 0 Then $sBase = StringTrimLeft($sBase, $iPos)
+			If StringLower($sBase) = "cmd.exe" Or StringLower($sBase) = "tee.exe" Then ContinueLoop
+			If FileExists($sExe) Then Return $sExe
+			If FileExists($bindir & $sExe) Then Return $bindir & $sExe
+			If FileExists($bindir & $sBase) Then Return $bindir & $sBase
+			Return $sExe
+		Next
+	EndIf
+	Return ""
+EndFunc
+
+Func _PipelineCommandTool($sCommand)
+	Local $sExe = _PipelineCommandExePath($sCommand)
+	If $sExe <> "" Then
+		Local $iPos = StringInStr($sExe, "\", 0, -1)
+		If $iPos > 0 Then Return StringTrimLeft($sExe, $iPos)
+		Return $sExe
+	EndIf
+	Return "Command"
+EndFunc
+
+Func _PipelineCommandVersion($sCommand)
+	Local $sExe = _PipelineCommandExePath($sCommand)
+	If $sExe = "" Or Not FileExists($sExe) Then Return ""
+	Local $sVersion = FileGetVersion($sExe)
+	If @error Or $sVersion = "" Then Return ""
+	Return $sVersion
+EndFunc
+
+Func _PipelineFileUrl($sPath)
+	$sPath = StringStripWS($sPath, 3)
+	$sPath = StringReplace($sPath, "\", "/")
+	While StringRight($sPath, 1) = "/"
+		$sPath = StringTrimRight($sPath, 1)
+	WEnd
+	$sPath = StringReplace($sPath, "%", "%25")
+	$sPath = StringReplace($sPath, " ", "%20")
+	$sPath = StringReplace($sPath, "#", "%23")
+	$sPath = StringReplace($sPath, "?", "%3F")
+	$sPath = StringReplace($sPath, "&", "%26")
+	$sPath = StringReplace($sPath, "'", "%27")
+	$sPath = StringReplace($sPath, '"', "%22")
+	$sPath = StringReplace($sPath, "[", "%5B")
+	$sPath = StringReplace($sPath, "]", "%5D")
+	Return "file://localhost/" & $sPath
+EndFunc
+
+Func _PipelineAddToolVersion($sTool, $sVersion)
+	$sTool = _NormalizeOneLine($sTool)
+	$sVersion = _NormalizeOneLine($sVersion)
+	If $sTool = "" Or $sVersion = "" Then Return
+	Local $sKey = "|" & $sTool & "|"
+	If StringInStr($g_sPipelineToolVersions, $sKey, 1) Then Return
+	$g_sPipelineToolVersions &= $sKey & $sVersion & @CRLF
+EndFunc
+
+Func _PipelineToolVersionsHtml()
+	If StringStripWS($g_sPipelineToolVersions, 3) = "" Then Return '<div class="empty">No external tool versions captured.</div>'
+	Local $sHtml = '<table class="tooltable"><tr><th>Tool</th><th>Version</th></tr>'
+	Local $aLines = StringSplit(StringStripWS($g_sPipelineToolVersions, 3), @CRLF, $STR_NOCOUNT)
+	If IsArray($aLines) Then
+		For $i = 0 To UBound($aLines) - 1
+			Local $aParts = StringSplit($aLines[$i], "|", $STR_NOCOUNT)
+			If IsArray($aParts) And UBound($aParts) >= 3 Then $sHtml &= '<tr><td>' & _PipelineHtmlEscape($aParts[1]) & '</td><td>' & _PipelineHtmlEscape($aParts[2]) & '</td></tr>'
+		Next
+	EndIf
+	Return $sHtml & '</table>'
+EndFunc
+
+Func _PipelineFinalBadgeText($sFinalStatus)
+	If $g_iPipelineFail > 0 Then Return "FAILED"
+	If $g_iPipelineWarn > 0 Then Return "SUCCESS WITH WARNINGS"
+	If StringLower($sFinalStatus) = "unknown" Then Return "UNSUPPORTED / UNKNOWN"
+	Return "FULL SUCCESS"
+EndFunc
+
+Func _PipelineSummaryHtml($sLogPath, $sFinalStatus)
+	Local $sBadge = _PipelineFinalBadgeText($sFinalStatus)
+	Local $sBadgeClass = _PipelineStatusClass(($g_iPipelineFail > 0 ? "FAIL" : ($g_iPipelineWarn > 0 ? "WARN" : "OK")))
+	Local $sOutputLink = ""
+	If $outdir <> "" Then $sOutputLink = '<a class="outputpath" href="' & _PipelineHtmlEscape(_PipelineFileUrl($outdir)) & '">' & _PipelineHtmlEscape($outdir) & '</a>'
+	If $sOutputLink = "" Then $sOutputLink = '<span class="muted">not available</span>'
+	Local $sDetect = ($g_sDetectionWinner <> "" ? $g_sDetectionWinner & ($g_sDetectedTypeForSummary <> "" ? " → " & $g_sDetectedTypeForSummary : "") : "not captured")
+	Local $sExtractor = ($g_sExtractorWinner <> "" ? $g_sExtractorWinner : $sFinalStatus)
+	Local $sLine = (StringStripWS($g_sPipelineLine, 3) <> "" ? StringTrimRight($g_sPipelineLine, 3) : "not captured")
+	Local $sHtml = '<div class="summary"><div class="finalbadge ' & $sBadgeClass & '">' & _PipelineHtmlEscape($sBadge) & '</div>'
+	$sHtml &= '<div class="summarygrid">'
+	$sHtml &= '<div><b>Detector winner</b><br>' & _PipelineHtmlEscape($sDetect) & '</div>'
+	$sHtml &= '<div><b>Extractor winner</b><br>' & _PipelineHtmlEscape($sExtractor) & '</div>'
+	$sHtml &= '<div><b>Warnings</b><br>' & $g_iPipelineWarn & '</div>'
+	$sHtml &= '<div><b>Failures</b><br>' & $g_iPipelineFail & '</div>'
+	$sHtml &= '<div><b>Commands</b><br>' & $g_iPipelineRun & '</div>'
+	$sHtml &= '<div><b>Output folder</b><br>' & $sOutputLink & '</div>'
+	$sHtml &= '</div><div class="pipeline"><b>Pipeline:</b> ' & _PipelineHtmlEscape($sLine) & '</div></div>'
+	Return $sHtml
+EndFunc
+
+Func _PipelineTimelineHtml()
+	If StringStripWS($g_sPipelineTimeline, 3) = "" Then Return ""
+	Return '<details class="panel"><summary>Timeline</summary><pre>' & _PipelineHtmlEscape(StringStripWS($g_sPipelineTimeline, 3)) & '</pre></details>'
+EndFunc
+
+Func _PipelineStep($sPhase, $sTool, $sStatus = "INFO", $sDetails = "", $sCommand = "", $sOutput = "")
+	$g_iPipelineSeq += 1
+	Local $sNormPhase = _NormalizeOneLine($sPhase)
+	Local $sNormTool = _NormalizeOneLine($sTool)
+	Local $sNormStatus = _NormalizeOneLine($sStatus)
+	Local $sClass = _PipelineStatusClass($sStatus)
+	Local $sSummary = "#" & $g_iPipelineSeq & " [" & $sNormPhase & "] " & $sNormTool & " — " & $sNormStatus
+	Local $sCmdId = "cmd" & $g_iPipelineSeq
+	Local $sOutId = "out" & $g_iPipelineSeq
+
+	Switch StringUpper($sNormStatus)
+		Case "OK", "SUCCESS"
+			$g_iPipelineOk += 1
+		Case "WARN", "WARNING", "PARTIAL"
+			$g_iPipelineWarn += 1
+		Case "FAIL", "FAILED", "CANCELED", "NOFREESPACE", "PASSWORD", "CORRUPTED"
+			$g_iPipelineFail += 1
+		Case "RUN"
+			$g_iPipelineRun += 1
+	EndSwitch
+
+	If $sNormPhase <> "COMMAND" Then $g_sPipelineTimeline &= GetDateTime() & "  " & $sNormPhase & "  " & $sNormTool & "  " & $sNormStatus & @CRLF
+	If $sNormPhase = "DETECTOR" Or $sNormPhase = "DETECTION" Or $sNormPhase = "EXTRACTOR" Or $sNormPhase = "OUTPUT" Or $sNormPhase = "FINAL" Then $g_sPipelineLine &= $sNormTool & ":" & $sNormStatus & " → "
+
+	If $sCommand <> "" Then _PipelineAddToolVersion(_PipelineCommandTool($sCommand), _PipelineCommandVersion($sCommand))
+
+	Local $sRow = '<details class="step ' & $sClass & '"><summary><span class="badge ' & $sClass & '">' & _PipelineHtmlEscape($sStatus) & '</span> ' & _PipelineHtmlEscape($sSummary) & '</summary>' & @CRLF
+	If $sDetails <> "" Then $sRow &= '<div class="label">Details</div><pre>' & _PipelineHtmlEscape($sDetails) & '</pre>' & @CRLF
+	If $sCommand <> "" Then $sRow &= '<div class="label">Command line <button class="copy" onclick="copyText(' & "'" & $sCmdId & "'" & ')">Copy command</button></div><pre id="' & $sCmdId & '">' & _PipelineHtmlEscape($sCommand) & '</pre>' & @CRLF
+	If $sOutput <> "" Then $sRow &= '<div class="label">Tool output</div><pre id="' & $sOutId & '">' & _PipelineHtmlEscape($sOutput) & '</pre>' & @CRLF
+	$sRow &= '</details>' & @CRLF
+	$g_sPipelineRows &= $sRow
+	Return $g_iPipelineSeq
+EndFunc
+
+Func _PipelineDetectorStatus($sText, $bStrong = True)
+	If StringIsSpace($sText) Then Return "UNKNOWN"
+	If Not $bStrong Then Return "WARN"
+	Return "OK"
+EndFunc
+
+Func _PipelineCompactDetails($sText, $iMax = 900)
+	$sText = StringStripWS(String($sText), 3)
+	If StringLen($sText) > $iMax Then $sText = StringLeft($sText, $iMax) & @CRLF & "... [trimmed; see normal log for full output]"
+	Return $sText
+EndFunc
+
+Func _PipelineWriteReport($sLogPath, $sFinalStatus)
+	If $g_sPipelineRows = "" Then Return ""
+	Local $sReport = StringTrimRight($sLogPath, 4) & "_pipeline.html"
+	Local $sInput = ($filenamefull <> "" ? $filenamefull : $file)
+	Local $sCss = '<style>body{font-family:Segoe UI,Arial,sans-serif;background:#f6f7f9;color:#111;margin:18px;font-size:13px}.card{max-width:1200px;margin:auto;background:white;border:1px solid #ddd;border-radius:10px;padding:16px;box-shadow:0 2px 10px #0001}h1{margin:0 0 6px;font-size:22px}.meta{color:#555;margin-bottom:14px;font-size:12px}.summary{border:1px solid #ddd;background:#fbfbfc;border-radius:10px;padding:10px;margin:10px 0 14px}.summarygrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.finalbadge{display:inline-block;border-radius:999px;padding:4px 10px;color:white;font-weight:700;margin-bottom:8px;font-size:12px}.finalbadge.ok{background:#198754}.finalbadge.warn{background:#b58100}.finalbadge.fail{background:#dc3545}.finalbadge.info{background:#0d6efd}.pipeline{margin-top:8px;color:#333;font-size:12px}.panel{border:1px solid #ddd;background:#fafafa;border-radius:8px;padding:6px 10px;margin:8px 0}.step{border-left:5px solid #999;background:#fafafa;margin:8px 0;padding:6px 10px;border-radius:8px}.step.ok{border-left-color:#198754}.step.fail{border-left-color:#dc3545}.step.warn{border-left-color:#ffc107}.step.info{border-left-color:#0d6efd}summary{cursor:pointer;font-weight:600;font-size:13px}.badge{display:inline-block;border-radius:999px;padding:1px 7px;color:white;font-size:11px}.badge.ok{background:#198754}.badge.fail{background:#dc3545}.badge.warn{background:#b58100}.badge.info{background:#0d6efd}.label{font-size:11px;color:#555;text-transform:uppercase;margin:6px 0 3px}pre{white-space:pre-wrap;word-break:break-word;background:#111;color:#eee;padding:7px;border-radius:7px;max-height:200px;overflow:auto;font-size:12px}.copy{float:right;border:1px solid #bbb;background:#fff;border-radius:6px;padding:1px 7px;cursor:pointer;font-size:12px}.tooltable{border-collapse:collapse;width:100%;margin-top:8px}.tooltable th,.tooltable td{border-bottom:1px solid #ddd;text-align:left;padding:4px 6px;font-size:12px}.outputpath{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word;font-family:Consolas,monospace;font-size:12px;line-height:1.25}.muted,.empty{color:#666}</style>'
+	Local $sJs = '<script>function copyText(id){var e=document.getElementById(id);if(!e)return;navigator.clipboard.writeText(e.innerText||e.textContent);}</script>'
+	Local $sHtml = '<!doctype html><html><head><meta charset="utf-8"><title>UniExtract Pipeline Report</title>' & $sCss & $sJs & '</head><body><div class="card">' & @CRLF
+	$sHtml &= '<h1>UniExtract Pipeline Report</h1>' & @CRLF
+	$sHtml &= '<div class="meta"><b>Input:</b> ' & _PipelineHtmlEscape($sInput) & '<br><b>Final status:</b> ' & _PipelineHtmlEscape($sFinalStatus) & '<br><b>Created:</b> ' & GetDateTime() & '<br><b>Log:</b> ' & _PipelineHtmlEscape($sLogPath) & '</div>' & @CRLF
+	$sHtml &= _PipelineSummaryHtml($sLogPath, $sFinalStatus) & @CRLF
+	$sHtml &= '<details class="panel"><summary>Tool versions</summary>' & _PipelineToolVersionsHtml() & '</details>' & @CRLF
+	$sHtml &= _PipelineTimelineHtml() & @CRLF
+	$sHtml &= $g_sPipelineRows & '</div></body></html>'
+	Local $hFile = FileOpen($sReport, $FO_UTF8 + $FO_CREATEPATH + $FO_OVERWRITE)
+	If $hFile = -1 Then Return SetError(1, 0, "")
+	FileWrite($hFile, $sHtml)
+	FileClose($hFile)
+	Cout("Pipeline report: " & $sReport)
+	Return $sReport
+EndFunc
+
+Func LogDetectionWinner($sTool, $sType)
+	$g_sDetectionWinner = _NormalizeOneLine($sTool)
+	$g_sDetectedTypeForSummary = _NormalizeOneLine($sType)
+	Cout("DETECTION WINNER: " & $g_sDetectionWinner & " -> " & $g_sDetectedTypeForSummary)
+	_PipelineStep("DETECTION", $g_sDetectionWinner, "OK", $g_sDetectedTypeForSummary)
+EndFunc
+
+Func LogExtractorWinner($sTool)
+	$g_sExtractorWinner = _NormalizeOneLine($sTool)
+	Cout("EXTRACTOR WINNER: " & $g_sExtractorWinner)
+	_PipelineStep("EXTRACTOR", $g_sExtractorWinner, "OK", "Marked as extractor winner")
+EndFunc
+
+Func LogPerFileSummary($sFinalStatus, $sArcDisp = "")
+	Local $sInput = ($filenamefull <> "" ? $filenamefull : $file)
+	Local $sDetect = _NormalizeOneLine($g_sDetectedTypeForSummary)
+	Local $sExtFull = StringLower($file)
+	Local $sExt = StringLower(StringTrimLeft($file, StringInStr($file, ".", 0, -1)))
+	Local $sForcedDetect = ""
+	If StringRegExp($sExtFull, "\.7z\.\d{3}$") Then
+		$sForcedDetect = "7-Zip archive"
+	ElseIf StringRegExp($sExtFull, "\.zip\.\d{3}$") Then
+		$sForcedDetect = "Zip archive"
+	ElseIf StringRegExp($sExtFull, "\.part\d+\.rar$") Or StringRegExp($sExtFull, "\.r\d{2}$") Then
+		$sForcedDetect = "RAR archive"
+	EndIf
+	If $sForcedDetect <> "" Then $sDetect = $sForcedDetect
+
+	; Treat placeholder / weak detector strings as missing and keep falling back.
+	If $sForcedDetect = "" And ($sDetect = "" Or $sDetect = "-1" Or $sDetect = "0" Or StringLower($sDetect) = "unknown" _
+		Or StringLower($sDetect) = "gzip compressed file" Or StringLower($sDetect) = "xz compressed file" _
+		Or StringLower($sDetect) = "bzip2 compressed file" Or StringLower($sDetect) = "7-zip archive" _
+		Or StringLower($sDetect) = "lzh compressed file") Then
+		$sDetect = _NormalizeOneLine($sArcDisp)
+	EndIf
+
+	If $sForcedDetect = "" And ($sDetect = "" Or $sDetect = "-1" Or $sDetect = "0" Or StringLower($sDetect) = "unknown" _
+		Or StringLower($sDetect) = "gzip compressed file" Or StringLower($sDetect) = "xz compressed file" _
+		Or StringLower($sDetect) = "bzip2 compressed file" Or StringLower($sDetect) = "7-zip archive" _
+		Or StringLower($sDetect) = "lzh compressed file") Then
+
+		; Prefer extension-based labels for known archive families, including compound extensions.
+		If StringRight($sExtFull, 7) = ".tar.gz" Or StringRight($sExtFull, 4) = ".tgz" Then
+			$sDetect = "TAR.GZ archive"
+		ElseIf StringRight($sExtFull, 7) = ".tar.xz" Or StringRight($sExtFull, 4) = ".txz" Then
+			$sDetect = "TAR.XZ archive"
+		ElseIf StringRight($sExtFull, 8) = ".tar.bz2" Or StringRight($sExtFull, 5) = ".tbz2" Or StringRight($sExtFull, 4) = ".tbz" Then
+			$sDetect = "TAR.BZ2 archive"
+		Else
+			Switch $sExt
+				Case "zip"
+					$sDetect = "Zip archive"
+				Case "7z"
+					$sDetect = "7-Zip archive"
+				Case "rar"
+					$sDetect = "RAR archive"
+				Case "xar"
+					$sDetect = "XAR archive"
+				Case "lzh", "lha"
+					$sDetect = "LZH archive"
+				Case "gz"
+					$sDetect = "Gzip archive"
+				Case "bz2"
+					$sDetect = "BZip2 archive"
+				Case "xz"
+					$sDetect = "XZ archive"
+				Case "tar"
+					$sDetect = "TAR archive"
+				Case "iso"
+					$sDetect = "ISO image"
+				Case "alz"
+					$sDetect = "ALZ archive"
+				Case "ecm"
+					$sDetect = "ECM file"
+			EndSwitch
+		EndIf
+	EndIf
+
+	If $sForcedDetect = "" And ($sDetect = "" Or $sDetect = "-1" Or $sDetect = "0" Or StringLower($sDetect) = "unknown" _
+		Or StringLower($sDetect) = "gzip compressed file" Or StringLower($sDetect) = "xz compressed file" _
+		Or StringLower($sDetect) = "bzip2 compressed file" Or StringLower($sDetect) = "7-zip archive" _
+		Or StringLower($sDetect) = "lzh compressed file") Then
+		$sDetect = _NormalizeOneLine(_FiletypeGet(False))
+	EndIf
+
+	If $sForcedDetect = "" And ($sDetect = "" Or $sDetect = "-1" Or $sDetect = "0" Or StringLower($sDetect) = "unknown" _
+		Or StringLower($sDetect) = "gzip compressed file" Or StringLower($sDetect) = "xz compressed file" _
+		Or StringLower($sDetect) = "bzip2 compressed file" Or StringLower($sDetect) = "7-zip archive" _
+		Or StringLower($sDetect) = "lzh compressed file") Then
+		$sDetect = _NormalizeOneLine($Type)
+	EndIf
+
+	If $sForcedDetect = "" And ($sDetect = "" Or $sDetect = "-1" Or $sDetect = "0" Or StringLower($sDetect) = "unknown" _
+		Or StringLower($sDetect) = "gzip compressed file" Or StringLower($sDetect) = "xz compressed file" _
+		Or StringLower($sDetect) = "bzip2 compressed file" Or StringLower($sDetect) = "7-zip archive" _
+		Or StringLower($sDetect) = "lzh compressed file") Then
+		Switch $sExt
+			Case "zip"
+				$sDetect = "Zip archive"
+			Case "7z"
+				$sDetect = "7-Zip archive"
+			Case "rar"
+				$sDetect = "RAR archive"
+			Case "xar"
+				$sDetect = "XAR archive"
+			Case "lzh", "lha"
+				$sDetect = "LZH archive"
+			Case "gz"
+				$sDetect = "Gzip archive"
+			Case "bz2"
+				$sDetect = "BZip2 archive"
+			Case "xz"
+				$sDetect = "XZ archive"
+			Case "tar"
+				$sDetect = "TAR archive"
+			Case "iso"
+				$sDetect = "ISO image"
+			Case "alz"
+				$sDetect = "ALZ archive"
+			Case "ecm"
+				$sDetect = "ECM file"
+			Case Else
+				$sDetect = "unknown"
+		EndSwitch
+	EndIf
+
+	Local $sExtractor = $g_sExtractorWinner
+	If $sExtractor = "" Then
+		Local $sDisp = StringLower(_NormalizeOneLine($sArcDisp))
+		Local $sTypeNorm = StringLower(_NormalizeOneLine($Type))
+		Local $sDetectNorm = StringLower(_NormalizeOneLine($sDetect))
+
+		If StringInStr($sDisp, "wix") Then
+			$sExtractor = "dark"
+		ElseIf StringInStr($sDisp, "inno") Then
+			$sExtractor = "innounp/innoextract"
+		ElseIf StringInStr($sDisp, "msi") Then
+			$sExtractor = "lessmsi/7z/msiexec"
+		ElseIf $sTypeNorm = StringLower(String($TYPE_ALZ)) Or $sExt = "alz" Then
+			$sExtractor = "unalz"
+		ElseIf $sTypeNorm = StringLower(String($TYPE_ECM)) Or $sExt = "ecm" Then
+			$sExtractor = "unecm"
+		ElseIf $sTypeNorm = StringLower(String($TYPE_GARBRO)) Or $sExt = "xp3" Or $sExt = "arc" Or $sExt = "pck" Then
+			$sExtractor = "GARbro"
+		ElseIf $sTypeNorm = StringLower(String($TYPE_VIDEO)) Or $sTypeNorm = StringLower(String($TYPE_VIDEO_CONVERT)) _
+			Or StringInStr($sDetectNorm, "video file") Or StringInStr($sDetectNorm, "audio file") _
+			Or $sExt = "mp4" Or $sExt = "mkv" Or $sExt = "avi" Or $sExt = "wmv" Or $sExt = "mp3" _
+			Or $sExt = "flac" Or $sExt = "wav" Or $sExt = "ogg" Then
+			$sExtractor = "ffmpeg"
+		ElseIf $sFinalStatus = "unknownexe" Then
+			$sExtractor = "unsupported"
+		ElseIf StringInStr($sDetectNorm, "installshield") Then
+			$sExtractor = "InstallShield extractor"
+		Else
+			$sExtractor = "7z"
+		EndIf
+	EndIf
+
+	; Final detect-label cleanup for noisy detector strings.
+	Local $sDetectLower = StringLower(_NormalizeOneLine($sDetect))
+	Local $sArcDispLower = StringLower(_NormalizeOneLine($sArcDisp))
+	Local $sTypeLower = StringLower(_NormalizeOneLine(_FiletypeGet(False)))
+	If StringInStr($sDetectLower, "nullsoft") Or StringInStr($sDetectLower, "nsis") Then
+		$sDetect = "NSIS installer"
+
+	ElseIf StringInStr($sDetectLower, "7-zip sfx archive") Then
+		$sDetect = "7-Zip SFX archive"
+
+	ElseIf StringInStr($sDetectLower, "7-zip installer package") Then
+		If StringInStr($sArcDispLower, "gzip") Or StringInStr($sTypeLower, "gzip") Then
+			$sDetect = "TAR.GZ archive"
+		ElseIf StringInStr($sArcDispLower, "xz") Or StringInStr($sTypeLower, "xz") Then
+			$sDetect = "TAR.XZ archive"
+		ElseIf $sExt <> "exe" Then
+			$sDetect = "7-Zip archive"
+		EndIf
+
+	ElseIf StringInStr($sDetectLower, "nuget package") Or StringInStr($sArcDispLower, "nuget package") Then
+		$sDetect = "NuGet package"
+
+	ElseIf StringInStr($sDetectLower, ".zip archive") Or StringInStr($sDetectLower, "zip compressed archive") _
+		Or StringInStr($sArcDispLower, ".zip archive") Or StringInStr($sArcDispLower, "zip compressed archive") _
+		Or StringInStr($sTypeLower, ".zip archive") Or StringInStr($sTypeLower, "zip compressed archive") _
+		Or ($sExt = "bin" And $sExtractor = "7z" And $sFinalStatus = "success") Then
+		$sDetect = "Zip archive"
+
+	ElseIf (StringInStr($sDetectLower, "tar.gz") Or StringInStr($sDetectLower, "gzip") _
+		Or StringInStr($sArcDispLower, "tar.gz") Or StringInStr($sArcDispLower, "gzip") _
+		Or StringInStr($sTypeLower, "tar.gz") Or StringInStr($sTypeLower, "gzip")) _
+		And (StringRight($sExtFull, 7) = ".tar.gz" Or StringRight($sExtFull, 4) = ".tgz" Or $sExt = "exe" Or $sExt = "msi") Then
+		$sDetect = "TAR.GZ archive"
+
+	ElseIf (StringInStr($sDetectLower, "tar.xz") Or StringInStr($sDetectLower, "xz") _
+		Or StringInStr($sArcDispLower, "tar.xz") Or StringInStr($sArcDispLower, "xz") _
+		Or StringInStr($sTypeLower, "tar.xz") Or StringInStr($sTypeLower, "xz")) _
+		And (StringRight($sExtFull, 7) = ".tar.xz" Or StringRight($sExtFull, 4) = ".txz") Then
+		$sDetect = "TAR.XZ archive"
+
+	ElseIf $sFinalStatus = "unknownexe" Then
+		$sDetect = "Custom/unsupported EXE"
+	EndIf
+
+	If $sExt = "mp3" And StringInStr(StringLower(_NormalizeOneLine($sDetect)), "game file") Then
+		$sDetect = "MP3 audio file"
+	ElseIf $sExt = "flac" And StringInStr(StringLower(_NormalizeOneLine($sDetect)), "game file") Then
+		$sDetect = "FLAC audio file"
+	ElseIf $sExt = "ogg" And StringInStr(StringLower(_NormalizeOneLine($sDetect)), "game file") Then
+		$sDetect = "OGG audio file"
+	ElseIf $sExt = "wav" And StringInStr(StringLower(_NormalizeOneLine($sDetect)), "game file") Then
+		$sDetect = "WAV audio file"
+	EndIf
+
+	If $sFinalStatus = "unknownexe" Then
+		$sExtractor = "unsupported"
+	EndIf
+
+	If $sForcedDetect <> "" Then $sDetect = $sForcedDetect
+
+	Local $sSummaryStatus = _NormalizeOneLine($sFinalStatus)
+	If $sSummaryStatus = "unknownexe" Then $sSummaryStatus = "unsupported"
+	Cout("SUMMARY: " & _NormalizeOneLine($sInput) & " -> " & _NormalizeOneLine($sDetect) & " -> " & _NormalizeOneLine($sExtractor) & " -> " & $sSummaryStatus)
+EndFunc
+
 ; Handle program termination with appropriate error message
 Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 	Local $bLogSaved = False, $exitcode = 0, $sFileType = _FiletypeGet(False), $shortStatus = ($status = $STATUS_SUCCESS)? $arctype: $status
@@ -4119,8 +6301,8 @@ Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 	If UBound($aWarnings) > 0 Then Cout("Warnings:" & @CRLF & _ArrayToString($aWarnings))
 
 	; When multiple files are selected and executed via command line, they are added to batch queue, but the working instance uses in-memory data.
-	; So we need to look for changes in the batch queue file, so batch mode could be enabled if necessary.
-	If Not $silentmode And GetBatchQueue() Then $silentmode = True
+	; Look for queue changes, but do not convert non-silent batch children to silent mode.
+	If Not $silentmode And GetBatchQueue() Then Cout("Batch queue detected; preserving non-silent interactive mode")
 
 	; Save local statistics
 	IniWrite($prefs, "Statistics", $status, Number(IniRead($prefs, "Statistics", $status, 0)) + 1)
@@ -4151,10 +6333,10 @@ Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 
 		; Display error information and exit
 		Case $STATUS_UNKNOWNEXE
-			GUI_Error_UnknownExt()
+			If Not __IsBatchModeActive() Then GUI_Error_UnknownExt()
 			$exitcode = 3
 		Case $STATUS_UNKNOWNEXT
-			GUI_Error_UnknownExt()
+			If Not __IsBatchModeActive() Then GUI_Error_UnknownExt()
 			$exitcode = 4
 		Case $STATUS_INVALIDFILE
 			Prompt(16, 'INVALID_FILE', $file)
@@ -4163,10 +6345,10 @@ Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 			Prompt(16, 'INVALID_DIR', $fname)
 			$exitcode = 5
 		Case $STATUS_NOTPACKED
-			Prompt(48, 'NOT_PACKED', CreateArray($file, $sFileType))
+			Cout("Suppressed NOTPACKED dialog for: " & $file & " (" & $sFileType & ")")
 			$exitcode = 6
 		Case $STATUS_NOTSUPPORTED
-			GUI_Error_WithFeedbackButton("NOT_SUPPORTED_TITLE", t('NOT_SUPPORTED', $filename))
+			If Not __IsBatchModeActive() Then GUI_Error_WithFeedbackButton("NOT_SUPPORTED_TITLE", t('NOT_SUPPORTED', $filename))
 			$exitcode = 7
 		Case $STATUS_MISSINGEXE
 			Prompt(48, 'MISSING_EXE', CreateArray($file, $arctype))
@@ -4192,7 +6374,7 @@ Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 
 			; Display failed attempt information and exit
 		Case $STATUS_FAILED
-			If Not $silentmode And Prompt(256 + 16 + 4, 'EXTRACT_FAILED', CreateArray($filenamefull, $arcdisp)) Then
+			If Not $silentmode And Not __IsBatchModeActive() And Prompt(256 + 16 + 4, 'EXTRACT_FAILED', CreateArray($filenamefull, $arcdisp)) Then
 				ShellExecute(SaveLog($status))
 				$bLogSaved = True
 			EndIf
@@ -4212,8 +6394,8 @@ Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 			EndIf
 	EndSwitch
 
-	; Write error log if in batchmode
-	If $exitcode <> 0 And $silentmode And $extract Then
+	; Write error log if in batchmode, both silent and non-silent, so final batch summary can show failures.
+	If $exitcode <> 0 And $extract And ($silentmode Or __IsBatchModeActive()) Then
 		Local $hFile = FileOpen($logdir & "errorlog.txt", $FO_CREATEPATH + $FO_APPEND)
 		Local $sMsg = GetDateTime() & " " & ($filenamefull = ""? $fname: $filenamefull) & " (" & StringUpper($status)& ")" & " - " & $arctype  & @CRLF
 		FileWrite($hFile, $sMsg)
@@ -4223,20 +6405,27 @@ Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 	; Delete empty output directory if failed
 	If $createdir And $status <> $STATUS_SUCCESS And DirGetSize($outdir) = 0 Then DirRemove($outdir, 1)
 
-	If ($exitcode == 1 Or $exitcode == 3 Or $exitcode == 4 Or $exitcode == 12) And $fileext <> "dll" Then GUI_Feedback_Prompt()
+	; If ($exitcode == 1 Or $exitcode == 3 Or $exitcode == 4 Or $exitcode == 12) And $fileext <> "dll" Then GUI_Feedback_Prompt() ; Feedback UI disabled in this fork
+
+	If $status = $STATUS_SUCCESS Then
+		LogPerFileSummary("success", $arcdisp)
+	ElseIf $status <> $STATUS_SILENT And $status <> $STATUS_BATCH And $status <> $STATUS_SYNTAX And $status <> $STATUS_FILEINFO Then
+		LogPerFileSummary($status, $arcdisp)
+	EndIf
 
 	Cout("Terminating - Status: " & $status)
 
-	; Create log file if enabled in options
+	; Create log file if enabled in options.
+	; Unknown / unsupported / not-packed files must also get logs so they are visible in single and batch runs.
 	If $bOptCreateLog And Not $bLogSaved And Not ($status = $STATUS_SILENT Or $status = $STATUS_SYNTAX Or $status = $STATUS_FILEINFO Or _
-	   $status = $STATUS_NOTPACKED Or $status = $STATUS_BATCH) Or ($status = $STATUS_FILEINFO And $silentmode) Then _
+	   $status = $STATUS_BATCH) Or ($status = $STATUS_FILEINFO And $silentmode) Then _
 		SaveLog($shortStatus)
 
-	If $batchEnabled = 1 And $status <> $STATUS_SILENT Then ; Don't start batch if gui is closed
+	If __IsBatchModeActive() And $status <> $STATUS_SILENT Then ; Continue queued batch items even if this child loaded a stale batchenabled=0
 		; Start next extraction
 		BatchQueuePop()
 	ElseIf $bOptKeepOpen And $cmdline[0] = 0 And $status <> $STATUS_SILENT Then
-		Run(@ScriptFullPath)
+		Run(Quote(@ScriptFullPath))
 	EndIf
 
 	; Check for updates
@@ -4260,6 +6449,7 @@ EndFunc
 ; Based on work by Valuater (http://www.autoitscript.com/forum/topic/85977-system-tray-message-box-udf/)
 Func _CreateTrayMessageBox($sMessage)
 	_DeleteTrayMessageBox()
+	If $silentmode Then Return
 
 	If $bOptNoStatusBox = 1 Then Return
 
@@ -4354,20 +6544,169 @@ EndFunc
 Func IsMultipartArchive($sBatchQueueContent)
 	If Not $filenamefull Then FilenameParse($file)
 
-	Return __TestMultipart('(.*?\.part)(\d+\.rar)', $sBatchQueueContent) Or _
-		   __TestMultipart('(.*?\.7z.)(\d{3})', $sBatchQueueContent) Or _
-		   __TestMultipart('(.*?\.r)((\d{2})|ar)', $sBatchQueueContent)
+	Local $sMultipartKey = "", $iMultipartOrder = 0
+	If Not __GetMultipartInfo($file, $sMultipartKey, $iMultipartOrder) Then Return False
+	Return StringInStr(StringLower($sBatchQueueContent), $sMultipartKey) > 0
 EndFunc
 
-; Test if a file matches a given regex and compare capture group with batch queue content
-Func __TestMultipart($sRegEx, $sBatchQueueContent)
-;~ 	Cout("Testing " & $sRegEx)
-	Local $ret = StringRegExpReplace($filenamefull, $sRegEx, "$1", 1)
-	Return @extended > 0 And StringInStr($sBatchQueueContent, $ret)
+; Return multipart archive group key and volume order for a file path
+; Lower order means preferred input (for example .001 over .002, .part1.rar over .part2.rar, .rar over .r00).
+Func __GetMultipartInfo($sPath, ByRef $sKey, ByRef $iOrder)
+	$sKey = ""
+	$iOrder = 0
+	If StringIsSpace($sPath) Then Return False
+
+	Local $sNormPath = StringLower($sPath)
+	Local $aMatch
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.part)(\d+)\.rar$', 1)
+	If IsArray($aMatch) Then
+		$sKey = $aMatch[0]
+		$iOrder = Number($aMatch[1])
+		Return True
+	EndIf
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.7z\.)(\d{3})$', 1)
+	If IsArray($aMatch) Then
+		$sKey = $aMatch[0]
+		$iOrder = Number($aMatch[1])
+		Return True
+	EndIf
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.zip\.)(\d{3})$', 1)
+	If IsArray($aMatch) Then
+		$sKey = $aMatch[0]
+		$iOrder = Number($aMatch[1])
+		Return True
+	EndIf
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.)(rar|r(\d{2}))$', 1)
+	If IsArray($aMatch) Then
+		$sKey = $aMatch[0] & 'rar'
+		$iOrder = $aMatch[1] = 'rar' ? 0 : Number($aMatch[2]) + 1
+		Return True
+	EndIf
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.)(zip|z(\d{2}))$', 1)
+	If IsArray($aMatch) Then
+		$sKey = $aMatch[0] & 'zip'
+		$iOrder = $aMatch[1] = 'zip' ? 0 : Number($aMatch[2]) + 1
+		Return True
+	EndIf
+
+	Return False
+EndFunc
+
+; Return True if this is a later multipart volume and the preferred first/start volume exists beside it.
+; This is a final batch-run guard, so downstream parts cannot be launched even if they reached the queue.
+Func __IsLaterMultipartVolumeWithPreferredSibling($sPath, ByRef $sPreferredPath)
+	$sPreferredPath = ""
+	If StringIsSpace($sPath) Then Return False
+
+	Local $sNormPath = StringLower($sPath)
+	Local $aMatch
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.7z\.)(\d{3})$', 1)
+	If IsArray($aMatch) And Number($aMatch[1]) > 1 Then
+		$sPreferredPath = $aMatch[0] & "001"
+		Return FileExists($sPreferredPath)
+	EndIf
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.zip\.)(\d{3})$', 1)
+	If IsArray($aMatch) And Number($aMatch[1]) > 1 Then
+		$sPreferredPath = $aMatch[0] & "001"
+		Return FileExists($sPreferredPath)
+	EndIf
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.part)(\d+)\.rar$', 1)
+	If IsArray($aMatch) And Number($aMatch[1]) > 1 Then
+		$sPreferredPath = $aMatch[0] & "1.rar"
+		Return FileExists($sPreferredPath)
+	EndIf
+
+	; Exotic/generic split names. Keep this conservative: skip only a later
+	; volume when the preferred first volume exists beside it. Do not match
+	; installer-style payloads such as data2.cab or setup-2.bin.
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.)(\d{3})$', 1)
+	If IsArray($aMatch) Then
+		Local $iGenericVolume = Number($aMatch[1])
+		If $iGenericVolume > 1 Then
+			$sPreferredPath = $aMatch[0] & "001"
+			If FileExists($sPreferredPath) Then Return True
+		EndIf
+		If $iGenericVolume > 0 Then
+			$sPreferredPath = $aMatch[0] & "000"
+			If FileExists($sPreferredPath) Then Return True
+		EndIf
+	EndIf
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.part)(\d+)$', 1)
+	If IsArray($aMatch) And Number($aMatch[1]) > 1 Then
+		$sPreferredPath = $aMatch[0] & "1"
+		If FileExists($sPreferredPath) Then Return True
+		$sPreferredPath = $aMatch[0] & StringRight("0000000001", StringLen($aMatch[1]))
+		Return FileExists($sPreferredPath)
+	EndIf
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.)(r)(\d{2})$', 1)
+	If IsArray($aMatch) Then
+		$sPreferredPath = $aMatch[0] & "rar"
+		Return FileExists($sPreferredPath)
+	EndIf
+
+	$aMatch = StringRegExp($sNormPath, '^(.*?\.)(z)(\d{2})$', 1)
+	If IsArray($aMatch) Then
+		$sPreferredPath = $aMatch[0] & "zip"
+		Return FileExists($sPreferredPath)
+	EndIf
+
+	Return False
+EndFunc
+
+; Extract input file path from stored batch queue command line
+Func __GetBatchQueueFile($sCmdLine)
+	Local $aMatch = StringRegExp($sCmdLine, '^"([^"]+)"', 1)
+	If Not IsArray($aMatch) Then Return ""
+	Return $aMatch[0]
+EndFunc
+
+; Compare queued batch items by input file only, ignoring switches like /silent.
+Func __SameBatchQueueFile($sFileA, $sFileB)
+	If StringIsSpace($sFileA) Or StringIsSpace($sFileB) Then Return False
+	Return StringLower(_PathFull($sFileA)) = StringLower(_PathFull($sFileB))
+EndFunc
+
+; Remove any remaining queued entries for the same input file after one entry has been popped.
+; This prevents duplicate processing when the same file was queued once as /sub and once as /sub /silent.
+Func __BatchQueueRemoveQueuedFileDuplicates($sFile)
+	If StringIsSpace($sFile) Then Return
+
+	Local $hLock = _BatchQueue_Lock()
+	If $hLock = 0 Then Return
+
+	Local $aQueue = _BatchQueue_ReadArray_NoLock()
+	Local $bChanged = False
+	For $i = UBound($aQueue) - 1 To 0 Step -1
+		Local $sQueuedFile = __GetBatchQueueFile($aQueue[$i])
+		If __SameBatchQueueFile($sQueuedFile, $sFile) Then
+			Cout("Removing duplicate queued batch file: " & $aQueue[$i])
+			_ArrayDelete($aQueue, $i)
+			$bChanged = True
+		EndIf
+	Next
+
+	If $bChanged Then _BatchQueue_WriteArray_NoLock($aQueue)
+	_BatchQueue_Unlock($hLock)
+EndFunc
+
+; Preserve silent mode when launching or storing an already queued item that was stored without /silent.
+Func __BatchQueueEnsureSilentArg($sCmdLine)
+	If $silentmode And Not StringRegExp(StringLower($sCmdLine), '(^|\s)/silent($|\s)') Then Return $sCmdLine & " /silent"
+	Return $sCmdLine
 EndFunc
 
 ; Create command line for current file
-Func GetCmd($silent = True)
+Func GetCmd($silent = False)
 	If Not $file Then Return SetError(1)
 	Local $return = Quote($file)
 
@@ -4389,76 +6728,251 @@ EndFunc
 Func AddToBatch()
 	Local $cmdline = GetCmd()
 	If @error Then Return Cout("Failed to add file to batch queue: invalid file parameter: " & $file)
+	$cmdline = __BatchQueueEnsureSilentArg($cmdline)
 
-	Local $hFile = FileOpen($batchQueue, $FO_UNICODE + $FO_CREATEPATH + $FO_APPEND)
-	If @error Then Return Cout("Failed to open batch queue")
-;~ 	FileSetPos($hFile, 0, 0)
-	Local $sBatchQueueContent = FileRead($hFile)
+	Local $hLock = _BatchQueue_Lock()
+	If $hLock = 0 Then Return Cout("Failed to lock batch queue")
+
+	Local $aQueue = _BatchQueue_ReadArray_NoLock()
+	Local $sBatchQueueContent = _BatchQueue_ArrayToText($aQueue)
+	Local $bDuplicate = False
+	For $i = 0 To UBound($aQueue) - 1
+		If $aQueue[$i] = $cmdline Or __SameBatchQueueFile(__GetBatchQueueFile($aQueue[$i]), $file) Then
+			If $silentmode Then $aQueue[$i] = __BatchQueueEnsureSilentArg($aQueue[$i])
+			$bDuplicate = True
+			ExitLoop
+		EndIf
+	Next
 
 	Local $bAddFile = True
-	If StringInStr($sBatchQueueContent, $cmdline) Then
+	If $bDuplicate Then
+		If $silentmode Or $batchEnabled Then
+			If $silentmode Then _BatchQueue_WriteArray_NoLock($aQueue) ; Preserve /silent on an already queued same-file entry
+			Cout("Skipping duplicate batch file " & $filenamefull)
+			_BatchQueue_Unlock($hLock)
+			EnableBatchMode()
+			Return
+		EndIf
 		$bAddFile = CustomPrompt('BATCH_DUPLICATE', $filenamefull)
 	Else
-		; Only add one file if multipart archive
-		$bAddFile = Not IsMultipartArchive($sBatchQueueContent)
+		Local $sMultipartKey = "", $iMultipartOrder = 0
+		If __GetMultipartInfo($file, $sMultipartKey, $iMultipartOrder) Then
+			Local $iExistingMultipartIndex = -1, $iExistingMultipartOrder = 999999, $sExistingMultipartFile = ""
+			For $i = 0 To UBound($aQueue) - 1
+				Local $sQueuedFile = __GetBatchQueueFile($aQueue[$i])
+				Local $sQueuedMultipartKey = "", $iQueuedMultipartOrder = 0
+				If __GetMultipartInfo($sQueuedFile, $sQueuedMultipartKey, $iQueuedMultipartOrder) And $sQueuedMultipartKey = $sMultipartKey Then
+					If $iQueuedMultipartOrder < $iExistingMultipartOrder Then
+						$iExistingMultipartIndex = $i
+						$iExistingMultipartOrder = $iQueuedMultipartOrder
+						$sExistingMultipartFile = $sQueuedFile
+					EndIf
+				EndIf
+			Next
+
+			If $iExistingMultipartIndex > -1 Then
+				If $iMultipartOrder < $iExistingMultipartOrder Then
+					Cout("Replacing queued multipart file " & PathGetFileName($sExistingMultipartFile) & " with preferred first volume " & $filenamefull)
+					$aQueue[$iExistingMultipartIndex] = $cmdline
+					$bDuplicate = True
+				Else
+					Cout("Skipping later multipart batch file " & $filenamefull & "; preferred volume already queued: " & PathGetFileName($sExistingMultipartFile))
+					$bAddFile = False
+				EndIf
+			EndIf
+		EndIf
 	EndIf
 
 	If Not $bAddFile Then
 		Cout("Not adding duplicate file " & $filenamefull)
-		FileClose($hFile)
+		_BatchQueue_Unlock($hLock)
 		Return
 	EndIf
 
-	FileWrite($hFile, $cmdline & @CRLF)
-	FileClose($hFile)
+	If Not $bDuplicate Then _ArrayAdd($aQueue, $cmdline)
+	If Not _BatchQueue_WriteArray_NoLock($aQueue) Then
+		_BatchQueue_Unlock($hLock)
+		Return Cout("Failed to save batch queue")
+	EndIf
+
+	_BatchQueue_Unlock($hLock)
 	Cout("File added to batch queue: " & $cmdline)
 	EnableBatchMode()
 EndFunc
 
 ; Read batch queue from file
 Func GetBatchQueue()
-	Local $hFile = FileOpen($batchQueue, $FO_UNICODE)
-	$queueArray = FileReadToArray($hFile)
-	FileClose($hFile)
+	Local $hLock = _BatchQueue_Lock()
+	If $hLock = 0 Then
+		$queueArray = 0
+		If $guimain Then GUICtrlSetData($BatchBut, t('BATCH_BUT'))
+		Return 0
+	EndIf
 
-	Local $iSize = UBound($queueArray)
-	If IsArray($queueArray) And $iSize > 0 Then
-;~ 		_ArrayDisplay($queueArray)
+	$queueArray = _BatchQueue_ReadArray_NoLock()
+	_BatchQueue_Unlock($hLock)
+
+	Local $iSize = 0
+	If IsArray($queueArray) Then $iSize = UBound($queueArray)
+
+	If $iSize > 0 Then
 		If $guimain Then GUICtrlSetData($BatchBut, t('BATCH_BUT') & " (" & $iSize & ")")
 		EnableBatchMode()
 		Return 1
 	EndIf
 
+	$queueArray = 0
+	If $guimain Then GUICtrlSetData($BatchBut, t('BATCH_BUT'))
 	Return 0
 EndFunc
 
 ; Write batch queue array to file
 Func SaveBatchQueue()
 	Cout("Saving batch queue")
-	Local $hFile = FileOpen($batchQueue, $FO_UNICODE + $FO_CREATEPATH + $FO_OVERWRITE)
-	FileWrite($hFile, _ArrayToString($queueArray, @CRLF))
-	FileClose($hFile)
+	Local $hLock = _BatchQueue_Lock()
+	If $hLock = 0 Then Return SetError(1, 0, 0)
+	Local $iResult = _BatchQueue_WriteArray_NoLock($queueArray)
+	_BatchQueue_Unlock($hLock)
+	Return $iResult
 EndFunc
 
 ; Returns first element of batch queue
 Func BatchQueuePop()
-;~ 	_ArrayDisplay($queueArray)
-	If Not IsArray($queueArray) Or UBound($queueArray) < 1 Then GetBatchQueue()
+	Local $element = "", $bHadLateItems = False
 
-	If Not IsArray($queueArray) Or UBound($queueArray) < 1 Then
+	Local $hLock = _BatchQueue_Lock()
+	If $hLock = 0 Then
+		Cout("Failed to lock batch queue")
+		Return
+	EndIf
+
+	$queueArray = _BatchQueue_ReadArray_NoLock()
+	Local $aClean = $queueArray
+	Local $i = 0
+	While $i < UBound($aClean)
+		Local $sLine = StringStripWS($aClean[$i], 3)
+		$sLine = StringReplace($sLine, ChrW(65279), "")
+		If $sLine = "" Then
+			_ArrayDelete($aClean, $i)
+			ContinueLoop
+		EndIf
+
+		Local $aMatch = StringRegExp($sLine, '^"([^"]+)"', 1)
+		If @error Or UBound($aMatch) < 1 Or Not FileExists($aMatch[0]) Then
+			Cout("Skipping invalid batch element: " & $sLine)
+			_ArrayDelete($aClean, $i)
+			ContinueLoop
+		EndIf
+
+		$element = $sLine
+		_ArrayDelete($aClean, $i) ; Pop before Run() to avoid a fast child processing the same queue item again
+		ExitLoop
+	WEnd
+
+	If UBound($aClean) <> UBound($queueArray) Then
+		If Not _BatchQueue_WriteArray_NoLock($aClean) Then
+			_BatchQueue_Unlock($hLock)
+			Cout("Failed to save cleaned batch queue")
+			Return
+		EndIf
+		$queueArray = $aClean
+	EndIf
+
+	_BatchQueue_Unlock($hLock)
+
+	If $element = "" Then
+		Local $hTimer = TimerInit()
+		Do
+			Sleep(100)
+			Local $hLateLock = _BatchQueue_Lock()
+			If $hLateLock <> 0 Then
+				Local $aLate = _BatchQueue_ReadArray_NoLock()
+				_BatchQueue_Unlock($hLateLock)
+				If UBound($aLate) > 0 Then
+					$bHadLateItems = True
+					ExitLoop
+				EndIf
+			EndIf
+		Until TimerDiff($hTimer) > 5000
+
+		If $bHadLateItems Then
+			Cout("Detected late batch queue additions")
+			Return BatchQueuePop()
+		EndIf
+
 		Cout("Batch queue empty")
 		EnableBatchMode(False)
 		If FileExists($fileScanLogFile) Then ShellExecute($fileScanLogFile)
 		Local $return = _FileRead($logdir & "errorlog.txt", True)
-		If $return <> "" Then MsgBox($iTopmost + 48, $name, t('BATCH_FINISH', $return))
-		If $bOptKeepOpen Then Run(@ScriptFullPath)
-	Else ; Get next command and execute it
-		Local $element = $queueArray[0]
-		_ArrayDelete($queueArray, 0)
-		Cout("Next batch element: " & $element)
-		SaveBatchQueue()
-		Run(@ScriptFullPath & " " & $element)
+		If $return <> "" Then _BatchFinishPrompt($return)
+		If $bOptKeepOpen Then Run(Quote(@ScriptFullPath))
+		Return
 	EndIf
+
+	Local $sElementFile = __GetBatchQueueFile($element)
+	__BatchQueueRemoveQueuedFileDuplicates($sElementFile)
+	$element = __BatchQueueEnsureSilentArg($element)
+
+	Local $sPreferredVolume = ""
+	If __IsLaterMultipartVolumeWithPreferredSibling($sElementFile, $sPreferredVolume) Then
+		Cout("Skipping later multipart batch file " & PathGetFileName($sElementFile) & "; preferred volume exists: " & PathGetFileName($sPreferredVolume))
+		Return BatchQueuePop()
+	EndIf
+
+	Cout("Next batch element: " & $element)
+	Local $iPid = Run('"' & @ScriptFullPath & '" ' & $element, @ScriptDir)
+	If $iPid = 0 Then
+		Cout("Failed to start next batch element: " & $element)
+
+		; Put the element back only if Run() itself failed, so no batch item is silently dropped.
+		Local $hRetryLock = _BatchQueue_Lock()
+		If $hRetryLock <> 0 Then
+			Local $aRetryQueue = _BatchQueue_ReadArray_NoLock()
+			_ArrayInsert($aRetryQueue, 0, $element)
+			If Not _BatchQueue_WriteArray_NoLock($aRetryQueue) Then Cout("Failed to restore batch element after Run() failure: " & $element)
+			_BatchQueue_Unlock($hRetryLock)
+		Else
+			Cout("Failed to relock batch queue to restore failed batch element: " & $element)
+		EndIf
+
+		Return
+	EndIf
+EndFunc
+
+; Remove multiline detector/details from the final batch popup only.
+; The real log files are unchanged; this only keeps the summary readable.
+Func _BatchFinishPopupText($sErrors)
+	Local $sClean = ""
+	Local $aLines = StringSplit(StringStripCR($sErrors), @LF, 2)
+	If @error Or Not IsArray($aLines) Then Return $sErrors
+
+	For $i = 0 To UBound($aLines) - 1
+		Local $sLine = StringStripWS($aLines[$i], 3)
+		If $sLine = "" Then ContinueLoop
+
+		; Keep only real error entries. Continuation lines from multiline detector output
+		; such as PE/linker/compiler details are intentionally hidden in the popup.
+		If Not StringRegExp($sLine, '^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+') Then ContinueLoop
+
+		; Remove the leading timestamp from the popup row only.
+		; The real log/error text remains unchanged.
+		$sLine = StringRegExpReplace($sLine, '^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+', '')
+
+		; If the archive/type text was multiline, the first line may end with a bare dash.
+		; Remove that cosmetic leftover rather than showing detector details below it.
+		$sLine = StringRegExpReplace($sLine, '\s+-\s*$', '')
+		$sClean &= $sLine & @CRLF
+	Next
+
+	Return StringStripWS($sClean, 2)
+EndFunc
+
+; Final batch summary popup. Cosmetic only: filter continuation details and keep original MsgBox behavior.
+Func _BatchFinishPrompt($sErrors)
+	Local $sPopupErrors = _BatchFinishPopupText($sErrors)
+	; Cosmetic only: keep one empty line between the last error row and the final log-directory note.
+	If $sPopupErrors <> "" Then $sPopupErrors &= @CRLF
+	MsgBox($iTopmost + 48, $name, t('BATCH_FINISH', $sPopupErrors))
 EndFunc
 
 ; Enable batch mode
@@ -4473,8 +6987,13 @@ Func EnableBatchMode($bEnable = True)
 			GUICtrlSetState($clearitem, $GUI_ENABLE)
 		EndIf
 	Else
-		; Delete empty batch queue file
-		_FileDelete($batchQueue)
+		; Delete batch queue file only if it is still empty under lock
+		Local $hLock = _BatchQueue_Lock()
+		If $hLock <> 0 Then
+			Local $aQueue = _BatchQueue_ReadArray_NoLock()
+			If UBound($aQueue) < 1 Then _FileDelete($batchQueue)
+			_BatchQueue_Unlock($hLock)
+		EndIf
 
 		If $guimain Then
 			GUICtrlSetOnEvent($GUI_Main_Ok, "GUI_OK")
@@ -4486,6 +7005,104 @@ Func EnableBatchMode($bEnable = True)
 
 	$batchEnabled = $bEnable
 	SavePref("batchenabled", Number($batchEnabled))
+EndFunc
+
+Func _BatchQueue_GetMutexName()
+	Return $name & " " & $sVersion & " BatchQueue"
+EndFunc
+
+Func _BatchQueue_Lock($iTimeout = 15000)
+	Local $aCreate = DllCall("kernel32.dll", "handle", "CreateMutexW", "ptr", 0, "bool", False, "wstr", _BatchQueue_GetMutexName())
+	If @error Or Not IsArray($aCreate) Or $aCreate[0] = 0 Then Return 0
+
+	Local $hLock = $aCreate[0]
+	Local $aWait = DllCall("kernel32.dll", "dword", "WaitForSingleObject", "handle", $hLock, "dword", $iTimeout)
+	If @error Or Not IsArray($aWait) Then
+		DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hLock)
+		Return 0
+	EndIf
+
+	If $aWait[0] = 0 Or $aWait[0] = 0x80 Then Return $hLock
+
+	DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hLock)
+	Return 0
+EndFunc
+
+Func _BatchQueue_Unlock($hLock)
+	If $hLock = 0 Then Return
+	DllCall("kernel32.dll", "bool", "ReleaseMutex", "handle", $hLock)
+	DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hLock)
+EndFunc
+
+Func _BatchQueue_ReadArray_NoLock()
+	Local $aClean[0]
+	Local $hFile = FileOpen($batchQueue, $FO_UNICODE)
+	If $hFile = -1 Then Return $aClean
+
+	Local $sContent = FileRead($hFile)
+	FileClose($hFile)
+
+	$sContent = StringReplace($sContent, @CR, "")
+	Local $aLines = StringSplit($sContent, @LF, 1)
+	For $i = 1 To $aLines[0]
+		Local $sLine = StringStripWS($aLines[$i], 3)
+		$sLine = StringReplace($sLine, ChrW(65279), "")
+		If $sLine <> "" Then _ArrayAdd($aClean, $sLine)
+	Next
+
+	Return $aClean
+EndFunc
+
+Func __BatchQueueHasItems()
+	Local $hLock = _BatchQueue_Lock()
+	If $hLock = 0 Then Return False
+
+	Local $aQueue = _BatchQueue_ReadArray_NoLock()
+	_BatchQueue_Unlock($hLock)
+
+	Return IsArray($aQueue) And UBound($aQueue) > 0
+EndFunc
+
+Func __IsBatchModeActive()
+	Return $batchEnabled = 1 Or __BatchQueueHasItems()
+EndFunc
+
+Func _BatchQueue_ArrayToText(ByRef $aQueue)
+	Local $sContent = ""
+	If IsArray($aQueue) Then
+		For $i = 0 To UBound($aQueue) - 1
+			Local $sLine = StringStripWS($aQueue[$i], 3)
+			If $sLine <> "" Then
+				If $sContent <> "" Then $sContent &= @CRLF
+				$sContent &= $sLine
+			EndIf
+		Next
+	EndIf
+	Return $sContent
+EndFunc
+
+Func _BatchQueue_WriteArray_NoLock(ByRef $aQueue)
+	Local $hFile = FileOpen($batchQueue, $FO_UNICODE + $FO_CREATEPATH + $FO_OVERWRITE)
+	If $hFile = -1 Then Return SetError(1, 0, 0)
+
+	Local $sContent = _BatchQueue_ArrayToText($aQueue)
+	If $sContent <> "" Then FileWrite($hFile, $sContent)
+	FileClose($hFile)
+	Return 1
+EndFunc
+
+Func _BatchQueue_RemoveFirstExact_NoLock($sNeedle)
+	Local $aQueue = _BatchQueue_ReadArray_NoLock()
+	If Not IsArray($aQueue) Then Return 0
+
+	For $i = 0 To UBound($aQueue) - 1
+		If $aQueue[$i] = $sNeedle Then
+			_ArrayDelete($aQueue, $i)
+			Return _BatchQueue_WriteArray_NoLock($aQueue)
+		EndIf
+	Next
+
+	Return 0
 EndFunc
 
 ; Detect language of user's operating system
@@ -4771,23 +7388,142 @@ Func SaveLog($status)
 	FileWrite($hFile, $sFullLog)
 	FileClose($hFile)
 
+	_PipelineStep("FINAL", "Result", StringUpper($status), "")
+	_PipelineWriteReport($sName, $status)
+
 	Return $sName
 EndFunc
 
+Func _ResultToText($iResult)
+	Switch $iResult
+		Case $RESULT_UNKNOWN
+			Return "unknown"
+		Case $RESULT_SUCCESS
+			Return "success"
+		Case $RESULT_FAILED
+			Return "failed"
+		Case $RESULT_CANCELED
+			Return "canceled"
+		Case $RESULT_NOFREESPACE
+			Return "nofreespace"
+	EndSwitch
+
+	Return "result=" & $iResult
+EndFunc
+
+Func _PipelineOutputStatus($sLog)
+	; Report-only classification.  Do not alter $success or extraction/fallback logic.
+	Switch $success
+		Case $RESULT_SUCCESS
+			Return "OK"
+		Case $RESULT_FAILED
+			Return "FAIL"
+		Case $RESULT_CANCELED
+			Return "CANCELED"
+		Case $RESULT_NOFREESPACE
+			Return "NOFREESPACE"
+	EndSwitch
+
+	If StringInStr($sLog, "Sub items Errors", 1) Or StringInStr($sLog, "Archives with Errors", 1) Then Return "WARN"
+	Return "UNKNOWN"
+EndFunc
+
+
+Func _PipelineOutputDetails($sLog)
+	; Keep the HTML report extractor-neutral.
+	; Full stdout/stderr is already included in the OUTPUT section.
+	Return ""
+EndFunc
+
+Func _PipelineAppendDetail(ByRef $sDetails, $sLine)
+	$sLine = StringStripWS(String($sLine), 3)
+	If $sLine = "" Then Return
+	If StringInStr(@CRLF & $sDetails & @CRLF, @CRLF & $sLine & @CRLF, 1) Then Return
+	$sDetails &= ($sDetails <> "" ? @CRLF : "") & $sLine
+EndFunc
+
+Func _PipelineFindLine($sText, $sNeedle)
+	Local $aLines = StringSplit(StringReplace($sText, @CRLF, @LF), @LF, $STR_NOCOUNT)
+	If Not IsArray($aLines) Then Return ""
+	For $i = 0 To UBound($aLines) - 1
+		If StringInStr($aLines[$i], $sNeedle, 1) Then Return $aLines[$i]
+	Next
+	Return ""
+EndFunc
+
+Func _IsSymlinkOnlyArchiveWarning($sLog)
+	Local $bHasSymlinkIssue = StringInStr($sLog, "Cannot create symbolic link", 1) Or _
+			StringInStr($sLog, "Dangerous link path was ignored", 1)
+	If Not $bHasSymlinkIssue Then Return False
+
+	If StringInStr($sLog, "No files to extract", 1) Or StringInStr($sLog, "Wrong password", 1) Or _
+		   StringInStr($sLog, "Missing volume", 1) Or StringInStr($sLog, "Open ERROR: Can not open the file as", 1) Or _
+		   StringInStr($sLog, "Error: System.Exception:", 1) Or StringInStr($sLog, "unknown WISE-version -> contact author", 1) Or _
+		   StringInStr($sLog, "Critical error:", 1) Or StringInStr($sLog, "[ERROR] ", 1) Or _
+		   StringInStr($sLog, "MainHeaderNotFoundError", 1) Or StringInStr($sLog, "*** ERROR:", 1) Or _
+		   StringInStr($sLog, 'Expected section name ".enigma2"') Or StringInStr($sLog, "ERROR: Wrong tag in package", 1) Or _
+		   StringInStr($sLog, "unzip:  cannot find", 1) Or StringInStr($sLog, "err code(", 1) Or _
+		   StringInStr($sLog, "stacktrace", 1) Or StringInStr($sLog, "Write error: ", 1) Then Return False
+
+	Return True
+EndFunc
+
+Func _HasFatalArchiveIntegrityError($sLog)
+	; Keep corruption detection narrow so normal TAR/symlink warnings on Windows do not get
+	; misclassified as fatal archive corruption and trigger unnecessary fallback scanning.
+	If _IsSymlinkOnlyArchiveWarning($sLog) Then Return False
+
+	Return StringInStr($sLog, "Unexpected end of archive", 1) Or _
+			StringInStr($sLog, " - checksum error", 1) Or _
+			StringInStr($sLog, "ERROR: Data Error", 1) Or _
+			StringInStr($sLog, "CRC Failed", 1) Or _
+			StringInStr($sLog, "Headers Error", 1)
+EndFunc
+
 ; Check for success or failure indicator in log
+	Func __HasToolSuccessText($sLog)
+		Return StringInStr($sLog, "Everything is Ok") Or _
+				StringInStr($sLog, "0 failed") Or StringInStr($sLog, "All files OK") Or _
+				StringInStr($sLog, "All OK") Or StringInStr($sLog, "done.") Or _
+				StringInStr($sLog, "Done ...") Or StringInStr($sLog, ": done") Or _
+				StringInStr($sLog, "Result:	Successful, errorcode 0") Or StringInStr($sLog, "... Successful") Or _
+				StringInStr($sLog, "Extract files [ ") Or StringInStr($sLog, "Done; file is OK") Or _
+				StringInStr($sLog, "Successfully extracted to") Or StringInStr($sLog, "[+] Finished!")
+	EndFunc
+
+	Func __HasPasswordFailureText($sLog)
+		Return StringInStr($sLog, "Wrong password?") Or _
+				StringInStr($sLog, "The specified password is incorrect.") Or _
+				StringInStr($sLog, "Archive encrypted.") Or _
+				StringInStr($sLog, "Corrupt file or wrong password") Or _
+				StringInStr($sLog, "ERROR: Wrong password") Or _
+				StringInStr($sLog, "Enter password")
+	EndFunc
+
 Func EvaluateLog($sLog)
 	ParseWarnings($sLog)
 
 	Cout("Reading log file")
-	If StringInStr($sLog, "Wrong password?") Or StringInStr($sLog, "The specified password is incorrect.") Or _
-	   StringInStr($sLog, "Archive encrypted.") Or StringInStr($sLog, "Corrupt file or wrong password") Or _
-	   StringInStr($sLog, "ERROR: Wrong password") Or StringInStr(_StringGetLine($sLog, -1), "Enter password") Then
-		Cout("Invalid password")
-		$success = $RESULT_FAILED
-		SetError(1, 1)
+	Local $bHasFatalArchiveIntegrityError = _HasFatalArchiveIntegrityError($sLog)
+	If $bHasFatalArchiveIntegrityError Then
+		Cout("Fatal archive integrity errors detected")
+		$g_bArchiveIntegrityError = True
+	EndIf
+
+	; Interactive extractors can log a wrong password first, then succeed after the user re-enters
+	; the correct password.  In that case keep the final successful result instead of treating the
+	; earlier failed attempt as fatal.
+		Local $bHasSuccessIndicator = __HasToolSuccessText($sLog)
+
+		If Not $bHasSuccessIndicator And (__HasPasswordFailureText($sLog) Or StringInStr(_StringGetLine($sLog, -1), "Enter password")) Then
+			Cout("Invalid password")
+			$g_bPasswordFailureAbort = True
+			$success = $RESULT_FAILED
+			SetError(1, 1)
 	ElseIf StringInStr($sLog, "Break signaled") Or StringInStr($sLog, "Program aborted") Or StringInStr($sLog, "User break") Then
 		Cout("Cancelled by user")
 		$success = $RESULT_CANCELED
+		SetError(4)
 	ElseIf StringInStr($sLog, "There is not enough space on the disk") Or _
 		   StringInStr($sLog, "[x] There is not enough space in working directory. Unpacking would most likely fail!") Then
 		$success = $RESULT_NOFREESPACE
@@ -4797,15 +7533,17 @@ Func EvaluateLog($sLog)
 		Cout("Missing part")
 		$success = $RESULT_FAILED
 		SetError(3)
-	ElseIf StringInStr($sLog, "Everything is Ok") Or _
-		   StringInStr($sLog, "0 failed") Or StringInStr($sLog, "All files OK") Or _
-		   StringInStr($sLog, "All OK") Or StringInStr($sLog, "done.") Or _
-		   StringInStr($sLog, "Done ...") Or StringInStr($sLog, ": done") Or _
-		   StringInStr($sLog, "Result:	Successful, errorcode 0") Or StringInStr($sLog, "... Successful") Or _
-		   StringInStr($sLog, "Extract files [ ") Or StringInStr($sLog, "Done; file is OK") Or _
-		   StringInStr($sLog, "Successfully extracted to") Or StringInStr($sLog, "[+] Finished!") Then
+	ElseIf $bHasFatalArchiveIntegrityError Then
+		$success = $RESULT_FAILED
+		SetError(1)
+	ElseIf $bHasSuccessIndicator Then
 		Cout("Success evaluation passed")
 		$success = $RESULT_SUCCESS
+	ElseIf _IsSymlinkOnlyArchiveWarning($sLog) Then
+		Cout("Detected symlink-related archive warnings only; deferring final verdict to output verification")
+		AddWarning("Archive contained symbolic links or unsafe link paths that Windows/7-Zip skipped.")
+		$g_bSymlinkOnlyWarning = True
+		$success = $RESULT_UNKNOWN
 	ElseIf StringInStr($sLog, "err code(", 1) Or StringInStr($sLog, "stacktrace", 1) _
 		   Or StringInStr($sLog, "Write error: ", 1) Or (StringInStr($sLog, "Cannot create", 1) _
 		   And StringInStr($sLog, "No files to extract", 1)) Or StringInStr($sLog, "Archives with Errors: 1") _
@@ -4848,15 +7586,26 @@ EndFunc
 Func _FindArchivePassword($sIsProtectedCmd, $sTestCmd, $sIsProtectedText = "encrypted", $sIsProtectedText2 = 0, $iLine = -3, $sTestText = "All OK")
 	; Is archive encrypted?
 	Local $return = FetchStdout(_MakeCommand($sIsProtectedCmd, True), $outdir, @SW_HIDE, $iLine)
-	If Not StringInStr($return, $sIsProtectedText) And ($sIsProtectedText2 == 0 Or Not StringInStr($return, $sIsProtectedText2)) Then Return 0
+	If Not StringInStr($return, $sIsProtectedText) And ($sIsProtectedText2 == 0 Or Not StringInStr($return, $sIsProtectedText2)) Then Return SetError(0, 0, 0)
 
 	Cout("Archive is password protected")
 	_SetTrayMessageBoxText(t('SEARCHING_PASSWORD'))
+	; Only true silent/batch-queue runs are unattended.
+	; The batch-enabled preference can also be active during a normal context-menu extraction,
+	; so do not use $batchEnabled here or encrypted archives fail before the extractor can ask for input.
+	Local $bUnattended = $silentmode
 	Local $aPasswords = FileReadToArray($sPasswordFile)
 	If @error Then
 		Cout("Error reading password file " & $sPasswordFile)
 		$aPasswords = FileReadToArray(@ScriptDir & "\passwords.txt")
-		If @error Then Return 0
+		If @error Then
+			_SetTrayMessageBoxText("")
+			If $bUnattended Then
+				Cout("No password list available in unattended mode")
+				Return SetError(0, 1, 0)
+			EndIf
+			Return SetError(0, 0, 0)
+		EndIf
 	EndIf
 
 	; Try passwords from list
@@ -4873,7 +7622,129 @@ Func _FindArchivePassword($sIsProtectedCmd, $sTestCmd, $sIsProtectedText = "encr
 	Next
 
 	_SetTrayMessageBoxText("")
-	Return $sPassword
+	If $sPassword == 0 And $bUnattended Then
+		Cout("No matching password found in unattended mode")
+		Return SetError(0, 1, 0)
+	EndIf
+
+	Return SetError(0, 0, $sPassword)
+EndFunc
+
+
+; Quote a command-line argument for direct CreateProcess/Run usage (no cmd.exe shell)
+Func _QuoteDirectArg($sString)
+	Return '"' & StringReplace($sString, '"', '\"') & '"'
+EndFunc
+
+; Try one PDF password with qpdf. The password is intentionally not written to the main log.
+Func _PdfTryQpdfPassword($sInputPdf, $sDecryptedPdf, $sPassword)
+	If FileExists($sDecryptedPdf) Then FileDelete($sDecryptedPdf)
+	FetchStdout($qpdf & ' --password=' & _QuoteDirectArg($sPassword) & ' --decrypt "' & $sInputPdf & '" "' & $sDecryptedPdf & '"', $outdir, @SW_HIDE, 0, False, False)
+	Return FileExists($sDecryptedPdf) And FileGetSize($sDecryptedPdf) > 0
+EndFunc
+
+; In non-silent mode, open a visible cmd window so the user can enter a PDF password manually.
+Func _PdfPromptPasswordWithCmd($sInputPdf, $sDecryptedPdf, $sTempDir)
+	Local $sQpdfPath = $bindir & $qpdf
+	Local $sPromptBat = $sTempDir & $filename & "_qpdf_password_prompt.cmd"
+	Local $sBatch = '@echo off' & @CRLF & _
+		'title UniExtract PDF password' & @CRLF & _
+		'echo Password-protected PDF detected.' & @CRLF & _
+		'echo File: "' & $sInputPdf & '"' & @CRLF & _
+		'echo.' & @CRLF & _
+		':retry' & @CRLF & _
+		'set "UEX_PDF_PASSWORD="' & @CRLF & _
+		'set /P "UEX_PDF_PASSWORD=Enter PDF password (leave empty to cancel): "' & @CRLF & _
+		'if not defined UEX_PDF_PASSWORD exit /b 1' & @CRLF & _
+		'if exist "' & $sDecryptedPdf & '" del /f /q "' & $sDecryptedPdf & '" >nul 2>nul' & @CRLF & _
+		'"' & $sQpdfPath & '" --password="%UEX_PDF_PASSWORD%" --decrypt "' & $sInputPdf & '" "' & $sDecryptedPdf & '"' & @CRLF & _
+		'if errorlevel 1 (' & @CRLF & _
+		'  echo.' & @CRLF & _
+		'  echo Wrong password or qpdf error. Try again, or press Enter without typing a password to cancel.' & @CRLF & _
+		'  echo.' & @CRLF & _
+		'  goto retry' & @CRLF & _
+		')' & @CRLF & _
+		'exit /b 0' & @CRLF
+
+	Local $hFile = FileOpen($sPromptBat, $FO_CREATEPATH + $FO_OVERWRITE)
+	If $hFile = -1 Then Return False
+	FileWrite($hFile, $sBatch)
+	FileClose($hFile)
+
+	Cout("Prompting for PDF password in cmd window")
+	Local $iExitCode = RunWait(@ComSpec & ' /d /c "' & $sPromptBat & '"', $outdir, @SW_SHOW)
+	FileDelete($sPromptBat)
+
+	Return $iExitCode = 0 And FileExists($sDecryptedPdf) And FileGetSize($sDecryptedPdf) > 0
+EndFunc
+
+; Decrypt password-protected PDFs with qpdf before running the existing Poppler PDF extractors.
+; Returns the original PDF path when no qpdf pre-processing is needed.
+; Returns a temporary decrypted PDF path with @extended = 1 when decryption succeeds.
+; Sets @error and $g_bPasswordFailureAbort when qpdf confirms that the PDF requires a password,
+; but no password from the password list or non-silent manual prompt can decrypt it.
+Func _PdfDecryptWithQpdf($sInputPdf, $sTempDir)
+	Local $sQpdfPath = $bindir & $qpdf
+	If Not FileExists($sQpdfPath) Then Return SetError(0, 0, $sInputPdf)
+
+	; qpdf returns 0 when the file requires a password, 2 when it does not.
+	Local $iRequiresPassword = RunWait(_MakeCommand($qpdf & ' --requires-password "' & $sInputPdf & '"', False), $outdir, @SW_HIDE)
+	If @error Then
+		Cout("qpdf PDF password check failed")
+		Return SetError(0, 0, $sInputPdf)
+	EndIf
+
+	If $iRequiresPassword = 2 Then Return SetError(0, 0, $sInputPdf)
+	If $iRequiresPassword <> 0 Then
+		Cout("qpdf could not determine PDF password state, exit code " & $iRequiresPassword)
+		Return SetError(0, 0, $sInputPdf)
+	EndIf
+
+	Cout("PDF is password protected")
+	_SetTrayMessageBoxText(t('SEARCHING_PASSWORD'))
+
+	DirCreate($sTempDir)
+	Local $sDecryptedPdf = $sTempDir & $filename & "_qpdf_decrypted.pdf"
+	If FileExists($sDecryptedPdf) Then FileDelete($sDecryptedPdf)
+
+	Local $aPasswords = FileReadToArray($sPasswordFile)
+	Local $iPasswordCount = @extended
+	If @error Then
+		Cout("Error reading password file " & $sPasswordFile)
+		$aPasswords = FileReadToArray(@ScriptDir & "\passwords.txt")
+		$iPasswordCount = @extended
+		If @error Then
+			$iPasswordCount = 0
+			Cout("No password list available for password-protected PDF")
+		EndIf
+	EndIf
+
+	If $iPasswordCount > 0 Then
+		Cout("Trying " & $iPasswordCount & " PDF passwords from password list")
+		For $i = 0 To $iPasswordCount - 1
+			_SetTrayMessageBoxText(t('TESTING_PASSWORD', CreateArray($i, $iPasswordCount)))
+			If _PdfTryQpdfPassword($sInputPdf, $sDecryptedPdf, $aPasswords[$i]) Then
+				_SetTrayMessageBoxText("")
+				Cout("PDF password found; using temporary qpdf-decrypted PDF")
+				Return SetError(0, 1, $sDecryptedPdf)
+			EndIf
+		Next
+	Else
+		Cout("Password list is empty for password-protected PDF")
+	EndIf
+
+	_SetTrayMessageBoxText("")
+	If Not $silentmode Then
+		If _PdfPromptPasswordWithCmd($sInputPdf, $sDecryptedPdf, $sTempDir) Then
+			Cout("PDF password accepted from cmd prompt; using temporary qpdf-decrypted PDF")
+			Return SetError(0, 1, $sDecryptedPdf)
+		EndIf
+		Cout("PDF password prompt canceled or no valid manual password was entered")
+	EndIf
+
+	Cout("No matching PDF password found")
+	$g_bPasswordFailureAbort = True
+	Return SetError(1, 1, $sInputPdf)
 EndFunc
 
 ; Execute a program and log output using tee
@@ -4881,16 +7752,28 @@ Func _Run($f, $sWorkingDir = $outdir, $show_flag = @SW_MINIMIZE, $bUseCmd = True
 	Global $run = 0, $runtitle = 0
 	Local $return = "", $size = 1, $lastSize = 0
 	Local Const $LogFile = $logdir & "teelog.txt"
+	Local $sRunTitleMarker = ""
 
 	$f = _MakeCommand($f, $bUseCmd) & ($bUseTee? ' 2>&1 | ' & $tee & ' "' & $LogFile & '"': '')
+	If $bUseCmd And StringLeft($f, StringLen($cmd)) = $cmd Then
+		$sRunTitleMarker = "UniExtract-" & @AutoItPID & "-" & StringReplace(String(TimerInit()), ".", "")
+		Local $sRunCommand = StringTrimLeft($f, StringLen($cmd))
+		If StringLeft($sRunCommand, 2) = '""' Then $sRunCommand = StringTrimLeft($sRunCommand, 1)
+		$f = $cmd & "title " & $sRunTitleMarker & " & " & $sRunCommand
+	EndIf
 
 	Cout("Executing: " & $f)
 	Cout("           with options: showFlag = " & $show_flag & ", initialShow = " & $bInitialShow & ", patternSearch = " & $bPatternSearch & ", workingdir = " & $sWorkingDir)
+	_PipelineStep("COMMAND", _PipelineCommandTool($f), "RUN", "workingdir = " & $sWorkingDir & (_PipelineCommandVersion($f) <> "" ? @CRLF & "tool version = " & _PipelineCommandVersion($f) : ""), $f)
 
 	; Create log
 	If $bUseTee Then
 		HasPlugin($tee)
 		If Not FileExists($logdir) Then DirCreate($logdir)
+
+		; Always start with a fresh tee log.  A killed/aborted extractor can leave stale
+		; password text behind, which must not be evaluated by the next queued file.
+		FileDelete($LogFile)
 
 		$run = Run($f, $sWorkingDir, $bInitialShow? @SW_MINIMIZE: $show_flag)
 		If @error Then
@@ -4906,6 +7789,10 @@ Func _Run($f, $sWorkingDir = $outdir, $show_flag = @SW_MINIMIZE, $bUseCmd = True
 			If TimerDiff($TimerStart) > 5000 Then ExitLoop
 		Until ProcessExists($run)
 
+		; Do not wait for the temporary console title here.
+		; Waiting here delays every detector/extractor command and changes batch /sub timing,
+		; which can let downstream split volumes run far enough to create useless logs.
+		; The title marker is used later only if an actual input/password prompt is detected.
 		$runtitle = _WinGetByPID($run)
 		If $bInitialShow Then WinSetState($runtitle, "", $show_flag)
 		Cout("Runtitle: " & $runtitle)
@@ -4926,16 +7813,30 @@ Func _Run($f, $sWorkingDir = $outdir, $show_flag = @SW_MINIMIZE, $bUseCmd = True
 			$return = FileRead($hFile)
 			If $return <> $state Then
 				$state = $return
-				; Automatically show cmd window when user input needed
+				; Do not kill an interactive extractor immediately after the first wrong password.
+				; Let the tool finish, then EvaluateLog() will mark PASSWORD and the caller
+				; will stop further extractor fallbacks for this file.  Killing here can leave
+				; stale password text in teelog.txt and contaminate the next queued file.
+				; Automatically show cmd window when user input is needed, but keep silent mode unattended.
 				If StringInStr($return, "already exist") Or StringInStr($return, "overwrite") Or StringInStr($return, " replace") _
 				Or StringInStr($return, "password") Or StringInStr($return, "Not enough free space available") _
 				Or StringInStr($return, "you must choose a new filename") Or StringInStr($return, "Insert disk with") _
 				Or StringInStr($return, "[R]etry") Then
+					If $silentmode Then
+						Cout("Input prompt suppressed by silent mode")
+						$success = $RESULT_FAILED
+						KillHelper()
+						ExitLoop
+					EndIf
+
 					Cout("User input needed")
-					WinSetState($run, "", @SW_SHOW)
+					; Re-acquire and restore the console window with retries.
+					; Some console extractors briefly change/recreate the console title, so
+					; a single WinGetHandle()/WinSetState() attempt is not reliable.
+					Local $hInputWindow = _RestoreRunWindow($run, $runtitle, $sRunTitleMarker)
+					If Not @error Then $runtitle = $hInputWindow
 					GUICtrlSetFont($idTrayStatusExt, 8.5, 900)
 					_SetTrayMessageBoxText(t('INPUT_NEEDED'))
-					WinActivate($runtitle)
 					$lastSize = Round((_DirGetSize($outdir, 0) - $initdirsize) / 1024 / 1024, 3)
 					ContinueLoop
 				EndIf
@@ -4965,7 +7866,13 @@ Func _Run($f, $sWorkingDir = $outdir, $show_flag = @SW_MINIMIZE, $bUseCmd = True
 		FileDelete($LogFile)
 
 		EvaluateLog($return)
-		SetError(@error, @extended)
+		_PipelineStep("OUTPUT", _PipelineCommandTool($f), _PipelineOutputStatus($return), _PipelineOutputDetails($return), $f, $return)
+			Local $iEvalError = @error, $iEvalExtended = @extended
+			If $g_bPasswordFailureAbort Then
+				SetError(1, 1)
+			Else
+				SetError($iEvalError, $iEvalExtended)
+			EndIf
 
 	; Do not create log
 	Else
@@ -4992,14 +7899,14 @@ Func _Run($f, $sWorkingDir = $outdir, $show_flag = @SW_MINIMIZE, $bUseCmd = True
 				If $TBgui Then _SetTrayMessageBoxText($size & " MB")
 			Else
 				If $TimerStart And TimerDiff($TimerStart) > 60000 Then
-					WinSetState($runtitle, "", @SW_SHOW)
-					WinActivate($runtitle)
+					; Do not restore/activate extractor windows here; only do it after an actual input prompt is detected.
 					Sleep(5000)
 					$TimerStart = 0
 				EndIf
 			EndIf
 			Sleep(100)
 		WEnd
+		_PipelineStep("OUTPUT", _PipelineCommandTool($f), _PipelineOutputStatus(""), "runtime logging disabled", $f)
 	EndIf
 
 	; Reset run var so no wrong process is closed on tray exit
@@ -5083,16 +7990,24 @@ Func FetchStdout($f, $sWorkingDir, $show_flag = @SW_HIDE, $iLine = 0, $bOutput =
 
 	$runtitle = _WinGetByPID($run)
 	Local $TimerStart = TimerInit()
+	Local $bTimedOut = False
 
 	Do
 		Sleep(1)
-		If TimerDiff($TimerStart) > $Timeout Then ExitLoop
+		If TimerDiff($TimerStart) > $Timeout Then
+			$bTimedOut = True
+			ExitLoop
+		EndIf
 		$return &= StdoutRead($run)
 	Until @error
 
 	If $bOutput Then Cout($return)
-	If ProcessExists($run) Then ProcessClose($run)
-	$run = 0
+	If ProcessExists($run) Then
+		If $bTimedOut And $bOutput Then Cout("FetchStdout timeout; killing helper process tree " & $run)
+		KillHelper()
+	Else
+		$run = 0
+	EndIf
 
 	If $iLine <> 0 Then Return _StringGetLine($return, $iLine)
 	Return $return
@@ -5105,10 +8020,27 @@ Func _MakeCommand($f, $bUseCmd = False)
 
 	If Not StringInStr($f, $bindir) Then
 		Local $pos = StringInStr($f, " ")
-		If $pos > 1 And $bUseCmd And FileExists($bindir & StringLeft($f, $pos)) Then
-			$f = '""' & $bindir & _StringInsert($f, '"', $pos - 1)
+		If $pos > 1 And FileExists($bindir & StringLeft($f, $pos - 1)) Then
+			$f = ($bUseCmd? '""': '"') & $bindir & _StringInsert($f, '"', $pos - 1)
+		ElseIf FileExists($bindir & $f) Then
+			$f = ($bUseCmd? '""': '"') & $bindir & $f & '"'
 		Else
-			$f = $bindir & $f
+			If $pos > 1 Then
+				Local $sExe = StringLeft($f, $pos - 1), $sArgs = StringMid($f, $pos)
+				If StringLeft($sExe, 1) = '"' Then
+					; already quoted, leave as-is
+				ElseIf FileExists($sExe) Then
+					$f = Quote($sExe, $bUseCmd) & $sArgs
+				Else
+					$f = $bindir & $f
+				EndIf
+			ElseIf StringLeft($f, 1) = '"' Then
+				; already quoted, leave as-is
+			ElseIf FileExists($f) Then
+				$f = Quote($f, $bUseCmd)
+			Else
+				$f = $bindir & $f
+			EndIf
 		EndIf
 	EndIf
 	Return ($bUseCmd? $cmd: "") & $f
@@ -5312,34 +8244,42 @@ Func _FiletypeGet($bHeader = True, $iWidth = 50)
 	Return $return
 EndFunc
 
+; Kill a helper process together with any child process it started through cmd.exe
+Func _KillProcessTree($iPid)
+	If Not $iPid Then Return
+
+	; taskkill /T is important here: UniExtract often starts helpers through cmd.exe,
+	; and killing only cmd.exe can leave the real extractor (for example quickbms.exe)
+	; alive with the input/temp file still locked.
+	RunWait(@ComSpec & ' /d /c taskkill /PID ' & Int($iPid) & ' /T /F >nul 2>&1', "", @SW_HIDE)
+	Sleep(200)
+
+	; Last-resort fallback for the parent process only. Children should already be gone
+	; because of /T above.
+	If ProcessExists($iPid) Then ProcessClose($iPid)
+EndFunc
+
 ; Stop running helper process
 Func KillHelper()
 	If Not $run Then Return
-	Cout("Killing helper process " & $run)
-	StdioClose($run)
+	Local $iRun = $run
+	Cout("Killing helper process tree " & $iRun)
+	StdioClose($iRun)
 
-	If Not @error And Not StringIsSpace($runtitle) Then
-		Cout("Runtitle: " & $runtitle)
-		; Send SIGINT to console to terminate child processes
-		WinActivate($runtitle)
-		If WinActive($runtitle) Then Send("^c")
-		; Close console
-		WinClose($runtitle)
-	EndIf
-
-	; Force termination if other close commands failed
-	If ProcessExists($run) Then ProcessClose($run)
+	If Not @error And Not StringIsSpace($runtitle) Then Cout("Runtitle: " & $runtitle)
+	_KillProcessTree($iRun)
+	$run = 0
 EndFunc
 
 ; Restart Universal Extractor
 Func Restart()
-	Run(@ScriptFullPath)
+	Run(Quote(@ScriptFullPath))
 	terminate($STATUS_SILENT)
 EndFunc
 
 ; Restart Universal Extractor without elevated privileges
 Func RestartWithoutAdminRights($sParameters = "")
-	Run($cmd & 'runas /trustlevel:0x20000 "' & @ScriptFullPath & $sParameters & '"')
+	Run($cmd & 'runas /trustlevel:0x20000 ' & Quote(Quote(@ScriptFullPath) & $sParameters))
 	terminate($STATUS_SILENT)
 EndFunc
 
@@ -5364,9 +8304,7 @@ EndFunc
 
 ; Send usage statistics if enabled in options
 Func SendStats($a, $sResult = 1)
-	If Not $bOptSendStats Then Return
-
-	InetRead(Cout($sUrlStats & $a & "&r=" & $sResult & "&id=" & $sOptGuid & "&v=" & $sVersion), 1)
+	Return ; Usage statistics disabled in this fork
 EndFunc
 
 ; Check for new version
@@ -5392,7 +8330,7 @@ Func CheckUpdate($silent = $UPDATEMSG_PROMPT, $bCheckInterval = False, $iMode = 
 	If StringLen($prefs) > 0 Then SavePref('lastupdate', $lastupdate)
 
 	; UniExtract main executable - calling the updater is always necessary, because an executable file cannot overwrite itself while running
-	If $iMode <> $UPDATE_HELPER Then
+	If $bForkMainUpdateEnabled And $iMode <> $UPDATE_HELPER Then
 		If ($aReturn[0])[1] <> FileGetSize($sUniExtract) Or FileGetMD5($sUniExtract) <> ($aReturn[0])[2] Then
 			Cout("Update available")
 			$found = True
@@ -5584,12 +8522,23 @@ Func _UpdateGetIndex($sURL = "", $bSilent = $silentmode)
 	Local $return = _INetGetSource($sURL)
 	If @error Then Return _UpdateCheckFailed($bSilent)
 
-	Local $aReturn = StringSplit($return, @LF, 2)
-;~ 	_ArrayDisplay($aReturn)
+	; Normalize CRLF and trim outer whitespace so a trailing blank line
+	; in the hosted index does not cause the update check to fail.
+	$return = StringStripWS(StringReplace($return, @CR, ""), 3)
 
-	For $i = 0 To UBound($aReturn) - 1
-		$aReturn[$i] = StringSplit($aReturn[$i], ",", 2)
+	Local $aLines = StringSplit($return, @LF, 2)
+	Local $aReturn[0]
+;~ 	_ArrayDisplay($aLines)
+
+	For $i = 0 To UBound($aLines) - 1
+		Local $sLine = StringStripWS($aLines[$i], 3)
+		If $sLine = "" Then ContinueLoop
+
+		Local $aLine = StringSplit($sLine, ",", 2)
 		If @error Then Return _UpdateCheckFailed($bSilent)
+
+		ReDim $aReturn[UBound($aReturn) + 1]
+		$aReturn[UBound($aReturn) - 1] = $aLine
 	Next
 
 	Return $aReturn
@@ -5706,7 +8655,6 @@ Func _AfterUpdate()
 	FileDelete($bindir & "regexp.ndll")
 	FileDelete($bindir & "lime.ndll")
 	FileDelete($bindir & "dbxplug.wcx")
-	FileDelete($bindir & "unecm.exe")
 
 	FileDelete($defdir & "flv.ini")
 	FileDelete($defdir & "ns2.ini")
@@ -5783,7 +8731,7 @@ Func RepairProgramFiles($sMsg)
 	If MsgBox($MB_ICONWARNING + $MB_YESNO, $title, $sMsg) <> $IDYES Then Return False
 
 	CheckUpdate($UPDATEMSG_SILENT, False, $UPDATE_HELPER)
-	Run($sUniExtract, @ScriptDir)
+	Run(Quote($sUniExtract), @ScriptDir)
 	Return True
 EndFunc
 
@@ -5800,6 +8748,17 @@ Func Uninstall($bRemoveLogs = True, $bRemoveUserData = False)
 	terminate($STATUS_SILENT)
 EndFunc
 
+Func SafeCheckUpdate()
+    If $g_bUpdateRunning Then
+        MsgBox(64, "Updater", "An update check is already running.")
+        Return
+    EndIf
+
+    $g_bUpdateRunning = True
+    CheckUpdate($UPDATEMSG_PROMPT, False, $UPDATE_ALL, True)
+    $g_bUpdateRunning = False
+EndFunc
+
 ; ------------------------ Begin GUI Control Functions ------------------------
 
 ; Build and display GUI if necessary
@@ -5807,6 +8766,9 @@ Func CreateGUI()
 	Global $iGuiMainWidth = 344, $iGuiMainHeight = 136
 	Local Const $iLeft = 12, $iTop = 10, $iInputWidth = 290
 	Local $iPosY = $iTop - 1
+	Local $bArabicLayout = ($language = "Arabic" Or $language = "Farsi" Or $language = "Hebrew")
+	Local $iMainLabelWidth = $bArabicLayout? 145: -1
+	Local $iMainLabelStyle = $bArabicLayout? $SS_RIGHT: -1
 
 	Cout("Creating main GUI")
 	GUIRegisterMsg($WM_DROPFILES, "WM_DROPFILES_UNICODE_FUNC")
@@ -5814,7 +8776,9 @@ Func CreateGUI()
 
 	Switch $language
 		Case "Arabic", "Farsi", "Hebrew"
-			$exStyle = $WS_EX_LAYOUTRTL
+			; WS_EX_LAYOUTRTL mirrors the whole coordinate system and breaks the main/preferences UI.
+			; Keep a normal window layout for now so Arabic text stays usable.
+			$exStyle = -1
 		Case Else
 			$exStyle = -1
 	EndSwitch
@@ -5850,7 +8814,7 @@ Func CreateGUI()
 	Local $helpmenu = GUICtrlCreateMenu(t('MENU_HELP_LABEL'))
 	Local $updateitem = GUICtrlCreateMenuItem(t('MENU_HELP_UPDATE_LABEL'), $helpmenu)
 	GUICtrlCreateMenuItem("", $helpmenu)
-	Local $feedbackitem = GUICtrlCreateMenuItem(t('MENU_HELP_FEEDBACK_LABEL'), $helpmenu)
+	; Local $feedbackitem = GUICtrlCreateMenuItem(t('MENU_HELP_FEEDBACK_LABEL'), $helpmenu) ; Feedback UI disabled in this fork
 	Local $pluginsitem = GUICtrlCreateMenuItem(t('MENU_HELP_PLUGINS_LABEL'), $helpmenu)
 	Local $firststartitem = GUICtrlCreateMenuItem(t('FIRSTSTART_TITLE'), $helpmenu)
 	GUICtrlCreateMenuItem("", $helpmenu)
@@ -5866,7 +8830,7 @@ Func CreateGUI()
 	GUI_UpdateLogItem()
 
 	; File controls
-	Local $filelabel = GUICtrlCreateLabel(t('MAIN_FILE_LABEL'), $iLeft, $iTop, $exStyle == $WS_EX_LAYOUTRTL? 50: -1, 15)
+	Local $filelabel = GUICtrlCreateLabel(t('MAIN_FILE_LABEL'), $iLeft, $iTop, $iMainLabelWidth, 15, $iMainLabelStyle)
 	Global $GUI_Main_Extract = GUICtrlCreateRadio(t('TERM_EXTRACT'), GetPos($guimain, $filelabel, 5), $iPosY, Default, 15)
 	Global $GUI_Main_Scan = GUICtrlCreateRadio(t('TERM_SCAN'), GetPos($guimain, $GUI_Main_Extract, 10), $iPosY, 100, 15)
 	GUICtrlSetState($extract? $GUI_Main_Extract: $GUI_Main_Scan, $GUI_CHECKED)
@@ -5877,7 +8841,7 @@ Func CreateGUI()
 
 	; Directory controls
 	$iPosY = GetPos($guimain, $filecont, 10, False)
-	Global $GUI_Main_Destination_Label = GUICtrlCreateLabel(t('MAIN_DEST_DIR_LABEL'), $iLeft, $iPosY, $exStyle == $WS_EX_LAYOUTRTL? 50: -1, 15)
+	Global $GUI_Main_Destination_Label = GUICtrlCreateLabel(t('MAIN_DEST_DIR_LABEL'), $iLeft, $iPosY, $iMainLabelWidth, 15, $iMainLabelStyle)
 	Global $GUI_Main_Lock = GUICtrlCreateCheckbox(t('MAIN_DIRECTORY_LOCK'), GetPos($guimain, $GUI_Main_Destination_Label, 5), $iPosY - 1, Default, 15)
 	GUICtrlSetTip($GUI_Main_Lock, t('MAIN_DIRECTORY_LOCK_TOOLTIP'))
 
@@ -5943,9 +8907,9 @@ Func CreateGUI()
 	GUICtrlSetOnEvent($contextitem, "GUI_ContextMenu")
 	GUICtrlSetOnEvent($prefsitem, "GUI_Prefs")
 	GUICtrlSetOnEvent($pluginsitem, "GUI_Plugins")
-	GUICtrlSetOnEvent($feedbackitem, "GUI_Feedback")
+	; GUICtrlSetOnEvent($feedbackitem, "GUI_Feedback") ; Feedback UI disabled in this fork
 	GUICtrlSetOnEvent($firststartitem, "GUI_FirstStart")
-	GUICtrlSetOnEvent($updateitem, "CheckUpdate")
+	GUICtrlSetOnEvent($updateitem, "SafeCheckUpdate")
 	GUICtrlSetOnEvent($webitem, "GUI_Website_Original")
 	GUICtrlSetOnEvent($web2item, "GUI_Website")
 	GUICtrlSetOnEvent($gititem, "GUI_Website_Github")
@@ -5982,6 +8946,10 @@ Func Prompt($iShowFlag, $sMsg, $aVars = 0, $bTerminate = False)
 		Cout("Assuming yes to message " & $sMsg)
 		Return 1
 	EndIf
+	If __IsBatchModeActive() Then
+		Cout("Suppressing batch prompt " & $sMsg)
+		Return 0
+	EndIf
 	Local $return = MsgBox($iTopmost + $iShowFlag, $title, t($sMsg, $aVars))
 	If $return == 1 Or $return == 6 Then
 		Return 1
@@ -5997,6 +8965,10 @@ Func CustomPrompt($sMsg, $aVars)
 	If $eCustomPromptSetting == $PROMPT_ALWAYS Then Return True
 	If $eCustomPromptSetting == $PROMPT_NEVER Then Return False
 	If $silentmode Then Return True
+	If __IsBatchModeActive() Then
+		Cout("Suppressing batch custom prompt " & $sMsg)
+		Return False
+	EndIf
 
 	Opt("GUIOnEventMode", 0)
 	Local $return = False
@@ -6068,6 +9040,36 @@ Func _SetState($aControls, $state)
 	For $idControlID In $aControls
 		GUICtrlSetState($idControlID, $state)
 	Next
+EndFunc
+
+; Restore the active extractor console window reliably.
+; Prefer the unique console title marker, fall back to the cached handle, then to PID.
+Func _RestoreRunWindow($iPID, $hCached = 0, $sTitleMarker = "")
+	Local $hWnd = 0
+
+	For $i = 1 To 30
+		If $sTitleMarker <> "" Then
+			$hWnd = WinGetHandle($sTitleMarker)
+			If Not @error And $hWnd <> 0 Then ExitLoop
+		EndIf
+
+		If IsHWnd($hCached) And WinExists($hCached) Then
+			$hWnd = $hCached
+			ExitLoop
+		EndIf
+
+		$hWnd = _WinGetByPID($iPID)
+		If Not @error And $hWnd <> 0 Then ExitLoop
+
+		Sleep(100)
+	Next
+
+	If $hWnd = 0 Then Return SetError(1, 0, 0)
+
+	WinSetState($hWnd, "", @SW_RESTORE)
+	WinSetState($hWnd, "", @SW_SHOW)
+	WinActivate($hWnd)
+	Return SetError(0, 0, $hWnd)
 EndFunc
 
 ; Get title of a window by PID as returned by Run()
@@ -6371,6 +9373,10 @@ EndFunc
 ; Build and display preferences GUI
 Func GUI_Prefs()
 	Local $iPosX, $iPosY, $iControlWidth, $iWidth = 466, $iHeight = 350
+	Local $bArabicLayout = ($language = "Arabic" Or $language = "Farsi" Or $language = "Hebrew")
+	Local $iPrefsTopLabelStyle = $bArabicLayout? $SS_RIGHT: -1
+	Local $iLangLabelWidth = $bArabicLayout? 82: 72
+	Local $iUpdateLabelWidth = $bArabicLayout? 132: 128
 	Cout("Creating preferences GUI")
 
 	; Create GUI
@@ -6379,8 +9385,8 @@ Func GUI_Prefs()
 
 	; General options
 	Local $idGroup = GUICtrlCreateGroup(t('PREFS_UNIEXTRACT_OPTS_LABEL'), 8, 6, 260, 98)
-	GUICtrlCreateLabel(t('PREFS_LANG_LABEL'), 14, 36, 72, 15)
-	GUICtrlCreateLabel(t('PREFS_UPDATEINTERVAL_LABEL'), 14, 72, 128, 15)
+	GUICtrlCreateLabel(t('PREFS_LANG_LABEL'), 14, 36, $iLangLabelWidth, 15, $iPrefsTopLabelStyle)
+	GUICtrlCreateLabel(t('PREFS_UPDATEINTERVAL_LABEL'), 14, 72, $iUpdateLabelWidth, 15, $iPrefsTopLabelStyle)
 	Global $langselect = GUICtrlCreateCombo("", 100, 32, 160, 25, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
 	Global $IntervalCont = GUICtrlCreateCombo("", 140, 68, 120, 21, BitOR($CBS_DROPDOWNLIST, $WS_VSCROLL))
 	Local $aUpdateInterval = [t('PREFS_UPDATE_DAILY'), t('PREFS_UPDATE_WEEKLY'), t('PREFS_UPDATE_MONTHLY'), t('PREFS_UPDATE_YEARLY'), t('PREFS_UPDATE_NEVER'), t('PREFS_UPDATE_CUSTOM', $iOptUpdateInterval)]
@@ -6417,8 +9423,8 @@ Func GUI_Prefs()
 	Global $unicodecheckopt = _GUICtrlCreateCheckbox('PREFS_CHECK_UNICODE_LABEL', $checkUnicode, $iPosX, $iPosY, $iControlWidth)
 	Global $appendextopt = _GUICtrlCreateCheckbox('PREFS_APPEND_EXT_LABEL', $appendext, $iPosX, $iPosY, $iControlWidth)
 	Global $idOptCreateLog = _GUICtrlCreateCheckbox('PREFS_LOG_LABEL', $bOptCreateLog, $iPosX, $iPosY, $iControlWidth)
-	Global $idOptFeedbackPrompt = _GUICtrlCreateCheckbox('PREFS_FEEDBACK_PROMPT_LABEL', $bOptAskForFeedback == 1, $iPosX, $iPosY, $iControlWidth, 20, $BS_AUTO3STATE)
-	Global $idOptSendStats = _GUICtrlCreateCheckbox('PREFS_SEND_STATS_LABEL', $bOptSendStats, $iPosX, $iPosY, $iControlWidth)
+	; Global $idOptFeedbackPrompt = _GUICtrlCreateCheckbox('PREFS_FEEDBACK_PROMPT_LABEL', $bOptAskForFeedback == 1, $iPosX, $iPosY, $iControlWidth, 20, $BS_AUTO3STATE) ; Feedback UI disabled in this fork
+	; Send anonymous usage statistics preference hidden in this fork
 	Global $idOptBetaUpdates = _GUICtrlCreateCheckbox('PREFS_BETA_UPDATES_LABEL', $bOptNightlyUpdates, $iPosX, $iPosY, $iControlWidth)
 	GUICtrlCreateGroup("", -99, -99, 1, 1)
 
@@ -6433,15 +9439,14 @@ Func GUI_Prefs()
 	GUICtrlSetTip($unicodecheckopt, t('PREFS_CHECK_UNICODE_TOOLTIP'))
 	GUICtrlSetTip($appendextopt, t('PREFS_APPEND_EXT_TOOLTIP'))
 	GUICtrlSetTip($idOptGameMode, t('PREFS_HIDE_STATUS_FULLSCREEN_TOOLTIP'))
-	GUICtrlSetTip($idOptFeedbackPrompt, t('PREFS_FEEDBACK_PROMPT_TOOLTIP'))
-	GUICtrlSetTip($idOptSendStats, t('PREFS_SEND_STATS_TOOLTIP'))
+	; GUICtrlSetTip($idOptFeedbackPrompt, t('PREFS_FEEDBACK_PROMPT_TOOLTIP')) ; Feedback UI disabled in this fork
 	GUICtrlSetTip($idOptExtractVideo, t('PREFS_VIDEOTRACK_TOOLTIP'))
 	GUICtrlSetTip($idOptDeleteSourceFile[$OPTION_ASK], t('PREFS_SOURCE_FILES_OPT_KEEP_TOOLTIP'))
 	GUICtrlSetTip($idOptDeleteAdditionalFiles, t('PREFS_DELETE_ADDITIONAL_FILES_TOOLTIP', t('DIR_ADDITIONAL_FILES')))
 
 	; Set properties
 	GUICtrlSetState($idOk, $GUI_DEFBUTTON)
-	If $bOptAskForFeedback == 2 Then GUICtrlSetState($idOptFeedbackPrompt, $GUI_INDETERMINATE)
+	; If $bOptAskForFeedback == 2 Then GUICtrlSetState($idOptFeedbackPrompt, $GUI_INDETERMINATE) ; Feedback UI disabled in this fork
 	If $iCleanup == $OPTION_DELETE Then GUICtrlSetState($idOptDeleteAdditionalFiles, $GUI_CHECKED)
 
 	; Update interval
@@ -6517,19 +9522,16 @@ Func GUI_Prefs_OK()
 	$appendext = Number(_IsChecked($appendextopt))
 	$bOptHideStatusBoxIfFullscreen = Number(_IsChecked($idOptGameMode))
 	$bOptOpenOutDir = Number(_IsChecked($idOptOpenOutDir))
-	$bOptAskForFeedback = Number(GUICtrlRead($idOptFeedbackPrompt))
-	If $bOptAskForFeedback > 2 Then $bOptAskForFeedback = 0
+	; $bOptAskForFeedback = Number(GUICtrlRead($idOptFeedbackPrompt)) ; Feedback UI disabled in this fork
+	; If $bOptAskForFeedback > 2 Then $bOptAskForFeedback = 0 ; Feedback UI disabled in this fork
+	$bOptAskForFeedback = 0
 	$bOptCreateLog = Number(_IsChecked($idOptCreateLog))
 	$bOptExtractVideo = Number(_IsChecked($idOptExtractVideo))
 	$bOptRememberGuiSizePosition = Number(_IsChecked($idOptRememberGuiSizePosition))
 	$iCleanup = _IsChecked($idOptDeleteAdditionalFiles)? $OPTION_DELETE: $OPTION_MOVE
 
-	$tmp = Number(_IsChecked($idOptSendStats))
-	If $bOptSendStats <> $tmp Then
-		If Not $tmp Then SendStats("DisableStats")
-		$bOptSendStats = $tmp
-		If $bOptSendStats Then SendStats("EnableStats")
-	EndIf
+	; Send anonymous usage statistics preference hidden/disabled in this fork
+	$bOptSendStats = 0
 
 	$tmp = Number(_IsChecked($idOptBetaUpdates))
 	Local $bUpdate = Not ($bOptNightlyUpdates == $tmp)
@@ -6606,6 +9608,32 @@ Func GUI_Batch_OK()
 	terminate($STATUS_BATCH)
 EndFunc
 
+; Determine whether a file is located below a likely UniExtract output directory
+; Output directories typically reuse the source filename without extension,
+; e.g. "archive.zip" -> ".\\archive\\..." or "setup.exe" -> ".\\setup\\..."
+; When batching a directory recursively, these should not be treated as fresh inputs.
+Func _IsUnderExtractOutputDir($sPath, $sRootDir)
+	Local $sRoot = StringRegExpReplace(_PathFull($sRootDir), "[\\/]+$", "")
+	Local $sCurrent = _PathFull(StringRegExpReplace($sPath, "[\\/][^\\/]+$", ""))
+
+	While StringLen($sCurrent) > StringLen($sRoot) And _StringStartsWith($sCurrent, $sRoot, 0)
+		Local $iPos = StringInStr($sCurrent, "\\", 0, -1)
+		If $iPos < 1 Then ExitLoop
+
+		Local $sParent = StringLeft($sCurrent, $iPos - 1)
+		Local $sDirName = StringTrimLeft($sCurrent, StringLen($sParent) + 1)
+		Local $aSiblingFiles = _FileListToArray($sParent, $sDirName & ".*", $FLTA_FILES)
+		If Not @error Then
+			Cout("Skipping file below existing extract output directory: " & $sPath)
+			Return True
+		EndIf
+
+		$sCurrent = $sParent
+	WEnd
+
+	Return False
+EndFunc
+
 ; Add all files from a directory to batch queue
 Func GUI_Batch_AddDirectory($sDir)
 	Local Static $bRecurse = Number(IniRead($prefs, "UniExtract Preferences", "BatchRecurse", 1))
@@ -6618,18 +9646,25 @@ Func GUI_Batch_AddDirectory($sDir)
 	EndIf
 ;~ 	_ArrayDisplay($aFiles)
 
+	Local $aSnapshot[0]
 	For $j = 1 To $aFiles[0]
+		Local $sCandidate = $aFiles[$j]
+		If _IsUnderExtractOutputDir($sCandidate, $sDir) Then ContinueLoop
+		_ArrayAdd($aSnapshot, $sCandidate)
+	Next
+
+	For $j = 0 To UBound($aSnapshot) - 1
 		If $guimain Then
-			GUI_Drop_Parse($aFiles[$j])
+			GUI_Drop_Parse($aSnapshot[$j])
 			GUI_Batch()
 		Else
-			$file = $aFiles[$j]
+			$file = $aSnapshot[$j]
 			AddToBatch()
 		EndIf
 	Next
 	$eCustomPromptSetting = $PROMPT_ASK
 
-	Return $aFiles[0]
+	Return UBound($aSnapshot)
 EndFunc
 
 ; Display batch queue and allow changes
@@ -6754,6 +9789,7 @@ EndFunc
 
 ; Create Feedback GUI
 Func GUI_Feedback()
+	Return ; Feedback UI disabled in this fork
 	Local Const $iWidth = 402, $iHeight = 508
 
 	; Attach input file information
@@ -6858,6 +9894,7 @@ EndFunc
 
 ; Exit feedback GUI if OK clicked
 Func GUI_Feedback_Send($FB_Sys, $FB_File, $FB_Output, $FB_Message)
+	Return False ; Feedback sending disabled in this fork
 	If $FB_File = "" And $FB_Output = "" And $FB_Message = "" Then Return MsgBox($iTopmost + 16, $name, t('FEEDBACK_EMPTY'))
 
 	GUISetState(@SW_HIDE, $FB_GUI)
@@ -6936,6 +9973,7 @@ EndFunc
 
 ; Ask for feedback
 Func GUI_Feedback_Prompt()
+	Return ; Feedback prompt disabled in this fork
 	If Not ($bOptAskForFeedback And $extract) Or $silentmode Then Return
 	If $bOptAskForFeedback == 2 Then Return GUI_Feedback()
 
@@ -7574,7 +10612,7 @@ Func GUI_MethodSelectList($aEntries, $sStandard = "", $sText = "METHOD_GAME_LABE
 
 	Local Const $iWidth = 274, $iHeight = 460
 	Local $sSelection = 0
-	If $silentmode Then Return $sSelection
+	If $silentmode Or __IsBatchModeActive() Then Return $sSelection
 
 	Local $hGui = GUICreate($title, $iWidth, $iHeight, -1, -1, BitOR($WS_SIZEBOX, $WS_MINIMIZEBOX, $WS_CAPTION, $WS_POPUP, $WS_SYSMENU))
 	_GuiSetColor()
@@ -7659,9 +10697,9 @@ Func GUI_Error_WithFeedbackButton($sTitle, $sText)
 	GUICtrlSetFont(-1, 14, 400, 4, $FONT_ARIAL)
 	GUICtrlCreateLabel($sText, 102, 42, 301, 104)
 	Local $idOk = GUICtrlCreateButton(t('OK_BUT'), 336, 158, 81, 25)
-	Local $idFeedback = GUICtrlCreateButton(t('FEEDBACK_TITLE_LABEL'), 101, 158, 81, 25)
+	; Local $idFeedback = GUICtrlCreateButton(t('FEEDBACK_TITLE_LABEL'), 101, 158, 81, 25) ; Feedback UI disabled in this fork
 
-	_GuiSetScale($hGui, $iWidth, $iHeight, $idLabel, $idFeedback)
+	_GuiSetScale($hGui, $iWidth, $iHeight, $idLabel, $idOk)
 	GUISetState(@SW_SHOW)
 
 	While 1
@@ -7669,10 +10707,10 @@ Func GUI_Error_WithFeedbackButton($sTitle, $sText)
 		Switch $nMsg
 			Case $GUI_EVENT_CLOSE, $idOk
 				ExitLoop
-			Case $idFeedback
-				GUIDelete($hGui)
-				GUI_Feedback()
-				ExitLoop
+			; Case $idFeedback
+				; GUIDelete($hGui)
+				; GUI_Feedback()
+				; ExitLoop ; Feedback UI disabled in this fork
 		EndSwitch
 	WEnd
 
@@ -7711,9 +10749,9 @@ Func GUI_Error_UnknownExt()
 	EndIf
 
 	Local $idOk = GUICtrlCreateButton(t('OK_BUT'), 395, $iPosY, 81, 25)
-	Local $idFeedback = GUICtrlCreateButton(t('FEEDBACK_TITLE_LABEL'), 95, $iPosY, 81, 25)
+	; Local $idFeedback = GUICtrlCreateButton(t('FEEDBACK_TITLE_LABEL'), 95, $iPosY, 81, 25) ; Feedback UI disabled in this fork
 
-	_GuiSetScale($hGui, $iWidth, $iHeight, $idLabel, $idFeedback)
+	_GuiSetScale($hGui, $iWidth, $iHeight, $idLabel, $idOk)
 	GUISetState(@SW_SHOW)
 
 	While True
@@ -7724,12 +10762,12 @@ Func GUI_Error_UnknownExt()
 				Local $aReturn = _GUICtrlEdit_GetSel($idEdit)
 				Local $iLen = $aReturn[1] - $aReturn[0]
 				ClipPut($iLen < 1? $sFileType: StringMid($sFileType, $aReturn[0], $iLen + 1))
-			Case $idFeedback
-				GUIDelete($hGui)
-				GUI_Feedback()
-				ExitLoop
+			; Case $idFeedback
+				; GUIDelete($hGui)
+				; GUI_Feedback()
+				; ExitLoop ; Feedback UI disabled in this fork
 			Case $idImage
-				Run($exeinfope & ' "' & $file & '"', $filedir)
+				Run((FileExists($diegui_path)? $diegui: $exeinfope) & ' "' & $file & '"', $filedir)
 		EndSwitch
 	WEnd
 
@@ -7782,14 +10820,14 @@ Func GUI_Plugins($hParent = 0, $sSelection = 0)
 	EndIf
 
 	; Define plugins
+	; h4sh3m Virtual Apps Dependency Extractor disabled in this fork; not included in plugin array.
 	; executable|name|description|filetypes|filemask|extractionfilter|outdir|newfilename|password
-	Local $aPluginInfo[12][9] = [ _
-		[$arc_conv, 'arc_conv', t('PLUGIN_ARC_CONV'), 'nsa, wolf, xp3, ypf', 'arc_conv_r*.7z', 'arc_conv.exe', '', '', 'I Agree'], _
-		[$thinstall, 'h4sh3m Virtual Apps Dependency Extractor', t('PLUGIN_THINSTALL'), 'exe (Thinstall)', 'Extractor.rar', '', '', '', 'h4sh3m'], _
+	Local $aPluginInfo[11][9] = [ _
+		[$arc_conv, 'arc_conv', t('PLUGIN_ARC_CONV'), 'nsa, wolf, xp3, ypf', 'arc_convert.zip', 'arc_conv.exe', '', '', 0], _
 		[$iscab, 'iscab', t('PLUGIN_ISCAB'), 'cab', 'iscab.exe;ISTools.dll', '', '', '', 0], _
 		[$unreal, 'Unreal Engine Resource Viewer', t('PLUGIN_UNREAL'), 'pak, u, uax, upk', 'umodel_win32.zip', 'umodel.exe|SDL2.dll', '', '', 0], _
 		[$dcp, 'WinterMute Engine Unpacker', t('PLUGIN_WINTERMUTE'), 'dcp', $dcp, '', '', '', 0], _
-		[$ci, 'CreateInstall Extractor', t('PLUGIN_CI', CreateArray("ci-extractor.exe", "gea.dll", "gentee.dll")), 'exe (CreateInstall)', 'ci-extractor.exe;gea.dll;gentee.dll', '', '', '', 0], _
+		[$ci, 'CreateInstall Extractor', t('PLUGIN_CI', CreateArray("ci-extractor.exe", "gea.dll", "gentee.dll")), 'exe (CreateInstall)', 'cif-setup.zip', 'ci-extractor.exe|gea.dll|gentee.dll', '', '', 0], _
 		[$dgca, 'DGCA', t('PLUGIN_DGCA'), 'dgca', 'dgca_v*.zip', $dgca, '', '', 0], _
 		[$bootimg, 'bootimg', t('PLUGIN_BOOTIMG'), 'boot.img', 'unpack_repack_kernel_redmi1s.zip', 'bootimg.exe', '', '', 0], _
 		[$is5cab, 'is5comp', t('PLUGIN_IS5COMP'), 'cab (InstallShield)', 'i5comp21.rar', 'I5comp.exe|ZD50149.DLL|ZD51145.DLL', '', '', 0], _
@@ -7848,7 +10886,8 @@ Func GUI_Plugins($hParent = 0, $sSelection = 0)
 				If $current == -1 Then ContinueLoop
 				GUICtrlSetState($GUI_Plugins_Download, $GUI_DISABLE)
 				Cout("Download clicked for plugin " & $aPluginInfo[$current][1])
-				OpenURL($sUrlGetUrl & $aPluginInfo[$current][1])
+				Local $sPluginUrl = _GetPluginDownloadUrl($aPluginInfo[$current][1])
+				If $sPluginUrl <> "" Then OpenURL($sPluginUrl)
 				GUICtrlSetState($GUI_Plugins_Download, $GUI_ENABLE)
 		EndSwitch
 	WEnd
@@ -7856,6 +10895,37 @@ Func GUI_Plugins($hParent = 0, $sSelection = 0)
 	FileChangeDir($sWorkingDir)	; Reset working dir in case it was changed by FileOpenDialog
 	GUIDelete($GUI_Plugins)
 	Opt("GUIOnEventMode", 1)
+EndFunc
+
+Func _GetPluginDownloadUrl($sPluginName)
+	Switch $sPluginName
+		Case 'arc_conv'
+			Return "https://sourceforge.net/projects/archivconvert/files/archivconvert/version_0.81/arc_convert.zip/download"
+;~		Case 'h4sh3m Virtual Apps Dependency Extractor' ; Disabled in this fork
+;~			Return $sUrlGithub & "/issues?q=h4sh3m"
+		Case 'iscab'
+			Return "https://code.google.com/archive/p/uniextract/source/default/source"
+		Case 'Unreal Engine Resource Viewer'
+			Return "https://www.gildor.org/en/projects/umodel"
+		Case 'WinterMute Engine Unpacker'
+			Return "https://www.mediafire.com/download.php?rard7tih3dwmqjf"
+		Case 'CreateInstall Extractor'
+			Return "https://www.createinstall.com/download-free-trial.html"
+		Case 'DGCA'
+			Return "https://www.ponsoftware.com/archiver/product/product.htm"
+		Case 'bootimg'
+			Return "https://xdaforums.com/t/guide-how-to-unpack-repack-kernel-windows-linux.2908458/"
+		Case 'is5comp'
+			Return "https://www.cdmediaworld.com/hardware/cdrom/files.shtml"
+		Case 'WolfDec'
+			Return "https://github.com/Sinflower/WolfDec/releases"
+		Case 'ExtSIS'
+			Return "https://en.freedownloadmanager.org/Windows-PC/SISContents-FREE.html"
+		Case 'Bitrock Unpacker'
+			Return "https://github.com/Harakku/bitrock-unpacker/releases"
+	EndSwitch
+
+	Return ""
 EndFunc
 
 Func GUI_Plugins_Install($aPluginInfo, $sPath)
@@ -7878,7 +10948,7 @@ Func GUI_Plugins_Install($aPluginInfo, $sPath)
 	; Determine filetype
 	Local $sExtension = StringRight($sPath, 3)
 	If $sExtension = ".7z" Or $sExtension = "rar" Or $sExtension = "zip" Then ; Unpack archive
-		Local $command = $cmd & $7z & ($aPluginInfo[5] == ''? ' x': ' e') & ($aPluginInfo[8] == 0? '': ' -p"' & $aPluginInfo[8] & '"')
+		Local $command = $cmd & $7z & ($aPluginInfo[5] == ''? ' x -aou -y': ' e -aou -y') & ($aPluginInfo[8] == 0? '': ' -p"' & $aPluginInfo[8] & '"')
 		If $aPluginInfo[5] <> "" Then ; Build include command for each file needed
 			For $sFile In StringSplit($aPluginInfo[5], "|", 2)
 				$command &= " -ir!" & $sFile
@@ -8086,16 +11156,26 @@ Func GUI_About()
 	Cout("Creating about GUI")
 
 	Local $hGui = _GUICreate($title & ' "' & $sCodename & '"', $iWidth, $iHeight, -1, -1, -1, $exStyle, $guimain)
+	Local $sTimestamp = FileGetVersion($sUniExtract, "Timestamp")
+	Local $sDate = StringSplit($sTimestamp, " ")[1]
+
 	_GuiSetColor()
 	Local $idLabel = GUICtrlCreateLabel($name, 16, 16, $iWidth - 32, 52, $SS_CENTER)
 	GUICtrlSetFont(-1, 25, 400, 0, $FONT_ARIAL)
-	GUICtrlCreateLabel(t('ABOUT_VERSION', CreateArray($sVersion, FileGetVersion($sUniExtract, "Timestamp"))), 16, 72, $iWidth - 32, 17, $SS_CENTER)
-	GUICtrlCreateLabel(t('ABOUT_INFO_LABEL', CreateArray("Jared Breland <jbreland@legroom.net>", "uniextract@bioruebe.com", "TrIDLib (C) 2008 - 2011 Marco Pontello" & @CRLF & "<http://mark0.net/code-tridlib-e.html>", "GNU GPLv2")), 16, 104, $iWidth - 32, $iHeight - 104 - 58, $SS_CENTER)
+
+	GUICtrlCreateLabel(t('ABOUT_VERSION', CreateArray($sVersion, $sDate)), 16, 72, $iWidth - 32, 17, $SS_CENTER)
+	GUICtrlCreateLabel(t('ABOUT_INFO_LABEL', CreateArray( _
+		"Jared Breland <jbreland@legroom.net>", _
+		"uniextract@bioruebe.com", _
+		$sVersion, _
+		"GPL v2")), 16, 104, $iWidth - 32, $iHeight - 104 - 58, $SS_CENTER)
+
 	GUICtrlCreateLabel($sOptGuid, 5, $iHeight - 15, 275, 15)
 	GUICtrlSetFont(-1, 8, 800, 0, $FONT_ARIAL)
-	Local $sPath = $iconsdir & "Bioruebe" & ($bHighContrastMode? "White": "") & ".png"
+
+	Local $sPath = $iconsdir & "Bioruebe" & ($bHighContrastMode ? "White" : "") & ".png"
 	Local $idOk = GUICtrlCreateButton(t('OK_BUT'), $iWidth / 2 - 45, $iHeight - 50, 90, 25)
-	_GUICtrlCreatePic($sPath , $iWidth - 100 - 10, $iHeight - 58, 100, 48)
+	_GUICtrlCreatePic($sPath, $iWidth - 100 - 10, $iHeight - 58, 100, 48)
 	_GuiSetScale($hGui, $iWidth, $iHeight, $idLabel, $idOk)
 	GUISetState(@SW_SHOW)
 
@@ -8147,6 +11227,8 @@ EndFunc
 
 ; Create tray menu items
 Func Tray_Create()
+	If $silentmode Then Return Opt("TrayIconHide", 1)
+
 	Global $Tray_Statusbox = TrayCreateItem(t('PREFS_HIDE_STATUS_LABEL'))
 	If $bOptNoStatusBox Then TrayItemSetState(-1, $TRAY_CHECKED)
 	TrayCreateItem("")

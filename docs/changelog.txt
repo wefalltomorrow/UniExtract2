@@ -1,3 +1,222 @@
+v3.1.0 (2026/10/02) - wefalltomorrow fork
+
+  Added reproducible Windows build and release packaging through GitHub Actions
+  Added complete command-line reference and repository contribution templates
+Based on the current gvp9000 source and its 2026 extraction/detection fixes.
+Integrated upstream PR #408 copied/quoted path handling.
+Restored missing file extensions after MHTML extraction.
+Fixed first-run setup UI appearing in silent mode.
+Silent mode now hides the tray icon and extraction status overlay.
+Silent mode no longer opens interactive repair UI when core program files are missing.
+Changed fork links and executable metadata to wefalltomorrow/UniExtract2.
+Disabled main executable replacement from the borrowed gvp9000 helper update feed.
+Standalone updater main URLs now target this fork.
+Corrected About dialog license text to GPLv2.
+Added docs/FORK-NOTES.md with upstream PR, issue and fork review.
+
+v3.0.4
+Added password-protected PDF support with qpdf.
+Locked PDFs are decrypted first, then UniExtract continues the normal PDF extraction, such as extracting text, images/pages, attachments, and HTML output.
+Added automatic PDF password testing from password list.
+Added manual CMD password prompt in non-silent mode.
+Added cleanup for failed/temp PDF decrypt files.
+PDF passwords are not written to the main log.
+Added JAR / ARJ Software archive detection.
+Added defs\jar_arj.ini using JAR32.EXE x -y %file%.
+Updated BMS.db QuickBMS script for FreeSpace / FreeSpace 2 .vp archives.
+Reason for BMS.db update: old .vp script dumped folders/backdirs as 0-byte files; new script is directory-aware and rebuilds proper folder paths.
+Added JAR32.EXE
+Added jar102x.exe
+Added qpdf
+Modified BMS.db
+Updated sqlite3 to 3.53.2
+Updated upx.exe to 5.2.0
+Updated triddefs.trd to 20260614
+Updated DiE database files to 20260614
+
+v3.0.2
+Added bitrock-unpacker.exe
+Added sfextract.exe
+Added unecm.exe
+Updated sqlite3 to 3.53.1
+Updated Exeinfope to 0.0.9.7
+Updated Ext_Detector.dll to 0.7.8.3
+Updated triddefs.trd to 20260602
+Updated pea.exe to 1.3.1.0
+Updated DiE database files to 20260603
+ECM extraction support
+Better ALZ handling
+Game/QuickBMS checks moved later to avoid wrong extraction/hangs
+Stronger process killing
+Timeout fix
+Better Atlantis installer detection
+New detailed HTML pipeline report
+
+v2.9.6
+Updated 7z.exe, 7z.dll to 26.01.
+Updated UnRAR.exe to 7.22.
+Updated innounp.exe to 2.67.9.
+Updated trid.exe to 2.48.
+Updated triddefs.trd to 20260505
+Updated DiE database files to 20260430
+Improved Setup Factory / VISE / Gentee handling.
+Improved EXE extraction pipeline.
+PEiD fallback is now deferred instead of running too early.
+Removed generic CheckExt() from the EXE flow.
+Fixed several incorrect $TYPE_* mappings.
+NSIS and RAR SFX now use the generic 7-Zip path.
+Improved TrID fallback with multiple matches.
+Cleaner unsupported EXE status/logging.
+Overall: safer routing and fewer false positives.
+
+v2.9.3
+Updated sqlite3.dll, sqlite3_x64.dll and sqlite3.exe to 3.53.0.
+Updated DiE database files to 20260427.
+Improved language file encoding support; /lang/*.ini files can now use UTF-8 encoding.
+Improved batch UPX/packer handling.
+Fixed batch/context-menu extraction handling.
+Fixed /silent propagation and behavior in batch mode.
+Fixed multipart/split archive skipping.
+Fixed wrong-password stop logic.
+Fixed UnRAR password handling in silent and non-silent batch mode.
+Fixed Exeinfo PE staying open in scan mode.
+Fixed final batch failure summary/logging behavior.
+Cleaned final batch failure popup formatting.
+
+v2.8.9
+Updated DiE database to 20260426.
+Updated TrIDDefs.TRD to 20260423.
+Updated lconvert.exe to 5.15.18 (x86).
+Updated file.exe and magic.mgc to v5.46 (built from source).
+Updated unshield.exe to v1.6.2 (built from source).
+Updated zlib1.dll to v1.3.2 (built from source).
+Updated pdfdetach.exe, pdftohtml.exe, pdftopng.exe, and pdftotext.exe to v4.06.
+Updated dark.exe to v3.14.8722.
+Updated /x86/UnRAR.exe to v7.1.0.
+Added lsar.exe listing tool from the unar package.
+Updated Ukrainian language file, thanks to StanleyKid-22.
+
+Redirected project/update URLs to the gvp9000 GitHub / GitHub Pages fork.
+Disabled Bioruebe feedback, statistics, privacy, and get-url endpoints.
+Disabled anonymous usage statistics completely and removed the preference checkbox.
+Changed settings behavior to prefer the program folder, with fallback to %AppData%\UniExtract.
+Changed logs to prefer program folder\log\, with %AppData%\UniExtract\log\ fallback if not writable.
+Fixed stale INI path reuse for batchqueue and filescanlogfile.
+Updated file.exe usage to explicitly load magic.mgc.
+Added WiX/Burn detection and prioritized Dark/WiX extraction before 7z fallback.
+Improved InstallShield handling:
+    - detects data*.cab + .hdr sets before generic CAB handling,
+    - improves ISx fallback cleanup,
+    - tries stage-2 extraction of payload-sized *_ext.bin with 7z.
+Fixed batch queue race risk by removing the queue item before launching the next item.
+Fixed wrong-password-then-correct-password case so final success is not treated as failure.
+Disabled the old h4sh3m/Thinstall plugin path and removed it from plugin listing.
+Improved Arabic/Farsi/Hebrew UI layout handling without mirroring the whole GUI.
+
+v2.8.0
+Update die to 3.21
+Update die definitions to 2026-04-22
+Update innounp to 2.67.8
+Update triddefs.trd to 2026-04-20
+Fixed SQLite extractor winner reporting
+Improved handling of definitively corrupt archives and broken volumes
+Reduced redundant fallback/retry paths after fatal 7-Zip integrity failures
+Prevented post-processing on archives already proven broken
+Localized the About window
+Added DiE version logging at startup
+Updated version and branding metadata
+
+2.7.0 RC 7
+Switched main update URLs from Bioruebe server to gvp9000 GitHub Pages
+Updates for the main executable (UniExtract.exe) and the nightly build are functioning correctly from my own repository.
+Updates for the helper components (extractors) are also functioning correctly from my own repository.
+Disabled all visible feedback UI / feedback prompt / feedback sending
+Improved update index parsing to tolerate CRLF and trailing blank lines
+Reworked plugin download links to use explicit per-plugin URLs
+Updated About dialog text, timestamp display, and icon branding
+Reworked FFmpeg updater to use direct GitHub release downloads
+Removed old geturl.php + 7z extraction FFmpeg workflow
+Added direct FFmpeg file existence validation after download
+Fixed download progress text from incorrect kb to bytes
+Added protection against invalid/zero remote file size
+Minor code formatting cleanup
+
+2.6.2 RC 7
+  Uniextract program path with spaces fixed
+  Updated Trid triddefs.trd signature file to 2026/04/17
+  Updated DiE signature files to 2026-04-17
+  Updated chdman to version 287b
+  Fixed pipeline for some InstallShield installers
+  Fixed pipeline for some Delphi installers
+  New Atlantis FILES custom-installer extractor was added.
+  InstallShield handling was rewritten into a safer automatic pipeline.
+  A lot of path quoting / spaces-in-path command calls were fixed.
+  Password-protected archive handling is stricter, especially for batch/unattended mode.
+  Corrupt archive detection is stricter, so false “success” is less likely.
+  Multipart archives (.7z.001, .part1.rar, .r00, .z01, etc.) are handled more intelligently.
+  Per-file summary labeling was improved.
+  Several external-tool calls were cleaned up for reliability.
+
+
+2.3.0 RC 7 (2026/04/10)
+  Updated innounp to version 2.67.7
+  
+	1) New media-aware skip guard before secondary probes
+	Practical effect:
+	- Less probe noise in logs.
+	- Lower chance that media files get unnecessarily sent through ISO/game-related checks.
+	- Faster/cleaner pipeline for MP4/MKV/MP3/AAC/FLAC/Vorbis/etc.
+
+	2) Strict fallback now recognizes audio explicitly
+	Practical effect:
+	- Audio files are now routed directly to `extract($TYPE_AUDIO, ...)` instead of falling deeper into generic fallback logic.
+
+	3) Detect It Easy logging was trimmed
+	Practical effect:
+	- Cleaner logs.
+	- Same overall DiE normalization pipeline, but with less verbose output.
+
+	4) `extract()` avoids junk “File type is:” lines
+	Practical effect:
+	- Avoids noisy or meaningless log lines like invalid/placeholder file-type values.
+
+	5) MSI lessmsi diagnostics were slightly cleaned
+	Practical effect:
+	- Slightly less MSI log noise.
+	- MSI behavior appears effectively the same here; this looks like a cosmetic logging cleanup, not a pipeline rewrite.
+	
+2.2.0 RC 7 (2026/04/07)
+  Updated DiE signature files to 2026-04-06
+  Updated userdb.txt signature file for PEiD and ExeInfoPE to 2025/12/28 (but the main detection work is made by DiE)
+  Updated Lessmsi to 2.12.9
+  Updated Pea to 1.3.0
+  Updated Trid triddefs.trd signature file to 2026/04/04
+
+2.2.0.0 RC 7 (2026)
+  Fix DiE (Detect-it-easy) file detection issue
+  Minnor other changes
+
+2.1.0.0 RC 6 (2026)
+  Improved file detection with DiE (Detect-it-easy) engine
+  Updated DiE engine to version 3.10
+  Updated exeinfope to version 0.0.9.5
+  Updated EnigmaVBUnpacker to version 0.6.3
+  Updated innounp to version 2.67.4
+  Updated jsMSIx to version 1.19.0.1
+  Updated MediaInfo to version 26.1.0
+  Updated mtee to version 2.7
+  Updated pea to version 1.2.9
+  Updated trid to version 2.47
+  Updated upx to version 5.1.1
+  Updated lessmsi to version 2.12.5
+  Updated 7zip to version 26.0
+  Updated chdman to version 286
+  Updated UnRAR to version 7.20
+  Fix a problem where the application terminated during update
+  Handles new version's lessmsi executables
+  Handles new version innoupdate executable
+  Better log system
+
 2.0.0 RC 4 (2023):
   Added support for more Smart Install Maker installers using simdec
   Added support for more Inno Setup installers using innoextract, thanks to hgdagon

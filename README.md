@@ -36,6 +36,7 @@ Compared with the old upstream source, this fork includes:
 - smarter QuickBMS/game detection, including safe silent-mode auto-selection when only one script matches
 - Descent 3 HOG2 timestamp restoration after QuickBMS extraction
 - more accurate extraction/pipeline result classification, including innounp output
+- optional Game Extractor Basic fallback for obscure game archives that other handlers miss
 - more useful extraction/pipeline logging
 
 The full inherited history is in [docs/changelog.txt](docs/changelog.txt). The fork/PR/issue review behind this version is documented in [docs/FORK-NOTES.md](docs/FORK-NOTES.md).
@@ -51,6 +52,14 @@ The current source is synced through gvp9000's v3.0.6 changes from October 2, 20
 The standalone updater downloads the current `UniExtract.exe` from this repository's latest GitHub release. There is not yet a separate nightly executable channel, so the nightly updater target currently falls back to the latest stable build.
 
 Release packages preserve the third-party license material shipped with the helper bundle. Check those licenses before redistributing or using particular helpers in a commercial environment.
+
+### Optional Game Extractor fallback
+
+Game Extractor is supported as an **optional** low-priority game-archive backend. It is not bundled with the normal UniExtract package because the upstream download is large and includes its own Java runtime.
+
+Install the public **Game Extractor Basic** package through UniExtract's Plugin Manager, or extract its `extract.zip` release into `bin\GameExtractor\`. UniExtract then tries it only after the existing dedicated handlers, GARbro/QuickBMS routes, extension routes and generic 7-Zip probe have failed.
+
+Only the public Basic release should be used for redistribution/integration. Do not copy files out of the paid Full Version into a public UniExtract package. See [docs/GAME-EXTRACTOR.md](docs/GAME-EXTRACTOR.md) for details.
 
 ## Command line
 

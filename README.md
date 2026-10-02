@@ -37,6 +37,7 @@ Compared with the old upstream source, this fork includes:
 - Descent 3 HOG2 timestamp restoration after QuickBMS extraction
 - more accurate extraction/pipeline result classification, including innounp output
 - optional Game Extractor Basic fallback for obscure game archives that other handlers miss
+- optional vgmstream fallback for streamed game audio that standard media routes do not handle
 - more useful extraction/pipeline logging
 
 The full inherited history is in [docs/changelog.txt](docs/changelog.txt). The fork/PR/issue review behind this version is documented in [docs/FORK-NOTES.md](docs/FORK-NOTES.md).
@@ -60,6 +61,14 @@ Game Extractor is supported as an **optional** low-priority game-archive backend
 Install the public **Game Extractor Basic** package through UniExtract's Plugin Manager, or extract its `extract.zip` release into `bin\GameExtractor\`. UniExtract then tries it only after the existing dedicated handlers, GARbro/QuickBMS routes, extension routes and generic 7-Zip probe have failed.
 
 Only the public Basic release should be used for redistribution/integration. Do not copy files out of the paid Full Version into a public UniExtract package. See [docs/GAME-EXTRACTOR.md](docs/GAME-EXTRACTOR.md) for details.
+
+### Optional vgmstream fallback
+
+[vgmstream](https://github.com/vgmstream/vgmstream) can be installed through UniExtract's Plugin Manager as a second optional game-focused backend. It is used for **streamed game audio**, not general archives.
+
+UniExtract first keeps its normal archive/media routes. If those fail and vgmstream is installed, UniExtract performs a metadata-only probe and only decodes the file when vgmstream actually accepts it. Multi-stream banks are exported as separate WAV files and loop metadata is ignored so each stream is decoded once.
+
+The plugin should be downloaded from the current upstream vgmstream releases rather than copied from Game Extractor's bundled helper, which is older. See [docs/VGMSTREAM.md](docs/VGMSTREAM.md).
 
 ## Command line
 

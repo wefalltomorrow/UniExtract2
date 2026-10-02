@@ -2,6 +2,7 @@ v3.1.2 (2026/10/03) - wefalltomorrow fork
 
 Added optional Game Extractor Basic integration for obscure game archives.
 Game Extractor is a low-priority fallback and is only tried after existing dedicated handlers and the generic 7-Zip probe fail.
+Changed INI registry extension handlers to non-fatal probes so failed legacy extractors can continue to later fallbacks, including Game Extractor.
 Added Game Extractor to the Plugin Manager; the public Basic package installs under bin\GameExtractor and is not bundled with the normal release.
 Game Extractor results require both its "Finished extracting files" marker and real extracted output before UniExtract accepts the run as successful.
 The integration exposes Game Extractor Basic's archive plugins through its normal CLI rather than copying individual Watto handlers into AutoIt.

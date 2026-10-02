@@ -32,6 +32,10 @@ Compared with the old upstream source, this fork includes:
 - copied/quoted Windows path handling based on upstream PR #408
 - quieter and more reliable `/silent` operation, including first-run behavior
 - extension recovery for extracted MHTML content
+- Unicode-path handling for split Inno Setup installers and their external `.bin` sidecars
+- smarter QuickBMS/game detection, including safe silent-mode auto-selection when only one script matches
+- Descent 3 HOG2 timestamp restoration after QuickBMS extraction
+- more accurate extraction/pipeline result classification, including innounp output
 - more useful extraction/pipeline logging
 
 The full inherited history is in [docs/changelog.txt](docs/changelog.txt). The fork/PR/issue review behind this version is documented in [docs/FORK-NOTES.md](docs/FORK-NOTES.md).
@@ -41,6 +45,8 @@ The full inherited history is in [docs/changelog.txt](docs/changelog.txt). The f
 The source repository does not store the large third-party helper set directly.
 
 For the moment, helper-file updates continue to use gvp9000's maintained helper feed because that feed matches the modern extractor set inherited by this fork. Main-executable replacement from that feed is deliberately disabled so it cannot overwrite this fork with another build.
+
+The current source is synced through gvp9000's v3.0.6 changes from October 2, 2026, while keeping this fork's additional path, silent-mode, MHTML and updater fixes.
 
 The standalone updater downloads the current `UniExtract.exe` from this repository's latest GitHub release. There is not yet a separate nightly executable channel, so the nightly updater target currently falls back to the latest stable build.
 
@@ -86,7 +92,7 @@ To create the full release package, run:
 .\scripts\package-release.ps1
 ```
 
-The packaging script uses the gvp9000 v3.0.4 full bundle as the current helper-binary base, then overlays this fork's compiled executables, definitions, languages, documentation and metadata. The GitHub Actions workflow performs the same build on Windows Server 2022 and runs a basic ZIP extraction smoke test against the packaged build.
+The packaging script uses the gvp9000 v3.0.6 full bundle as the current helper-binary base, then overlays this fork's compiled executables, definitions, languages, documentation and metadata. The GitHub Actions workflow performs the same build on Windows Server 2022 and runs a basic ZIP extraction smoke test against the packaged build.
 
 ## Contributing
 

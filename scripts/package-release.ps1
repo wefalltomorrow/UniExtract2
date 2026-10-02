@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Version,
-    [string]$HelperBaseUrl = 'https://github.com/gvp9000/UniExtract2/releases/download/v3.0.4/UniExtract2.zip'
+    [string]$HelperBaseUrl = 'https://github.com/gvp9000/UniExtract2/releases/download/v3.0.6/UniExtract2.zip'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -85,7 +85,7 @@ Universal Extractor 2
 Version: $Version
 Source: https://github.com/wefalltomorrow/UniExtract2
 Commit: $Commit
-Helper package base: gvp9000 UniExtract2 v3.0.4
+Helper package base: gvp9000 UniExtract2 v3.0.6
 
 Third-party helpers retain their own licenses. See docs and docs\third-party in this package.
 "@ | Set-Content -LiteralPath (Join-Path $StageRoot 'BUILD-INFO.txt') -Encoding UTF8

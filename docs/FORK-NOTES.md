@@ -1,6 +1,6 @@
 # Fork notes
 
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-03
 
 This file records where the current fork changes came from and what was deliberately left out. It is meant to stop fixes from getting lost in a long fork chain.
 
@@ -13,6 +13,12 @@ This file records where the current fork changes came from and what was delibera
 - latest gvp9000 source reviewed and synced: `3372caa4ae88c183f413ad7d4faa7dbb8beb3c82` (2026-10-02, v3.0.6)
 
 The latest reviewed gvp9000 fork is 98 commits ahead of the upstream master used here. Its commit messages are not always descriptive, so the source changes and changelog were reviewed rather than relying on commit titles.
+
+## Game Extractor integration
+
+v3.1.2 adds the public GPLv2 Game Extractor Basic package as an optional low-priority fallback. UniExtract calls Game Extractor's own command-line archive extraction path, so the installed Basic package supplies its archive-plugin coverage directly instead of duplicating thousands of per-game handlers in AutoIt.
+
+The paid Full edition is not bundled or copied into this repository. Full-only code and non-extraction features such as preview/edit/conversion functionality are outside this integration.
 
 ## Upstream pull requests
 

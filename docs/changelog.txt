@@ -1,6 +1,7 @@
 v3.1.0 development (wefalltomorrow fork)
 Based on the current gvp9000 source and its 2026 extraction/detection fixes.
 Integrated upstream PR #408 copied/quoted path handling.
+Restored missing file extensions after MHTML extraction.
 Fixed first-run setup UI appearing in silent mode.
 Silent mode now hides the tray icon and extraction status overlay.
 Silent mode no longer opens interactive repair UI when core program files are missing.

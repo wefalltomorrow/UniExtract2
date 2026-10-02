@@ -82,6 +82,12 @@ Force the optional Game Extractor fallback (requires Game Extractor Basic instal
 UniExtract.exe "C:\Games\unknown.pak" /sub /type=gameextractor
 ```
 
+Force the optional vgmstream game-audio decoder:
+
+```text
+UniExtract.exe "C:\Games\audio\voice.wem" /sub /type=vgmstream
+```
+
 ## Exit behavior
 
 UniExtract uses different internal status/exit values for success, unsupported files, invalid paths, extraction failures and silent/internal termination. When automating it, test the exit code and the generated log rather than assuming that every non-interactive run produced output.

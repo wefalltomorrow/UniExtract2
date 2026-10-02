@@ -30,29 +30,41 @@ if (-not $AutoItDir) {
 
 $Wrapper = Find-FirstExistingPath @(
     (Join-Path $AutoItDir 'SciTE\AutoIt3Wrapper\AutoIt3Wrapper.exe'),
+    (Join-Path $AutoItDir 'SciTE\AutoIt3Wrapper\AutoIt3Wrapper.au3'),
     "${env:ProgramFiles(x86)}\AutoIt3\SciTE\AutoIt3Wrapper\AutoIt3Wrapper.exe",
-    "${env:ProgramFiles}\AutoIt3\SciTE\AutoIt3Wrapper\AutoIt3Wrapper.exe"
+    "${env:ProgramFiles(x86)}\AutoIt3\SciTE\AutoIt3Wrapper\AutoIt3Wrapper.au3",
+    "${env:ProgramFiles}\AutoIt3\SciTE\AutoIt3Wrapper\AutoIt3Wrapper.exe",
+    "${env:ProgramFiles}\AutoIt3\SciTE\AutoIt3Wrapper\AutoIt3Wrapper.au3"
 )
 
 if (-not $Wrapper) {
     $SearchRoots = @(
-        "${env:ProgramFiles(x86)}\AutoIt3",
-        "${env:ProgramFiles}\AutoIt3",
-        'C:\ProgramData\chocolatey'
+        "${env:ProgramFiles(x86)}",
+        "${env:ProgramFiles}",
+        'C:\ProgramData\chocolatey',
+        $env:LOCALAPPDATA
     ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 
     foreach ($Root in $SearchRoots) {
-        $Match = Get-ChildItem -LiteralPath $Root -Filter AutoIt3Wrapper.exe -File -Recurse -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-        if ($Match) {
-            $Wrapper = $Match.FullName
-            break
+        foreach ($Name in @('AutoIt3Wrapper.exe', 'AutoIt3Wrapper.au3')) {
+            $Match = Get-ChildItem -LiteralPath $Root -Filter $Name -File -Recurse -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            if ($Match) {
+                $Wrapper = $Match.FullName
+                break
+            }
         }
+        if ($Wrapper) { break }
     }
 }
 
 if (-not $Wrapper) {
-    throw 'AutoIt3Wrapper.exe was not found. Install SciTE4AutoIt3 before building.'
+    throw 'AutoIt3Wrapper was not found. Install SciTE4AutoIt3 before building.'
+}
+
+$AutoItExe = Join-Path $AutoItDir 'AutoIt3.exe'
+if (-not (Test-Path -LiteralPath $AutoItExe)) {
+    throw "AutoIt3.exe was not found at $AutoItExe."
 }
 
 Write-Host "AutoIt: $AutoItDir"
@@ -71,7 +83,11 @@ foreach ($Target in $Targets) {
     Remove-Item -LiteralPath $OutputPath -Force -ErrorAction SilentlyContinue
 
     Write-Host "Building $($Target.Source)..."
-    & $Wrapper /prod /in $SourcePath /autoit3dir $AutoItDir /NoStatus
+    if ([IO.Path]::GetExtension($Wrapper) -ieq '.au3') {
+        & $AutoItExe $Wrapper /prod /in $SourcePath /autoit3dir $AutoItDir /NoStatus
+    } else {
+        & $Wrapper /prod /in $SourcePath /autoit3dir $AutoItDir /NoStatus
+    }
 
     if ($LASTEXITCODE -ne 0) {
         throw "AutoIt3Wrapper failed for $($Target.Source) with exit code $LASTEXITCODE."

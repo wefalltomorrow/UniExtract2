@@ -116,6 +116,8 @@ Rather than bundling another full Java application into the normal release, this
 
 The paid Full Version supplied for comparison was used only to understand package layout and capabilities. No paid-version files are being added to this repository or release bundle. See `docs/GAME-EXTRACTOR.md`.
 
+The same package also exposed a useful game-audio path through vgmstream. The supplied copy was from May 2024, so this fork does not reuse it. Instead, vgmstream is integrated as a separate optional plugin sourced from the current upstream rolling Windows builds. Its metadata-only JSON mode is used as a capability probe before decoding all subsongs once to WAV. See `docs/VGMSTREAM.md`.
+
 ## Changes added specifically in this fork
 
 - integrated upstream PR #408 path cleanup
@@ -134,5 +136,6 @@ The paid Full Version supplied for comparison was used only to understand packag
 - move the helper/update bundle fully to this fork instead of relying on gvp9000 for third-party binaries
 - integrate upstream PR #342 together with its required helper tools, licensing and update metadata
 - add repeatable Windows regression samples for the optional Game Extractor fallback, including at least one format not handled by the existing QuickBMS/GARbro routes
+- add a small redistributable game-audio regression fixture for vgmstream without checking third-party copyrighted game assets into the repository
 - expand repeatable extraction regression samples for Inno, InstallShield, NSIS, Setup Factory, MSI/WiX, QuickBMS/HOG2, multipart archives, password-protected archives and PDFs
 - reconcile MinTurk's newer Turkish translation string-by-string against the current language file

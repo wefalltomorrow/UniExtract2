@@ -9,9 +9,10 @@ This file records where the current fork changes came from and what was delibera
 - Original project: `Bioruebe/UniExtract2`
 - Last upstream master commit reviewed: `9719ac988421e48276420e2f33e09087cfbacf8d` (2024-07-06)
 - Main active fork used as the newer source base: `gvp9000/UniExtract2`
-- gvp9000 head used as the starting point: `71f2efe262f19439cdc5ef2611b6ed7a742a5f64` (2026-09-04)
+- gvp9000 head originally used as the starting point: `71f2efe262f19439cdc5ef2611b6ed7a742a5f64` (2026-09-04)
+- latest gvp9000 source reviewed and synced: `3372caa4ae88c183f413ad7d4faa7dbb8beb3c82` (2026-10-02, v3.0.6)
 
-The gvp9000 fork was 97 commits ahead of the upstream master used here. Its commit messages are not always descriptive, so the source changes and changelog were reviewed rather than relying on commit titles.
+The latest reviewed gvp9000 fork is 98 commits ahead of the upstream master used here. Its commit messages are not always descriptive, so the source changes and changelog were reviewed rather than relying on commit titles.
 
 ## Upstream pull requests
 
@@ -56,6 +57,11 @@ This is the only fork found with a large, current source change set. Useful work
 - UTF-8 translation support
 - updated helper/signature integration
 - FreeSpace / FreeSpace 2 VP QuickBMS data fix
+- Unicode Inno Setup sidecar handling when temporary ASCII filenames are required
+- QuickBMS/game probing that respects known BMS extensions even after a media detector match
+- safe silent-mode auto-selection when exactly one BMS script matches
+- Descent 3 HOG2 timestamp restoration
+- improved pipeline/output status classification, especially for innounp
 
 Fork-specific branding and main-update behavior were not kept unchanged.
 
@@ -96,6 +102,12 @@ These are not being marked "closed" here because many reports require the origin
 | #308 MHTML output missing .html extension | Added an MHTML-specific post-processing pass that uses the existing TrID extension recovery on extracted files. |
 | #242 Original extension left changed after failed analysis | Current code analyses a temporary copied/renamed file instead of renaming the original input, avoiding the original failure mode. |
 
+## October 2, 2026 gvp9000 follow-up sync
+
+After the initial 3.1.0 release work was merged, gvp9000 published v3.0.6 and commit `3372caa4ae88c183f413ad7d4faa7dbb8beb3c82`. The code changes were reviewed rather than copied blindly. The useful extraction fixes were carried over while preserving this fork's own version metadata, updater ownership, silent-mode changes, PR #408 path cleanup and MHTML recovery.
+
+The v3.1.1 package also moves from gvp9000's v3.0.4 helper archive to the v3.0.6 helper archive.
+
 ## Changes added specifically in this fork
 
 - integrated upstream PR #408 path cleanup
@@ -111,8 +123,7 @@ These are not being marked "closed" here because many reports require the origin
 
 ## Still worth doing
 
-- package and test a complete release from this fork
-- move the helper/update bundle to this fork once release hosting is ready
+- move the helper/update bundle fully to this fork instead of relying on gvp9000 for third-party binaries
 - integrate upstream PR #342 together with its required helper tools, licensing and update metadata
-- add repeatable extraction regression samples for Inno, InstallShield, NSIS, Setup Factory, MSI/WiX, multipart archives, password-protected archives and PDFs
-- add a Windows build/syntax check in GitHub Actions once the AutoIt build environment is pinned
+- expand repeatable extraction regression samples for Inno, InstallShield, NSIS, Setup Factory, MSI/WiX, QuickBMS/HOG2, multipart archives, password-protected archives and PDFs
+- reconcile MinTurk's newer Turkish translation string-by-string against the current language file

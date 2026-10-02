@@ -142,7 +142,7 @@ Const $TYPE_7Z = "7z", $TYPE_ACE = "ace", $TYPE_ACTUAL = "actual", $TYPE_AI = "a
 	  $TYPE_QBMS = "qbms", $TYPE_RAI = "rai", $TYPE_RAR = "rar", $TYPE_RGSS = "rgss", $TYPE_ROBO = "robo", $TYPE_RPA = "rpa", $TYPE_SFARK = "sfark", _
 	  $TYPE_SIS = "sis", $TYPE_SQLITE = "sqlite", $TYPE_SUPERDAT = "superdat", $TYPE_SWF = "swf", $TYPE_SWFEXE = "swfexe", _
 	  $TYPE_THINSTALL = "thinstall", $TYPE_TTARCH = "ttarch", $TYPE_UHA = "uha", $TYPE_UIF = "uif", $TYPE_UNITYPACKAGE = "unitypackage", _
-	  $TYPE_UNREAL = "unreal", $TYPE_VIDEO = "video", $TYPE_VIDEO_CONVERT = "videoconv", $TYPE_VISIONAIRE3 = "visionaire3", $TYPE_VSSFX = "vssfx", _
+	  $TYPE_UNREAL = "unreal", $TYPE_VIDEO = "video", $TYPE_VIDEO_CONVERT = "videoconv", $TYPE_VGMSTREAM = "vgmstream", $TYPE_VISIONAIRE3 = "visionaire3", $TYPE_VSSFX = "vssfx", _
 	  $TYPE_VSSFX_PATH = "vssfxpath", $TYPE_WISE = "wise", $TYPE_WIX = "wix", $TYPE_WOLF = "wolf", $TYPE_ZIP = "zip", $TYPE_ZOO = "zoo", _
 	  $TYPE_ZPAQ = "zpaq", $TYPE_ATLANTIS = "atlantis"
 Const $aExtractionTypes = [$TYPE_7Z, $TYPE_ACE, $TYPE_ACTUAL, $TYPE_AI, $TYPE_ALZ, $TYPE_ARC_CONV, $TYPE_AUDIO, $TYPE_BCM, $TYPE_BOOTIMG, _
@@ -151,7 +151,7 @@ Const $aExtractionTypes = [$TYPE_7Z, $TYPE_ACE, $TYPE_ACTUAL, $TYPE_AI, $TYPE_AL
 	  $TYPE_KGB, $TYPE_LZ, $TYPE_LZO, $TYPE_LZX, $TYPE_MOLE, $TYPE_MSCF, $TYPE_MSI, $TYPE_MSM, $TYPE_MSP, $TYPE_MSU, $TYPE_NBH, $TYPE_NSIS, _
 	  $TYPE_PDF, $TYPE_PEA, $TYPE_QBMS, $TYPE_RAI, $TYPE_RAR, $TYPE_RGSS, $TYPE_ROBO, $TYPE_RPA, $TYPE_SFARK, $TYPE_SIS, $TYPE_SQLITE, _
 	  $TYPE_SUPERDAT, $TYPE_SWF, $TYPE_SWFEXE, $TYPE_THINSTALL, $TYPE_TTARCH, $TYPE_UHA, $TYPE_UIF, $TYPE_UNITYPACKAGE, $TYPE_UNREAL, _
-	  $TYPE_VIDEO, $TYPE_VIDEO_CONVERT, $TYPE_VISIONAIRE3, $TYPE_VSSFX, $TYPE_VSSFX_PATH, $TYPE_WISE, $TYPE_WIX, $TYPE_WOLF, $TYPE_ZIP, _
+	  $TYPE_VIDEO, $TYPE_VIDEO_CONVERT, $TYPE_VGMSTREAM, $TYPE_VISIONAIRE3, $TYPE_VSSFX, $TYPE_VSSFX_PATH, $TYPE_WISE, $TYPE_WIX, $TYPE_WOLF, $TYPE_ZIP, _
 	  $TYPE_ZOO, $TYPE_ZPAQ, $TYPE_ATLANTIS]
 
 
@@ -262,6 +262,8 @@ Const $garbro = $bindir & "GARbro\GARbro.Console.exe"
 Const $gameextractor_dir = $bindir & "GameExtractor\"
 Const $gameextractor_jar = $gameextractor_dir & "GameExtractor.jar"
 Const $gameextractor_java = $gameextractor_dir & "jre\bin\java.exe"
+Const $vgmstream_dir = $bindir & "vgmstream\"
+Const $vgmstream = $vgmstream_dir & "vgmstream-cli.exe"
 Const $gcf = $archdir & "GCFScape.exe"
 Const $hlp = "helpdeco.exe"
 Const $innoextract = Quote($bindir & "innoextract.exe", True)
@@ -568,6 +570,10 @@ Func StartExtraction()
 	; Optional broad game-archive fallback. Keep this after all native/specific handlers and 7-Zip
 	; so installing Game Extractor does not slow down or override normal UniExtract routes.
 	If CheckGameExtractor() Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'))
+
+	; Optional streamed game-audio fallback. vgmstream is probed only after archive extractors fail
+	; so regular archives and standard media keep their existing faster/more specific routes.
+	If CheckVgmstream() Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_VGMSTREAM, "vgmstream " & t('TERM_AUDIO'))
 
 	FileScan_UnixFile()
 	If $g_bArchiveIntegrityError Then
@@ -2837,6 +2843,26 @@ Func CheckGameExtractor()
 	Return extract($TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'), "", True, True)
 EndFunc
 
+; Probe the optional vgmstream CLI before decoding obscure streamed game audio.
+; -m -I prints JSON metadata without creating an output file, giving us a low-cost
+; capability check rather than guessing from broad/common file extensions.
+Func CheckVgmstream()
+	If Not FileExists($vgmstream) Then Return False
+
+	Cout("Testing vgmstream game-audio fallback")
+	Local $sVgmstreamProbe = FetchStdout('"' & $vgmstream & '" -m -I "' & $file & '"', $vgmstream_dir, @SW_HIDE, 0, False, False, False)
+	If @error Or $sVgmstreamProbe == "" Then Return False
+
+	If StringInStr($sVgmstreamProbe, '"sampleRate"') _
+	And StringInStr($sVgmstreamProbe, '"channels"') _
+	And StringInStr($sVgmstreamProbe, '"streamInfo"') Then
+		Cout("vgmstream accepted input: " & StringStripWS(StringStripCR($sVgmstreamProbe), 8))
+		Return extract($TYPE_VGMSTREAM, "vgmstream " & t('TERM_AUDIO'), "", True, True)
+	EndIf
+
+	Return False
+EndFunc
+
 ; Determine if file can be extracted with GARbro
 Func CheckGarbro($arcdisp = 0)
 	HasNetFramework(4.6)
@@ -4331,6 +4357,24 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			And (_DirGetSize($outdir, $initdirsize + 1) > $initdirsize Or FileGetTime($outdir, 0, 1) <> $dirmtime) Then
 				$success = $RESULT_SUCCESS
 				LogExtractorWinner("Game Extractor")
+			Else
+				$success = $RESULT_FAILED
+			EndIf
+
+		Case $TYPE_VGMSTREAM
+			If Not HasPlugin($vgmstream, $returnFail) Then Return False
+
+			; Decode every subsong once (-i disables game loop repetition). ?04s keeps
+			; multi-stream banks deterministic while still working for single-stream files.
+			Local $sVgmstreamOutput = $outdir & "\" & $filename & "_?04s.wav"
+			Local $sVgmstreamCommand = '"' & $vgmstream & '" -i -S 0 -o "' & $sVgmstreamOutput & '" "' & $file & '"'
+			Local $sVgmstreamLog = _Run($sVgmstreamCommand, $vgmstream_dir, @SW_HIDE, True, True, False, False)
+
+			If Not StringInStr($sVgmstreamLog, "failed opening", 0) _
+			And Not StringInStr($sVgmstreamLog, "wrong time config", 0) _
+			And (_DirGetSize($outdir, $initdirsize + 1) > $initdirsize Or FileGetTime($outdir, 0, 1) <> $dirmtime) Then
+				$success = $RESULT_SUCCESS
+				LogExtractorWinner("vgmstream")
 			Else
 				$success = $RESULT_FAILED
 			EndIf
@@ -11092,9 +11136,10 @@ Func GUI_Plugins($hParent = 0, $sSelection = 0)
 	; Define plugins
 	; h4sh3m Virtual Apps Dependency Extractor disabled in this fork; not included in plugin array.
 	; executable|name|description|filetypes|filemask|extractionfilter|outdir|newfilename|password
-	Local $aPluginInfo[12][9] = [ _
+	Local $aPluginInfo[13][9] = [ _
 		[$arc_conv, 'arc_conv', t('PLUGIN_ARC_CONV'), 'nsa, wolf, xp3, ypf', 'arc_convert.zip', 'arc_conv.exe', '', '', 0], _
 		[$gameextractor_jar, 'Game Extractor', t('PLUGIN_GAMEEXTRACTOR'), 'game archives', 'extract.zip', '', $gameextractor_dir, '', 0], _
+		[$vgmstream, 'vgmstream', t('PLUGIN_VGMSTREAM'), 'streamed game audio', 'vgmstream-win*.zip', '', $vgmstream_dir, '', 0], _
 		[$iscab, 'iscab', t('PLUGIN_ISCAB'), 'cab', 'iscab.exe;ISTools.dll', '', '', '', 0], _
 		[$unreal, 'Unreal Engine Resource Viewer', t('PLUGIN_UNREAL'), 'pak, u, uax, upk', 'umodel_win32.zip', 'umodel.exe|SDL2.dll', '', '', 0], _
 		[$dcp, 'WinterMute Engine Unpacker', t('PLUGIN_WINTERMUTE'), 'dcp', $dcp, '', '', '', 0], _
@@ -11174,6 +11219,8 @@ Func _GetPluginDownloadUrl($sPluginName)
 			Return "https://sourceforge.net/projects/archivconvert/files/archivconvert/version_0.81/arc_convert.zip/download"
 		Case 'Game Extractor'
 			Return "https://github.com/wattostudios/GameExtractor/releases/latest"
+		Case 'vgmstream'
+			Return "https://github.com/vgmstream/vgmstream-releases/releases/latest"
 ;~		Case 'h4sh3m Virtual Apps Dependency Extractor' ; Disabled in this fork
 ;~			Return $sUrlGithub & "/issues?q=h4sh3m"
 		Case 'iscab'

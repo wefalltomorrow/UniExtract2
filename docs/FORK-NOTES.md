@@ -108,6 +108,14 @@ After the initial 3.1.0 release work was merged, gvp9000 published v3.0.6 and co
 
 The v3.1.1 package also moves from gvp9000's v3.0.4 helper archive to the v3.0.6 helper archive.
 
+## Game Extractor review
+
+The current public `wattostudios/GameExtractor` v3.16.0008 source/release line was reviewed after v3.1.1. Its archive system is much broader than the old Game Extractor-derived QuickBMS subset already present in UniExtract: the public source tree contains 1,957 archive plugin source files, while the examined 3.16-generation plugin set declares 1,058 distinct file extensions.
+
+Rather than bundling another full Java application into the normal release, this fork adds Game Extractor Basic as an optional low-priority plugin. When installed under `bin\GameExtractor\`, it is tried only after UniExtract's existing dedicated routes and general 7-Zip probe fail.
+
+The paid Full Version supplied for comparison was used only to understand package layout and capabilities. No paid-version files are being added to this repository or release bundle. See `docs/GAME-EXTRACTOR.md`.
+
 ## Changes added specifically in this fork
 
 - integrated upstream PR #408 path cleanup
@@ -125,5 +133,6 @@ The v3.1.1 package also moves from gvp9000's v3.0.4 helper archive to the v3.0.6
 
 - move the helper/update bundle fully to this fork instead of relying on gvp9000 for third-party binaries
 - integrate upstream PR #342 together with its required helper tools, licensing and update metadata
+- add repeatable Windows regression samples for the optional Game Extractor fallback, including at least one format not handled by the existing QuickBMS/GARbro routes
 - expand repeatable extraction regression samples for Inno, InstallShield, NSIS, Setup Factory, MSI/WiX, QuickBMS/HOG2, multipart archives, password-protected archives and PDFs
 - reconcile MinTurk's newer Turkish translation string-by-string against the current language file

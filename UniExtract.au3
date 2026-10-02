@@ -135,7 +135,7 @@ Const $STATUS_SYNTAX = "syntax", $STATUS_FILEINFO = "fileinfo", $STATUS_UNKNOWNE
 Const $TYPE_7Z = "7z", $TYPE_ACE = "ace", $TYPE_ACTUAL = "actual", $TYPE_AI = "ai", $TYPE_ALZ = "alz", $TYPE_ARC_CONV = "arc_conv", _
 	  $TYPE_AUDIO = "audio", $TYPE_BCM = "bcm", $TYPE_BOOTIMG = "bootimg", $TYPE_CAB = "cab", $TYPE_CHD = "chd", $TYPE_CHM = "chm", $TYPE_CI = "ci", _
 	  $TYPE_CIC = "cic", $TYPE_CTAR = "ctar", $TYPE_DGCA = "dgca", $TYPE_DAA = "daa", $TYPE_DCP = "dcp", $TYPE_ECM = "ecm", $TYPE_EI = "ei", $TYPE_ENIGMA = "enigma", _
-	  $TYPE_FEAD = "fead", $TYPE_FORGE = "installforge", $TYPE_FREEARC = "freearc", $TYPE_FSB = "fsb", $TYPE_GARBRO = "garbro", $TYPE_GHOST = "ghost", _
+	  $TYPE_FEAD = "fead", $TYPE_FORGE = "installforge", $TYPE_FREEARC = "freearc", $TYPE_FSB = "fsb", $TYPE_GARBRO = "garbro", $TYPE_GAMEEXTRACTOR = "gameextractor", $TYPE_GHOST = "ghost", _
 	  $TYPE_HLP = "hlp", $TYPE_INNO = "inno", $TYPE_ISCAB = "iscab", $TYPE_ISCRIPT = "installscript", $TYPE_ISEXE = "isexe", $TYPE_ISZ = "isz", _
 	  $TYPE_KGB = "kgb", $TYPE_LZ = "lz", $TYPE_LZO = "lzo", $TYPE_LZX = "lzx", $TYPE_MOLE = "mole", $TYPE_MSCF = "mscf", $TYPE_MSI = "msi", _
 	  $TYPE_MSM = "msm", $TYPE_MSP = "msp", $TYPE_MSU = "msu", $TYPE_NBH = "nbh", $TYPE_NSIS = "NSIS", $TYPE_PDF = "PDF", $TYPE_PEA = "pea", _
@@ -147,7 +147,7 @@ Const $TYPE_7Z = "7z", $TYPE_ACE = "ace", $TYPE_ACTUAL = "actual", $TYPE_AI = "a
 	  $TYPE_ZPAQ = "zpaq", $TYPE_ATLANTIS = "atlantis"
 Const $aExtractionTypes = [$TYPE_7Z, $TYPE_ACE, $TYPE_ACTUAL, $TYPE_AI, $TYPE_ALZ, $TYPE_ARC_CONV, $TYPE_AUDIO, $TYPE_BCM, $TYPE_BOOTIMG, _
 	  $TYPE_CAB, $TYPE_CHD, $TYPE_CHM, $TYPE_CI, $TYPE_CIC, $TYPE_CTAR, $TYPE_DGCA, $TYPE_DAA, $TYPE_DCP, $TYPE_ECM, $TYPE_EI, $TYPE_ENIGMA, $TYPE_FEAD, _
-	  $TYPE_FORGE, $TYPE_FREEARC, $TYPE_FSB, $TYPE_GARBRO, $TYPE_GHOST, $TYPE_HLP, $TYPE_INNO, $TYPE_ISCAB, $TYPE_ISCRIPT, $TYPE_ISEXE, $TYPE_ISZ, _
+	  $TYPE_FORGE, $TYPE_FREEARC, $TYPE_FSB, $TYPE_GARBRO, $TYPE_GAMEEXTRACTOR, $TYPE_GHOST, $TYPE_HLP, $TYPE_INNO, $TYPE_ISCAB, $TYPE_ISCRIPT, $TYPE_ISEXE, $TYPE_ISZ, _
 	  $TYPE_KGB, $TYPE_LZ, $TYPE_LZO, $TYPE_LZX, $TYPE_MOLE, $TYPE_MSCF, $TYPE_MSI, $TYPE_MSM, $TYPE_MSP, $TYPE_MSU, $TYPE_NBH, $TYPE_NSIS, _
 	  $TYPE_PDF, $TYPE_PEA, $TYPE_QBMS, $TYPE_RAI, $TYPE_RAR, $TYPE_RGSS, $TYPE_ROBO, $TYPE_RPA, $TYPE_SFARK, $TYPE_SIS, $TYPE_SQLITE, _
 	  $TYPE_SUPERDAT, $TYPE_SWF, $TYPE_SWFEXE, $TYPE_THINSTALL, $TYPE_TTARCH, $TYPE_UHA, $TYPE_UIF, $TYPE_UNITYPACKAGE, $TYPE_UNREAL, _
@@ -259,6 +259,9 @@ Const $filetool = Quote($bindir & "file.exe", True) & " -m " & Quote($bindir & "
 Const $freearc = "unarc.exe"
 Const $fsb = "fsbext.exe"
 Const $garbro = $bindir & "GARbro\GARbro.Console.exe"
+Const $gameextractor_dir = $bindir & "GameExtractor\"
+Const $gameextractor_jar = $gameextractor_dir & "GameExtractor.jar"
+Const $gameextractor_java = $gameextractor_dir & "jre\bin\java.exe"
 Const $gcf = $archdir & "GCFScape.exe"
 Const $hlp = "helpdeco.exe"
 Const $innoextract = Quote($bindir & "innoextract.exe", True)
@@ -561,6 +564,11 @@ Func StartExtraction()
 		Cout("Definitive archive corruption/broken-volume failure detected after general 7-Zip probe; aborting further fallback scans")
 		terminate($STATUS_FAILED, $file, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
 	EndIf
+
+	; Optional broad game-archive fallback. Keep this after all native/specific handlers and 7-Zip
+	; so installing Game Extractor does not slow down or override normal UniExtract routes.
+	If CheckGameExtractor() Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'))
+
 	FileScan_UnixFile()
 	If $g_bArchiveIntegrityError Then
 		Cout("Definitive archive corruption/broken-volume failure detected after unix file tool stage; aborting strict fallback")
@@ -2819,6 +2827,16 @@ Func CheckGame($bUseGaup = True, $bUseGarbro = True)
 	Return False
 EndFunc
 
+; Try the optional Game Extractor package as a low-priority game archive fallback.
+; The GPLv2 Basic package is installed separately under bin\GameExtractor and is not bundled
+; with the standard UniExtract release.
+Func CheckGameExtractor()
+	If Not FileExists($gameextractor_jar) Or Not FileExists($gameextractor_java) Then Return False
+
+	Cout("Testing Game Extractor fallback")
+	Return extract($TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'), "", True, True)
+EndFunc
+
 ; Determine if file can be extracted with GARbro
 Func CheckGarbro($arcdisp = 0)
 	HasNetFramework(4.6)
@@ -4299,6 +4317,23 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 		Case $TYPE_GARBRO
 			Local $sGarbroExtractCmd = Quote($garbro, True) & ' x -ocu -if png -o "' & $outdir & '" "' & $file & '" || ' & Quote($garbro, True) & ' extract -ocu -if png -o "' & $outdir & '" "' & $file & '"'
 			_Run(@ComSpec & ' /d /c ' & $sGarbroExtractCmd, $outdir, @SW_MINIMIZE)
+
+		Case $TYPE_GAMEEXTRACTOR
+			If Not HasPlugin($gameextractor_jar, $returnFail) Or Not HasPlugin($gameextractor_java, $returnFail) Then Return False
+
+			Local $sGameExtractorCommand = Quote($gameextractor_java, True) & ' -Xmx1024m -jar "' & $gameextractor_jar & '" -extract -input "' & $file & '" -output "' & $outdir & '"'
+			Local $sGameExtractorLog = _Run($sGameExtractorCommand, $gameextractor_dir, @SW_HIDE, True, True, False, False)
+
+			; Game Extractor only prints this after an archive was opened and the export task ran.
+			; Require actual output as well so a misleading console message cannot become a false positive.
+			If StringInStr($sGameExtractorLog, "Finished extracting files", 0) _
+			And Not StringInStr($sGameExtractorLog, "Error: The archive could not be opened", 0) _
+			And (_DirGetSize($outdir, $initdirsize + 1) > $initdirsize Or FileGetTime($outdir, 0, 1) <> $dirmtime) Then
+				$success = $RESULT_SUCCESS
+				LogExtractorWinner("Game Extractor")
+			Else
+				$success = $RESULT_FAILED
+			EndIf
 
 		Case $TYPE_GHOST
 			$ret = $outdir & "\" & $filename & ".exe"
@@ -11057,8 +11092,9 @@ Func GUI_Plugins($hParent = 0, $sSelection = 0)
 	; Define plugins
 	; h4sh3m Virtual Apps Dependency Extractor disabled in this fork; not included in plugin array.
 	; executable|name|description|filetypes|filemask|extractionfilter|outdir|newfilename|password
-	Local $aPluginInfo[11][9] = [ _
+	Local $aPluginInfo[12][9] = [ _
 		[$arc_conv, 'arc_conv', t('PLUGIN_ARC_CONV'), 'nsa, wolf, xp3, ypf', 'arc_convert.zip', 'arc_conv.exe', '', '', 0], _
+		[$gameextractor_jar, 'Game Extractor', t('PLUGIN_GAMEEXTRACTOR'), 'game archives', 'extract.zip', '', $gameextractor_dir, '', 0], _
 		[$iscab, 'iscab', t('PLUGIN_ISCAB'), 'cab', 'iscab.exe;ISTools.dll', '', '', '', 0], _
 		[$unreal, 'Unreal Engine Resource Viewer', t('PLUGIN_UNREAL'), 'pak, u, uax, upk', 'umodel_win32.zip', 'umodel.exe|SDL2.dll', '', '', 0], _
 		[$dcp, 'WinterMute Engine Unpacker', t('PLUGIN_WINTERMUTE'), 'dcp', $dcp, '', '', '', 0], _
@@ -11136,6 +11172,8 @@ Func _GetPluginDownloadUrl($sPluginName)
 	Switch $sPluginName
 		Case 'arc_conv'
 			Return "https://sourceforge.net/projects/archivconvert/files/archivconvert/version_0.81/arc_convert.zip/download"
+		Case 'Game Extractor'
+			Return "https://github.com/wattostudios/GameExtractor/releases/latest"
 ;~		Case 'h4sh3m Virtual Apps Dependency Extractor' ; Disabled in this fork
 ;~			Return $sUrlGithub & "/issues?q=h4sh3m"
 		Case 'iscab'
@@ -11170,6 +11208,10 @@ Func GUI_Plugins_Install($aPluginInfo, $sPath)
 	Cout("Adding plugin " & $aPluginInfo[1])
 	Cout("Plugin file selected: " & $sPath)
 	If $aPluginInfo[6] = "" Then $aPluginInfo[6] = $bindir
+
+	; A plugin may use its own subdirectory instead of the already-existing bin directory.
+	; Create it before permission checks and before using it as the extractor working directory.
+	If StringRight($aPluginInfo[6], 1) = "\" And Not FileExists($aPluginInfo[6]) Then DirCreate($aPluginInfo[6])
 
 	; Check permissions
 	If Not CanAccess($aPluginInfo[6]) Then

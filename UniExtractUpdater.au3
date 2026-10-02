@@ -2,14 +2,19 @@
 #AutoIt3Wrapper_Icon=support\Icons\uniextract_exe.ico
 #AutoIt3Wrapper_Outfile=UniExtractUpdater_NoAdmin.exe
 #AutoIt3Wrapper_Res_Description=Update utility for Universal Extractor
+#AutoIt3Wrapper_Res_ProductName=Universal Extractor
 #AutoIt3Wrapper_Res_Fileversion=3.1.0.0
+#AutoIt3Wrapper_Res_ProductVersion=%fileversion%
+#AutoIt3Wrapper_Res_CompanyName=wefalltomorrow
+#AutoIt3Wrapper_Res_LegalCopyright=GNU General Public License v2
+#AutoIt3Wrapper_Res_Field=Homepage|https://github.com/wefalltomorrow/UniExtract2
 #AutoIt3Wrapper_Run_Au3Stripper=y
 #Au3Stripper_Parameters=/mo
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
 #cs ----------------------------------------------------------------------------
 
- AutoIt Version: 3.3.14.2
+ AutoIt Version: 3.3.18.0
  Author:         Bioruebe
 
  Script Function:
@@ -25,7 +30,7 @@
 
 Const $sUpdaterTitle = "Universal Extractor Updater"
 Const $sMainUpdateURL = "https://github.com/wefalltomorrow/UniExtract2/releases/latest/download/UniExtract.exe"
-Const $sMainNighlyUpdateURL = "https://github.com/wefalltomorrow/UniExtract2/releases/download/nightly/UniExtract.exe"
+Const $sMainNighlyUpdateURL = $sMainUpdateURL ; No separate nightly executable channel yet
 ; FFmpeg is still sourced from the maintained helper bundle until this fork publishes equivalent assets.
 Const $sFFmpegUpdateURL_x86 = "https://github.com/gvp9000/UniExtract2/releases/latest/download/ffmpeg_x86.exe"
 Const $sFFmpegUpdateURL_x64 = "https://github.com/gvp9000/UniExtract2/releases/latest/download/ffmpeg_x64.exe"

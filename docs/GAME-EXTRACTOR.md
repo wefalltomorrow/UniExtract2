@@ -51,7 +51,9 @@ That does not mean every one is unique to Game Extractor: there is substantial o
 
 UniExtract launches Game Extractor Basic's own archive reader and export task. As a result, every archive plugin that the installed Basic package loads and can extract through its command-line mode is available to this fallback without maintaining a separate UniExtract route for each format.
 
-This is intentionally not described as every capability from the paid Full edition. Full-only source is not part of the public GPLv2 tree, and preview-only, editor, image-conversion and other non-archive features are outside UniExtract's extraction fallback. Individual Game Extractor plugins may also depend on native or third-party components shipped by their upstream package.
+For archive extraction specifically, Watto's current Basic-vs-Full feature table lists both editions as able to read archives from more than 5,700 games and extract files to disk. That is the capability UniExtract uses here, so the public Basic backend is intended to provide the same archive-reading/extraction coverage without requiring the paid edition.
+
+This is still not every capability of the paid Full edition. Full-only source is not part of the public GPLv2 tree, and preview, editing, archive-writing, thumbnail and conversion features are outside UniExtract's extraction fallback. Individual Game Extractor plugins may also depend on native or third-party components shipped by their upstream package.
 
 ## Licensing boundary
 

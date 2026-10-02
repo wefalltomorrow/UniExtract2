@@ -1,129 +1,96 @@
-# Universal Extractor 2 _(UniExtract2)_
+# Universal Extractor 2
 
-[![Download](https://img.shields.io/badge/download-success?style=for-the-badge)](https://github.com/gvp9000/UniExtract2/releases)
+This is a maintained community fork of [Bioruebe/UniExtract2](https://github.com/Bioruebe/UniExtract2).
 
-Universal Extractor 2 is a tool designed to **extract files from any type of extractable file**.
+The goal is simple: keep UniExtract2 useful on current Windows versions and bring together worthwhile fixes that have ended up scattered across the original repository, open pull requests, issue discussions and active forks.
 
-Unlike most archiving programs, UniExtract is not limited to **standard archives** such as `.zip` and `.rar`. It can also deal with **application installers**, **disk images** and even **game archives** and other **multimedia files**. An overview of supported file types can be found [here](/docs/FORMATS.md)
+This fork currently builds on the large 2026 update set from [gvp9000/UniExtract2](https://github.com/gvp9000/UniExtract2), then adds extra fixes and cleanup here. The original Universal Extractor was created by Jared Breland, and UniExtract2 was developed by Bioruebe.
 
-This program is an unofficial updated and extended version of the [original UniExtract by Jared Breland](http://legroom.net/software/uniextract). As the development of the original version has stopped and no update has been published for years, many forks (modified versions, maintained by volunteers from the community) have arisen. This is the most advanced of them, featuring a very long list of enhancements.
+## What it does
 
-## New features in version 2
+Universal Extractor 2 tries to unpack files without requiring you to know which extraction tool they need first. It supports normal archives as well as many installers, disk images, self-extracting archives, game/resource formats and other containers.
 
-- 500+ new supported file types
-- Batch mode
-- Scan only mode to detect the type of any given file
-- Built-in updater
-- Support for password list for common archives
-- Improved context menu integration and status box
-- Better and faster file analysis
-- Silent mode, not showing any prompts
-- Many interface improvements and redesigned dialogs
-- Resource usage/speed improvements, lots of bug fixes
+It uses a collection of specialist tools behind one interface, with file detection deciding which extraction path to try.
 
-See the [changelog](docs/changelog.txt) for a complete log of all improvements.
+## What is different in this fork
 
-## Download
+Compared with the last upstream source release, the current development branch includes a much newer extraction and detection pipeline, including:
 
-Get the latest version [here](https://github.com/gvp9000/UniExtract2/releases)
+- Detect It Easy as the primary executable detector with Exeinfo PE and PEiD fallbacks
+- newer handling for Inno Setup, InstallShield, WiX/Burn, Setup Factory, VISE/Gentee and NSIS installers
+- improved 7-Zip, UnRAR, lessmsi, QuickBMS and GARbro command handling
+- more reliable batch queue handling, including duplicate and multipart-volume checks
+- better silent/unattended extraction behavior
+- stricter corrupt-archive and wrong-password handling
+- password-protected PDF extraction through qpdf
+- JAR (ARJ Software) and ECM extraction support
+- improved FreeSpace / FreeSpace 2 VP extraction data
+- UTF-8 language-file support
+- updated helper-tool integration and file signatures
+- fixes for paths containing spaces and copied/quoted Windows paths
+- a more useful per-file extraction log and pipeline report
 
-###### Virus alert?
+See [docs/changelog.txt](docs/changelog.txt) for the inherited change history and [docs/FORK-NOTES.md](docs/FORK-NOTES.md) for the upstream PR, issue and fork review used for this branch.
 
-Universal Extractor does not contain any malware. Some anti-virus programs occasionally misdetect files inside UniExtract's program directory. You can be sure that this is a so-called false positive, an error - if you downloaded UniExtract from the official source at `https://github.com/gvp9000/UniExtract2`. A more detailed explanation can be found [here](/docs/ANTI-MALWARE.md). If you encounter a false positive, please report it [here](https://github.com/gvp9000/UniExtract2/issues/8).
+## Development status
 
-###### 'Windows protected your PC'?
+The current work is on the `best-of-all` branch and is marked as **3.1.0 development**.
 
-Modern versions of Windows have a feature called *SmartScreen*, which warns about unknown files. This means software without a big company behind it and/or a huge userbase produces a warning. Don't panic! Mostly this happens after a new version of UniExtract has been released. After enough users updated their installation, the warning might vanish, because it now has reputation. If you see a *SmartScreen* warning, you can safely click 'More info', then 'Run anyway'.
+There is not yet a packaged release from this fork. Until one is published, treat the repository as source/development work rather than a drop-in replacement release.
 
-###### System requirements
+### Updates and helper binaries
 
-In short: Windows XP or newer.
-However, outdated version of Windows only have limited support:
+The source needs the external helper programs used by UniExtract2. For now this fork continues to use gvp9000's maintained helper-file update feed because it contains the newer extractor set this code expects.
 
-- Windows 7: sending feedback requires you to follow [this guide by Microsoft](https://support.microsoft.com/en-us/help/3140245/update-to-enable-tls-1-1-and-tls-1-2-as-default-secure-protocols-in-wi), otherwise it will fail
-- Windows XP: any online functionality, such as the updater or the feedback dialog, is disabled for security reasons. Also some extractors might not work.
+Main executable updates from that feed are deliberately disabled. A helper update must never replace this fork's `UniExtract.exe` with another fork's build.
 
-(Online functionality for these systems might be restored in a future version of Universal Extractor.)
+Once this fork has its own release/update bundle, those remaining helper URLs can be moved over as well.
 
-###### Updating
+## Upstream pull requests
 
-Universal Extractor 2 comes with a built-in updater. You will receive a notification when a new version is released. Alternatively, you can search for updates manually from the `Help` menu.
+The currently open pull requests in the original repository have been reviewed rather than blindly merged:
 
-At the moment, UniExtract is still in beta and updates are rare. If you want to keep up-to-date with the development, you can [opt-in to more frequent updates](#nightly-builds).
+- **#408 – quoted/copied path handling:** included, with slightly more conservative trimming.
+- **#342 – ASH, AP4, LZ7, TPL, U8 and WAD support:** useful idea, but the patch depends on several extra third-party executables that it does not package or manage. It is being kept as follow-up work instead of merging code that would advertise formats without shipping a working extraction path.
+- **#432 – “Super sonic”:** unrelated to Universal Extractor and intentionally not included.
 
-**Do not replace any files in UniExtract's program directory yourself. This will break things!**
-**Do not update via Help - Check for updates !!!**
+More detail is in [docs/FORK-NOTES.md](docs/FORK-NOTES.md).
 
-###### Older versions
+## Building from source
 
-...can be found on the [Releases](https://github.com/gvp9000/UniExtract2/releases) page.
-However, this is for historical reasons ony. Please consider using the newest version instead.
+1. Install [AutoIt](https://www.autoitscript.com/site/autoit/downloads/).
+2. Install the AutoIt SciTE editor if you want the normal wrapper/build workflow.
+3. Clone this repository.
+4. Build `UniExtract.au3` with AutoIt3Wrapper/Aut2Exe.
+5. Make sure the UniExtract helper files are present in the expected `bin`/support directories. The built-in helper updater can populate/update the supported helper set.
 
-###### Uninstalling
+The project is Windows-specific and some extraction paths depend on third-party tools that are not stored directly in this source repository.
 
-- If you enabled **context menu entries**, open Universal Extractor and select `Edit` > `Context Menu Entries`. Uncheck both `enabled` checkboxes and click `OK`.
-- If you saved the program to a directory without write access (e.g. C:\Program Files) and want to remove all settings, remove the directory `%APPDATA%\Bioruebe\UniExtract`. Simply open the file explorer and enter `%APPDATA%\Bioruebe` into the path input, then delete the directory `UniExtract`.
-- Finally, delete the program directory.
+## Reporting problems
 
-## FAQ
+Please open an issue in this repository with:
 
-#### Is there a portable version?
+- the UniExtract version/commit
+- the file type or installer type
+- what you expected to be extracted
+- what actually happened
+- the generated UniExtract log, when available
+- a public sample or download link if the file can legally be shared
 
-Universal Extractor itself is completely portable, with some exceptions:
+Issues: https://github.com/wefalltomorrow/UniExtract2/issues
 
-- Enabling context menu entries will create registry entries
-- To extract a wide variety of file types more than 50 different extractors are used. Some of them might leave traces on the system. For the most common archives and installers extraction can be considered portable, for others probably not.
-- Storing Universal Extractor in a directory without write access (e.g. C:\Program Files) enables multi-user mode. This results in configuration files being stored in the %APPDATA% directory (C:\Users\YourUsername\AppData\Roaming\Bioruebe\UniExtract).
+## Credits
 
-#### Why are there many different versions/modifications/repacks of Universal Extractor?
+Universal Extractor was originally created by **Jared Breland**.
 
-When the original developer of UniExtract stopped working on it, many people from around the world continued to update and improve the program. Some 'only' updated the tools Universal Extractor uses, others added great features. As a result all versions differ in terms of supported archives and features added.
+Universal Extractor 2 was developed by **Bioruebe** and its contributors.
 
-This version is the only 'real' open-source one, with a central repository on Github everyone can contribute to. Over the years I fulfilled many user requests, added support for files the community wanted to decompress and implemented a lot of convenience functions. Many volunteers help translating UniExtract, finding bugs, discussing improvements and respond to other user's questions.
+This fork also incorporates substantial later work by **gvp9000** and fixes/ideas from upstream pull requests, issue reporters, translators and other community forks. Individual third-party extractors remain the work of their respective authors.
 
-However, Universal Extractor 2 may fail to unpack files, which other versions of this tool can extract. If you *really* need to access the contents of an archive, you may have success with one of the other UniExtracts. Alternatively, you can also ask for support here. It might take a while until I can answer, though.
-
-#### Can UniExtract (re)compress files?
-
-No. This tool was designed as an extraction utility.
-
-## Nightly Builds
-
-You can opt-in to receive the most current development build of Universal Extractor 2. Simply open the preferences dialog (from 'Edit' menu) and check `Install beta updates`. The next time you search for updates, you will receive the development build instead of the release version. After disabling the option again you can go back to the latest stable version by simply updating.
-
-## Reporting bugs
-
-Did you encounter a problem with UniExtract? Please report what went wrong to us. There are differnet ways to do so:
-
-- If you have a Github account, you can **[open an issue](https://github.com/gvp9000/UniExtract2/issues)**. This is the prefered way for **feature requests**, **suggestions** and **general technical problems**.
-- From within Universal Extractor: select **'Give feedback'** from the **'Help' menu**. This is the prefered way to submit **failed extractons**. If UniExtract was not successful, it will automatically ask you to send feedback (can be disabled from the options). This type of feedback includes a log with several debug information, which could help fixing the problem.
-- Direct contact via opening a [pull requests](https://github.com/gvp9000/UniExtract2/pulls).
-
-## Building from Source
-
-1. Download and install [AutoIt](https://www.autoitscript.com/site/autoit/downloads/)
-2. Download and install [SciTE](https://www.autoitscript.com/site/autoit-script-editor/downloads/) (Optional)
-   - Running UniExtract through SciTE has the additional benefit of real-time logging in the built-in console.
-3. Clone this repository **or** download a snapshot and unpack into a folder of your likings
-4. Open UniExtract.au3 in SciTE and hit `F5` to run in debug mode; `F7` to build an executable file **or** run UniExtract.au3 through Aut2Exe
-5. Download the necessary program files, which are not part of the source package
-   1. Run the program
-   2. UniExtract will display a message that the program files are incomplete. Select `No`.
-   3. Go to `Edit/Preferences` and check `Install beta updates`. An update notification should appear. Otherwise, choose `Help/Check for Updates`. Select `Yes`.
-6. In case the main executable gets overwritten, rebuild it as explained in step 4.
-
-## Contributions
-
-Any contribution in form of ideas, bug reports, code commits, documentation improvements, etc. is welcome. Help is currently needed in updating the translations for many languages. If you are able to translate into another language, take a look at the corresponding issue (#2) or open the language file in the `/lang` subdirectory and check for empty strings. English and German language are always up-to-date and can be used as a reference.
-
-Feel free to submit bug reports or feature requests using the issues tab or the built-in feedback window in Universal Extractor, accessible via the 'Help' menu. Refer to Github's issue page for planned features and problems to be fixed in future versions. The file `todo.txt` is a leftover from the original Universal Extractor and only used for personal development thoughts and notes.
+See [docs/helper_binaries_info.txt](docs/helper_binaries_info.txt) and the files under `docs/third-party` for third-party tool and license information.
 
 ## License
 
-Universal Extractor is licensed under **GPLv2**. See LICENSE for the full legal text.
-Code (functions, UDFs, etc.) written from scratch by me (which are not under copyleft) can also be used in your own projects under the terms of a BSD 3-clause license.
+Universal Extractor 2 is licensed under the **GNU General Public License v2**. See [LICENSE](LICENSE).
 
-Universal Extractor (gvp9000 version) uses [Detect-It-Easy by horsicq](https://github.com/horsicq/detect-it-easy), [TrIDLib by Marco Pontello](http://mark0.net/code-tridlib-e.html), several [7zip plugins by Dec Software](https://www.tc4shell.com/en/7zip/) and many other great tools and libraries to support as many file formats as possible. Please consider supporting the authors of the software [mentioned here](/docs/helper_binaries_info.txt).
-
-Please note that Universal Extractor includes third-party software, which uses different licenses than the main program. Specifically, **some extractors do not allow commercial use**. If you intend to use the software for commercial purposes, please check the individual license files in the `/docs` subdirectory and the [helper binary info file](https://github.com/gvp9000/UniExtract2/blob/master/helper_binaries_info.txt) first.
-Feel free to delete files, whose license does not fit your use case, from the `/bin` subdirectory.
+The bundled/helper tools used by UniExtract2 have their own licenses. Some do not permit commercial use, so check the relevant third-party license before redistributing a complete binary package.

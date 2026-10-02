@@ -3,13 +3,13 @@
 #AutoIt3Wrapper_Outfile=.\UniExtract.exe
 #AutoIt3Wrapper_Res_Description=Universal Extractor
 #AutoIt3Wrapper_Res_ProductName=Universal Extractor
-#AutoIt3Wrapper_Res_Fileversion=3.0.4
+#AutoIt3Wrapper_Res_Fileversion=3.1.0.0
 #AutoIt3Wrapper_Res_ProductVersion=%fileversion%
-#AutoIt3Wrapper_Res_CompanyName=gvp9000
+#AutoIt3Wrapper_Res_CompanyName=wefalltomorrow
 #AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_LegalCopyright=GNU General Public License v2
-#AutoIt3Wrapper_Res_Field=Author|Jared Breland, Bioruebe, gvp9000
-#AutoIt3Wrapper_Res_Field=Homepage|https://github.com/gvp9000/UniExtract2
+#AutoIt3Wrapper_Res_Field=Author|Jared Breland, Bioruebe, gvp9000, wefalltomorrow
+#AutoIt3Wrapper_Res_Field=Homepage|https://github.com/wefalltomorrow/UniExtract2
 #AutoIt3Wrapper_Res_Field=Timestamp|%date%
 #AutoIt3Wrapper_Res_HiDpi=y
 #AutoIt3Wrapper_Run_AU3Check=n
@@ -25,8 +25,9 @@
 ; Universal Extractor 2
 ; Originally by Jared Breland <jbreland@legroom.net>
 ; Version 2.x by Bioruebe
-; Modified/customized by gvp9000
-; Homepage: https://github.com/gvp9000/UniExtract2
+; Continued by gvp9000 and community contributors
+; Maintained in this fork by wefalltomorrow
+; Homepage: https://github.com/wefalltomorrow/UniExtract2
 ; Language: AutoIt v3.3.18.0
 ; License: GNU General Public License v2 (https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 ;
@@ -91,15 +92,18 @@ Const $sVersionId = $sVersion
 Const $sCodename = "New Start"
 Const $title = $name & " " & $sVersion
 Const $sUrlWebsiteOriginal = "https://www.legroom.net/software/uniextract"
-Const $sUrlWebsite = "https://github.com/gvp9000/UniExtract2"
-Const $sUrlGithub = "https://github.com/gvp9000/UniExtract2"
+Const $sUrlWebsite = "https://github.com/wefalltomorrow/UniExtract2"
+Const $sUrlGithub = "https://github.com/wefalltomorrow/UniExtract2"
+; Keep using the actively maintained gvp9000 helper feed until this fork publishes its own helper bundle.
+; Main executable updates from that feed are disabled below so they cannot overwrite this fork.
 Const $sUrlUpdateStable = "https://gvp9000.github.io/UniExtract2/updates/data/"
 Const $sUrlUpdateNightly = "https://gvp9000.github.io/UniExtract2/updates/nightly/"
+Const $bForkMainUpdateEnabled = False
 Const $sUrlGetUrl = "" ; Disabled in this fork
 Const $sUrlFeedback = "" ; Disabled in this fork
 Const $sUrlStats = "" ; Disabled in this fork
 Const $sUrlPrivacyPolicy = "" ; Disabled in this fork
-Const $sUrlCommandLineHelp = "https://github.com/gvp9000/UniExtract2/blob/master/docs/COMMAND-LINE.md"
+Const $sUrlCommandLineHelp = "https://github.com/wefalltomorrow/UniExtract2/blob/master/docs/COMMAND-LINE.md"
 Const $bindir = @ScriptDir & "\bin\"
 Const $langdir = @ScriptDir & "\lang\"
 Const $defdir = @ScriptDir & "\def\"
@@ -358,6 +362,7 @@ Global $CM_Shells[5][4] = [ _
 
 ; Make sure a language file exists
 If Not FileExists($sEnglishLangFile) And Not FileExists($langdir) Then
+	If _ArraySearch($cmdline, "/silent") > -1 Then Exit 99
 	RepairProgramFiles("No language file found." & @CRLF & @CRLF & "Do you want " & $name & " to download all missing files?")
 	Exit 99
 EndIf
@@ -379,14 +384,25 @@ If $sOptGuid = "" Or StringIsSpace($sOptGuid) Then
 
 	Cout("Created user ID: " & $sOptGuid)
 	SavePref("ID", $sOptGuid)
-	GUI_FirstStart()
 
-	While $FS_GUI
-		Sleep(250)
-	WEnd
+	If $silentmode Then
+		Cout("Silent mode: skipping first start assistant")
+	Else
+		GUI_FirstStart()
+		While $FS_GUI
+			Sleep(250)
+		WEnd
+	EndIf
 EndIf
 
-If Not FileExists($bindir) And RepairProgramFiles(t('PROGRAM_FILES_MISSING')) Then Exit 99
+If Not FileExists($bindir) Then
+	If $silentmode Then
+		Cout("Program files missing; interactive repair is disabled in silent mode")
+		Exit 99
+	ElseIf RepairProgramFiles(t('PROGRAM_FILES_MISSING')) Then
+		Exit 99
+	EndIf
+EndIf
 
 ; If no file passed, display GUI to select file and set options
 If $prompt Then
@@ -664,6 +680,10 @@ EndFunc
 
 ; Parse filename
 Func FilenameParse($f)
+	; Accept paths copied from Explorer's "Copy as path", including surrounding quotes/noise.
+	$f = StringStripWS($f, 3)
+	If StringLen($f) >= 2 And StringLeft($f, 1) = '"' And StringRight($f, 1) = '"' Then _
+		$f = StringTrimLeft(StringTrimRight($f, 1), 1)
 	If StringIsSpace($f) Then Return SetError(1)
 
 	$file = _PathFull($f)
@@ -6426,6 +6446,7 @@ EndFunc
 ; Based on work by Valuater (http://www.autoitscript.com/forum/topic/85977-system-tray-message-box-udf/)
 Func _CreateTrayMessageBox($sMessage)
 	_DeleteTrayMessageBox()
+	If $silentmode Then Return
 
 	If $bOptNoStatusBox = 1 Then Return
 
@@ -8306,7 +8327,7 @@ Func CheckUpdate($silent = $UPDATEMSG_PROMPT, $bCheckInterval = False, $iMode = 
 	If StringLen($prefs) > 0 Then SavePref('lastupdate', $lastupdate)
 
 	; UniExtract main executable - calling the updater is always necessary, because an executable file cannot overwrite itself while running
-	If $iMode <> $UPDATE_HELPER Then
+	If $bForkMainUpdateEnabled And $iMode <> $UPDATE_HELPER Then
 		If ($aReturn[0])[1] <> FileGetSize($sUniExtract) Or FileGetMD5($sUniExtract) <> ($aReturn[0])[2] Then
 			Cout("Update available")
 			$found = True
@@ -11144,12 +11165,12 @@ Func GUI_About()
 		"Jared Breland <jbreland@legroom.net>", _
 		"uniextract@bioruebe.com", _
 		$sVersion, _
-		"GPL v3")), 16, 104, $iWidth - 32, $iHeight - 104 - 58, $SS_CENTER)
+		"GPL v2")), 16, 104, $iWidth - 32, $iHeight - 104 - 58, $SS_CENTER)
 
 	GUICtrlCreateLabel($sOptGuid, 5, $iHeight - 15, 275, 15)
 	GUICtrlSetFont(-1, 8, 800, 0, $FONT_ARIAL)
 
-	Local $sPath = $iconsdir & "gvp9000" & ($bHighContrastMode ? "White" : "") & ".png"
+	Local $sPath = $iconsdir & "Bioruebe" & ($bHighContrastMode ? "White" : "") & ".png"
 	Local $idOk = GUICtrlCreateButton(t('OK_BUT'), $iWidth / 2 - 45, $iHeight - 50, 90, 25)
 	_GUICtrlCreatePic($sPath, $iWidth - 100 - 10, $iHeight - 58, 100, 48)
 	_GuiSetScale($hGui, $iWidth, $iHeight, $idLabel, $idOk)
@@ -11203,6 +11224,8 @@ EndFunc
 
 ; Create tray menu items
 Func Tray_Create()
+	If $silentmode Then Return Opt("TrayIconHide", 1)
+
 	Global $Tray_Statusbox = TrayCreateItem(t('PREFS_HIDE_STATUS_LABEL'))
 	If $bOptNoStatusBox Then TrayItemSetState(-1, $TRAY_CHECKED)
 	TrayCreateItem("")

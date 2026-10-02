@@ -11173,7 +11173,7 @@ Func _GetPluginDownloadUrl($sPluginName)
 		Case 'arc_conv'
 			Return "https://sourceforge.net/projects/archivconvert/files/archivconvert/version_0.81/arc_convert.zip/download"
 		Case 'Game Extractor'
-			Return "https://github.com/wattostudios/GameExtractor/releases/latest"
+			Return "https://github.com/wattostudios/GameExtractor/releases/latest/download/extract.zip"
 ;~		Case 'h4sh3m Virtual Apps Dependency Extractor' ; Disabled in this fork
 ;~			Return $sUrlGithub & "/issues?q=h4sh3m"
 		Case 'iscab'

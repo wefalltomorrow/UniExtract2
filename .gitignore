@@ -1,0 +1,13 @@
+# AutoIt build output
+*.exe
+
+# Release/build staging
+dist/
+.build/
+artifacts/
+
+# Local editor/OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

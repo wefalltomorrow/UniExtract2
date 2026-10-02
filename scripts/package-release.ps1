@@ -53,7 +53,7 @@ if (-not $PackageRoot) {
 }
 
 Write-Host "Helper package root: $PackageRoot"
-Copy-Item -LiteralPath (Join-Path $PackageRoot '*') -Destination $StageRoot -Recurse -Force
+Copy-Item -Path (Join-Path $PackageRoot '*') -Destination $StageRoot -Recurse -Force
 
 foreach ($File in @('UniExtract.exe', 'UniExtractUpdater.exe', 'UniExtractUpdater_NoAdmin.exe', 'English.ini', 'README.md', 'LICENSE', 'VERSION')) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot $File) -Destination (Join-Path $StageRoot $File) -Force

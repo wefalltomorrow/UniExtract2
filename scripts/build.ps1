@@ -83,14 +83,16 @@ foreach ($Target in $Targets) {
     Remove-Item -LiteralPath $OutputPath -Force -ErrorAction SilentlyContinue
 
     Write-Host "Building $($Target.Source)..."
+
+    $WrapperArgs = '/prod /in "' + $SourcePath + '" /autoit3dir "' + $AutoItDir + '" /NoStatus'
     if ([IO.Path]::GetExtension($Wrapper) -ieq '.au3') {
-        & $AutoItExe $Wrapper /prod /in $SourcePath /autoit3dir $AutoItDir /NoStatus
+        $Process = Start-Process -FilePath $AutoItExe -ArgumentList ('"' + $Wrapper + '" ' + $WrapperArgs) -Wait -PassThru -NoNewWindow
     } else {
-        & $Wrapper /prod /in $SourcePath /autoit3dir $AutoItDir /NoStatus
+        $Process = Start-Process -FilePath $Wrapper -ArgumentList $WrapperArgs -Wait -PassThru -NoNewWindow
     }
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "AutoIt3Wrapper failed for $($Target.Source) with exit code $LASTEXITCODE."
+    if ($Process.ExitCode -ne 0) {
+        throw "AutoIt3Wrapper failed for $($Target.Source) with exit code $($Process.ExitCode)."
     }
 
     if (-not (Test-Path -LiteralPath $OutputPath)) {

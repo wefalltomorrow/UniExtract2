@@ -3670,7 +3670,7 @@ Func CheckExt()
 		For $i = 0 To $aDefinitions[0][0]
 			$aReturn = StringSplit($aDefinitions[$i][0], ",")
 			For $j = 1 To $aReturn[0]
-				If StringCompare($fileext, StringStripWS($aReturn[$j], 8)) == 0 Then extract($aDefinitions[$i][1])
+				If StringCompare($fileext, StringStripWS($aReturn[$j], 8)) == 0 Then _TryExtExtract($aDefinitions[$i][1])
 			Next
 		Next
 	Next

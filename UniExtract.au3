@@ -1921,7 +1921,7 @@ Func filecompare($sFileType)
 		Case StringInStr($sFileType, "MS Windows HtmlHelp Data")
 			extract($TYPE_CHM, 'Compiled HTML ' & t('TERM_HELP'))
 		Case StringInStr($sFileType, "MIME entity text") Or StringInStr($sFileType, "mhtml")
-			extract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'))
+			extract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'), "mhtml")
 		Case StringInStr($sFileType, "MoPaQ", 0)
 			CheckTotalObserver('MPQ ' & t('TERM_ARCHIVE'))
 		Case StringInStr($sFileType, "MIME entity")
@@ -2105,7 +2105,7 @@ Func tridcompare($sFileType)
 			extract($TYPE_LZX, 'LZX ' & t('TERM_COMPRESSED'))
 
 		Case StringInStr($sFileType, "MIME HTML archive format") Or StringInStr($sFileType, "E-Mail message")
-			extract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'))
+			extract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'), "mhtml")
 
 		Case StringInStr($sFileType, "Microsoft Windows Installer merge module")
 			extract($TYPE_MSM, 'Windows Installer (MSM) ' & t('TERM_MERGE_MODULE'))
@@ -3790,7 +3790,7 @@ Func InitialCheckExt()
 		Case "lzx"
 			_TryExtExtract($TYPE_LZX, 'LZX ' & t('TERM_COMPRESSED'))
 		Case "mht", "mhtml"
-			_TryExtExtract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'))
+			_TryExtExtract($TYPE_7Z, 'MHTML ' & t('TERM_ARCHIVE'), "mhtml")
 		Case "msi"
 			_TryExtExtract($TYPE_MSI, 'Windows Installer (MSI) ' & t('TERM_PACKAGE'))
 		Case "msm"
@@ -3928,6 +3928,9 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 
 			If $g_bArchiveIntegrityError Then
 				Cout("Definitive 7-Zip archive corruption/broken-volume failure detected; skipping SFX/script and nested post-processing")
+			ElseIf $additionalParameters == "mhtml" Then
+				Cout("Restoring missing extensions in extracted MHTML files")
+				AppendExtensions($outdir)
 			ElseIf FileExists($outdir & "\.text") Then
 				; Generic .exe extraction should not be considered successful
 				$success = $RESULT_FAILED

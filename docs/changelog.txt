@@ -1,3 +1,11 @@
+Next release - wefalltomorrow fork
+
+Added optional Game Extractor Basic integration for obscure game archives.
+Game Extractor is a low-priority fallback and is only tried after existing dedicated handlers and the generic 7-Zip probe fail.
+Added Game Extractor to the Plugin Manager; the public Basic package installs under bin\GameExtractor and is not bundled with the normal release.
+Game Extractor results require both its "Finished extracting files" marker and real extracted output before UniExtract accepts the run as successful.
+Documented the Basic-vs-Full licensing boundary and intentionally excluded files from the paid Full Version.
+
 v3.1.1 (2026/10/02) - wefalltomorrow fork
 
 Synced gvp9000 v3.0.6 source changes and switched release packaging to its updated helper bundle.

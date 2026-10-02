@@ -1,3 +1,15 @@
+v3.1.0 development (wefalltomorrow fork)
+Based on the current gvp9000 source and its 2026 extraction/detection fixes.
+Integrated upstream PR #408 copied/quoted path handling.
+Fixed first-run setup UI appearing in silent mode.
+Silent mode now hides the tray icon and extraction status overlay.
+Silent mode no longer opens interactive repair UI when core program files are missing.
+Changed fork links and executable metadata to wefalltomorrow/UniExtract2.
+Disabled main executable replacement from the borrowed gvp9000 helper update feed.
+Standalone updater main URLs now target this fork.
+Corrected About dialog license text to GPLv2.
+Added docs/FORK-NOTES.md with upstream PR, issue and fork review.
+
 v3.0.4
 Added password-protected PDF support with qpdf.
 Locked PDFs are decrypted first, then UniExtract continues the normal PDF extraction, such as extracting text, images/pages, attachments, and HTML output.

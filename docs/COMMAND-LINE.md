@@ -76,6 +76,12 @@ Force the 7-Zip extraction path:
 UniExtract.exe "C:\Downloads\odd-file.bin" /sub /type=7z
 ```
 
+Force the optional Game Extractor fallback (requires Game Extractor Basic installed through the Plugin Manager):
+
+```text
+UniExtract.exe "C:\Games\unknown.pak" /sub /type=gameextractor
+```
+
 ## Exit behavior
 
 UniExtract uses different internal status/exit values for success, unsupported files, invalid paths, extraction failures and silent/internal termination. When automating it, test the exit code and the generated log rather than assuming that every non-interactive run produced output.

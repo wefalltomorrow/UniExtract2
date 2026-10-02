@@ -47,6 +47,12 @@ The public Game Extractor v3.16.0008 source tree contains **1,957 archive plugin
 
 That does not mean every one is unique to Game Extractor: there is substantial overlap with 7-Zip, GARbro and QuickBMS. The value of the fallback is the long tail of game-specific archive variants and per-game parsers that are impractical to reproduce as individual AutoIt routes.
 
+### What "Game Extractor support" means
+
+UniExtract launches Game Extractor Basic's own archive reader and export task. As a result, every archive plugin that the installed Basic package loads and can extract through its command-line mode is available to this fallback without maintaining a separate UniExtract route for each format.
+
+This is intentionally not described as every capability from the paid Full edition. Full-only source is not part of the public GPLv2 tree, and preview-only, editor, image-conversion and other non-archive features are outside UniExtract's extraction fallback. Individual Game Extractor plugins may also depend on native or third-party components shipped by their upstream package.
+
 ## Licensing boundary
 
 Game Extractor's public repository describes the **Basic Version** source as GPLv2. The paid **Full Version** is explicitly separate and its code is not covered by that public GPLv2 source release.

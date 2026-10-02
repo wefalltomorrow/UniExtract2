@@ -1,4 +1,7 @@
-v3.1.0 development (wefalltomorrow fork)
+v3.1.0 (2026/10/02) - wefalltomorrow fork
+
+  Added reproducible Windows build and release packaging through GitHub Actions
+  Added complete command-line reference and repository contribution templates
 Based on the current gvp9000 source and its 2026 extraction/detection fixes.
 Integrated upstream PR #408 copied/quoted path handling.
 Restored missing file extensions after MHTML extraction.

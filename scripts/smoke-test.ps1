@@ -63,6 +63,9 @@ function Invoke-SmokeExtraction {
 }
 
 Invoke-SmokeExtraction -Name 'basic' -ArchiveName 'smoke-test.zip'
-Invoke-SmokeExtraction -Name 'unicode-filename' -ArchiveName 'smoke-ユニコード.zip'
+
+# Keep this script ASCII-only for Windows PowerShell 5.1, but still create a real Unicode filename.
+$UnicodeArchiveName = 'smoke-' + [char]0x30E6 + [char]0x30CB + [char]0x30B3 + [char]0x30FC + [char]0x30C9 + '.zip'
+Invoke-SmokeExtraction -Name 'unicode-filename' -ArchiveName $UnicodeArchiveName
 
 Write-Host 'All packaged extraction smoke tests passed.'

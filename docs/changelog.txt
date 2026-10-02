@@ -1,3 +1,14 @@
+v3.1.1 (2026/10/02) - wefalltomorrow fork
+
+Synced gvp9000 v3.0.6 source changes and switched release packaging to its updated helper bundle.
+Fixed split Inno Setup extraction from Unicode paths by copying required external .bin sidecars beside the temporary ASCII-named executable.
+Known QuickBMS/game extensions are no longer skipped when a detector incorrectly identifies the input as media.
+Silent mode now auto-selects a game BMS script only when exactly one script matches the extension; ambiguous matches are left unresolved.
+Added Descent 3 HOG2 timestamp restoration after successful QuickBMS extraction, with bounds and output-path safety checks.
+Improved pipeline result classification for innounp and common password, cancel, disk-space and fatal-error output.
+Release builds now verify the file version of all three executables.
+Updated full-package helper base from gvp9000 v3.0.4 to v3.0.6.
+
 v3.1.0 (2026/10/02) - wefalltomorrow fork
 
   Added reproducible Windows build and release packaging through GitHub Actions

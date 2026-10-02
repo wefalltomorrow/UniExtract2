@@ -93,10 +93,13 @@ These are not being marked "closed" here because many reports require the origin
 | #374 Update 7-Zip | The maintained helper set uses a current 7-Zip generation rather than the old upstream binary. |
 | #406 7-Zip vulnerability report | Same helper refresh removes dependence on the years-old upstream 7-Zip build. |
 | #354 WiX/Dark errors | WiX/Burn detection and Dark handling were reworked and updated. |
+| #308 MHTML output missing .html extension | Added an MHTML-specific post-processing pass that uses the existing TrID extension recovery on extracted files. |
+| #242 Original extension left changed after failed analysis | Current code analyses a temporary copied/renamed file instead of renaming the original input, avoiding the original failure mode. |
 
 ## Changes added specifically in this fork
 
 - integrated upstream PR #408 path cleanup
+- restore missing extensions after MHTML extraction (#308)
 - fixed first-run GUI appearing during `/silent`
 - hide the tray icon and extraction status overlay during `/silent`
 - avoid interactive missing-file repair dialogs during `/silent`

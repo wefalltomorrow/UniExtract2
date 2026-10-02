@@ -35,8 +35,12 @@ jobs:
         shell: powershell
         run: .\scripts\package-release.ps1
 
+      - name: Smoke-test packaged build
+        shell: powershell
+        run: .\scripts\smoke-test.ps1
+
       - name: Upload build artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: UniExtract2-${{ github.sha }}
           path: |

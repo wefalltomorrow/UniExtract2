@@ -60,6 +60,15 @@ jobs:
         shell: powershell
         run: .\scripts\package-release.ps1
 
+      - name: Upload per-file bin audit
+        uses: actions/upload-artifact@v7
+        with:
+          name: bin-inventory-${{ github.sha }}
+          path: |
+            .build/release/BIN-INVENTORY.csv
+            .build/release/BIN-INVENTORY-SUMMARY.txt
+          if-no-files-found: error
+
       - name: Smoke-test packaged build
         shell: powershell
         run: .\scripts\smoke-test.ps1

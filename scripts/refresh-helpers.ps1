@@ -277,7 +277,13 @@ Remove-Item -LiteralPath $ExeinfoDest -Recurse -Force -ErrorAction SilentlyConti
 New-Item -ItemType Directory -Path $ExeinfoDest -Force | Out-Null
 Copy-Item -Path (Join-Path $ExeinfoPackageRoot '*') -Destination $ExeinfoDest -Recurse -Force
 Assert-FileVersionContains (Join-Path $ExeinfoDest 'exeinfope.exe') '0.1.0.0' 'Exeinfo PE'
-Add-RefreshLog 'Exeinfo PE: 0.1.0.0 (isolated package)'
+
+# Remove the old flat Exeinfo copy inherited from the gvp helper base. The current
+# source runs the isolated package above so these would only be stale duplicates.
+foreach ($LegacyExeinfoFile in @('exeinfope.exe', 'exeinfopeRUN.cfg', 'Ext_Detector.dll')) {
+    Remove-Item -LiteralPath (Join-Path $BinRoot $LegacyExeinfoFile) -Force -ErrorAction SilentlyContinue
+}
+Add-RefreshLog 'Exeinfo PE: 0.1.0.0 (isolated package; legacy flat copy removed)'
 
 # PEA 1.33 from the current PeaZip portable release.
 $PeaZip = Get-Download 'https://github.com/peazip/PeaZip/releases/download/11.3.0/peazip_portable-11.3.0.WINDOWS.zip' 'peazip_portable-11.3.0.WINDOWS.zip' '76ab0961b184e60f3534e62ce91aaf25bcb7cd409a4a7680a33d22c77a10f9de'

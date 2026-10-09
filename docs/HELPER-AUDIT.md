@@ -81,6 +81,20 @@ The fork still uses gvp9000's helper update feed for legacy helpers that have no
 
 This is an intermediate step toward owning the complete helper bundle and update metadata in this fork.
 
+## Automated complete file inventory (unreleased development)
+
+The Windows packaging process generates **BIN-INVENTORY.csv** directly from the fully populated staged `bin` folder, after the maintained helper overlay has run. Every file, including nested DLLs, runtime support files, format plugins and legacy command-line programs, receives an actual SHA-256 digest, size, path and available embedded version and PE architecture information.
+
+A separate **BIN-INVENTORY-SUMMARY.txt** reports the totals and how many files remain in the inherited, not-yet-individually-reviewed group. Required 7-Zip, qpdf, SQLite, CHDMan, UnRAR, TrID and vgmstream files must be present for the package to pass.
+
+This is a **complete file listing**, not a claim that every tool is current or has passed extraction regression tests. Source/review labels differentiate fork-pinned updates, explicit compatibility exceptions and legacy entries still requiring upstream checking.
+
+### Newly checked utilities
+
+- **acefile 0.6.11**: Python upstream is now **0.6.14** (published 20 January 2026). Its standalone Windows executable remains **outdated**, pending a reproducible packaging and regression-tested update: https://pypi.org/project/acefile/
+- **innoextract 1.9**: matches the latest upstream tagged release; retain: https://github.com/dscharrer/innoextract/releases
+- **Forensic7z 1.6**: matches the currently published plugin version; retain: https://www.tc4shell.com/en/7zip/forensic7z/
+
 ## Release policy
 
 A helper is a good candidate for refresh when all of the following are true:

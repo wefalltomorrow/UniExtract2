@@ -8708,7 +8708,7 @@ Func _IsForkManagedHelperUpdatePath($sRelativePath)
 		"bin\x86\formats\py7z.32.dll", "bin\x64\formats\py7z.64.dll", _
 		"bin\mediainfo.dll", _
 		"bin\exeinfope.exe", "bin\ext_detector.dll", "bin\exeinfoperun.cfg", _
-		"bin\champollion.exe", "bin\pea.exe", "bin\msgunfmt.exe", "bin\innounp.exe", "bin\triddefs.trd", _
+		"bin\champollion.exe", "bin\pea.exe", "bin\msgunfmt.exe", "bin\innounp.exe", "bin\triddefs.trd", "bin\acefile.exe", _
 		"bin\x64\unrar.exe", "bin\x64\chdman.exe", _
 		"bin\sqlite3.exe", "bin\x86\sqlite3.dll", "bin\x64\sqlite3.dll" _
 	]
@@ -8717,7 +8717,7 @@ Func _IsForkManagedHelperUpdatePath($sRelativePath)
 		If $sPath = $sManaged Then Return True
 	Next
 
-	Local $aPrefixes[] = ["bin\qpdf\", "bin\exeinfo\"]
+	Local $aPrefixes[] = ["bin\qpdf\", "bin\exeinfo\", "bin\x86\vgmstream\", "bin\x64\vgmstream\"]
 	For $sPrefix In $aPrefixes
 		If StringLeft($sPath, StringLen($sPrefix)) = $sPrefix Then Return True
 	Next

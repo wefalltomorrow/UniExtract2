@@ -222,7 +222,7 @@ Add-RefreshLog 'UPX: 5.2.1'
 
 # TC4Shell 7-Zip format plugins. These are small architecture-paired DLL packages.
 # Keep the upstream package layout out of the release and copy only the format DLLs.
-$AsarZip = Get-Download 'https://www.tc4shell.com/binary/Asar.zip' 'Asar7z-1.5.zip' -AllowInvalidCertificate
+$AsarZip = Get-Download 'https://www.tc4shell.com/binary/Asar.zip' 'Asar7z-1.5.zip' 'ea17751b2d7d607dfc11612e71d0c9d36561e643cdfb2bfb16922a9a0ec6d250' -AllowInvalidCertificate
 $AsarExtract = Join-Path $WorkRoot 'asar7z'
 Expand-ZipPackage $AsarZip $AsarExtract
 $Asar32 = Find-RequiredFile $AsarExtract 'Asar.32.dll'
@@ -265,6 +265,18 @@ Copy-RequiredFile $Py7z64 (Join-Path $BinRoot 'x64\Formats\Py7z.64.dll')
 Assert-FileVersionContains (Join-Path $BinRoot 'x86\Formats\Py7z.32.dll') '1.2.1' 'Py7z x86'
 Assert-FileVersionContains (Join-Path $BinRoot 'x64\Formats\Py7z.64.dll') '1.2.1' 'Py7z x64'
 Add-RefreshLog 'Py7z: 1.2.1 (x86/x64)'
+
+# Verify that the refreshed 7-Zip binaries actually load the paired format plugins.
+# File-version checks alone only prove that the DLLs were copied, not that 7-Zip accepted them.
+foreach ($SevenZipPath in @((Join-Path $BinRoot 'x86\7z.exe'), (Join-Path $BinRoot 'x64\7z.exe'))) {
+    $SevenZipInfo = (& $SevenZipPath i 2>&1 | Out-String)
+    foreach ($PluginName in @('Asar', 'eDecoder', 'Iso7z', 'Py7z')) {
+        if ($SevenZipInfo -notmatch [regex]::Escape($PluginName)) {
+            throw "7-Zip plugin validation failed for $SevenZipPath. '$PluginName' was not listed by '7z i'."
+        }
+    }
+}
+Add-RefreshLog '7-Zip format plugins: load validation passed (x86/x64)'
 
 # MediaInfoLib 26.10 (x86 DLL; UniExtract itself is compiled as x86)
 $MediaInfoZip = Get-Download 'https://mediaarea.net/download/binary/libmediainfo0/26.10/MediaInfo_DLL_26.10_Windows_i386_WithoutInstaller.zip' 'MediaInfo_DLL_26.10_Windows_i386.zip' '6507e1ca54a1f96eb3afbf80c8de9f0c477f32fc614c259343568b622f192f81'

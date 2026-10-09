@@ -314,7 +314,7 @@ Add-RefreshLog 'innounp: 2.71.1'
 # TrID definitions snapshot: 08/10/2026, 22425 definitions.
 # The upstream URL is rolling. Validate the definition count so a later upstream update
 # fails loudly instead of silently changing a historical release build.
-$TridDefsZip = Get-Download 'https://mark0.net/download/triddefs.zip' 'triddefs.zip'
+$TridDefsZip = Get-Download 'https://mark0.net/download/triddefs.zip' 'triddefs.zip' '782f6910641942c736c8e33ec7c197dedfe4d1df59d5970bc97b97ebbaf65788'
 $TridDefsExtract = Join-Path $WorkRoot 'triddefs'
 Expand-ZipPackage $TridDefsZip $TridDefsExtract
 Copy-RequiredFile (Find-RequiredFile $TridDefsExtract 'TrIDDefs.TRD') (Join-Path $BinRoot 'TrIDDefs.TRD')
@@ -328,7 +328,7 @@ Add-RefreshLog 'TrID definitions: 08/10/2026 (22425 definitions)'
 
 # UnRAR 7.23 x64. RARLAB no longer publishes a matching current Win32 UnRAR binary,
 # so retain the compatibility x86 copy from the helper base and refresh the x64 path.
-$WinRarX64 = Get-Download 'https://www.rarlab.com/rar/winrar-x64-723.exe' 'winrar-x64-723.exe'
+$WinRarX64 = Get-Download 'https://www.rarlab.com/rar/winrar-x64-723.exe' 'winrar-x64-723.exe' '8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b'
 $WinRarExtract = Join-Path $WorkRoot 'winrar-x64'
 Expand-With7Zip $WinRarX64 $WinRarExtract
 Copy-RequiredFile (Find-RequiredFile $WinRarExtract 'UnRAR.exe') (Join-Path $BinRoot 'x64\UnRAR.exe')
@@ -350,9 +350,9 @@ Add-RefreshLog 'CHDMan: 0.289 x64 (legacy x86 helper retained)'
 # Official releases provide current x86/x64 DLLs but only an x64 command-line shell.
 # Build the tiny x86 shell from the official amalgamation so UniExtract does not lose
 # 32-bit Windows compatibility.
-$SqliteAmalgamation = Get-Download 'https://www.sqlite.org/2026/sqlite-amalgamation-3530400.zip' 'sqlite-amalgamation-3530400.zip'
-$SqliteDllX86 = Get-Download 'https://www.sqlite.org/2026/sqlite-dll-win-x86-3530400.zip' 'sqlite-dll-win-x86-3530400.zip'
-$SqliteDllX64 = Get-Download 'https://www.sqlite.org/2026/sqlite-dll-win-x64-3530400.zip' 'sqlite-dll-win-x64-3530400.zip'
+$SqliteAmalgamation = Get-Download 'https://www.sqlite.org/2026/sqlite-amalgamation-3530400.zip' 'sqlite-amalgamation-3530400.zip' '1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d'
+$SqliteDllX86 = Get-Download 'https://www.sqlite.org/2026/sqlite-dll-win-x86-3530400.zip' 'sqlite-dll-win-x86-3530400.zip' '607673153c6d15f0465761a1a86413049d6ba5c897857da2dab24282faad0224'
+$SqliteDllX64 = Get-Download 'https://www.sqlite.org/2026/sqlite-dll-win-x64-3530400.zip' 'sqlite-dll-win-x64-3530400.zip' '8b959b7eff4a81f6a62fc3468f9273e5cfe78d4a927e62215aed231b654fb104'
 $SqliteSrc = Join-Path $WorkRoot 'sqlite-src'
 $SqliteX86 = Join-Path $WorkRoot 'sqlite-dll-x86'
 $SqliteX64 = Join-Path $WorkRoot 'sqlite-dll-x64'

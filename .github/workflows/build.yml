@@ -72,6 +72,7 @@ jobs:
           name: bin-inventory-${{ github.sha }}
           path: |
             .build/release/BIN-INVENTORY.csv
+            .build/release/BIN-EXECUTABLES.csv
             .build/release/BIN-INVENTORY-SUMMARY.txt
           if-no-files-found: error
 

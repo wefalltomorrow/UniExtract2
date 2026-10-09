@@ -80,7 +80,7 @@ This is an intermediate step toward owning the complete helper bundle and update
 
 The Windows packaging process generates **BIN-INVENTORY.csv** directly from the fully populated staged `bin` folder, after the maintained helper overlay has run. Every file, including nested DLLs, runtime support files, format plugins and legacy command-line programs, receives an actual SHA-256 digest, size, path and available embedded version and PE architecture information.
 
-A separate **BIN-INVENTORY-SUMMARY.txt** reports the totals and how many files remain in the inherited, not-yet-individually-reviewed group. Required 7-Zip, qpdf, SQLite, CHDMan, UnRAR, TrID and vgmstream files must be present for the package to pass.
+A separate **BIN-INVENTORY-SUMMARY.txt** reports the totals and how many files remain in the inherited, not-yet-individually-reviewed group. The additional **BIN-EXECUTABLES.csv** focuses specifically on packaged `.exe` utilities, with a separate count of remaining legacy executables. This prevents the thousands of inherited runtime and data files from obscuring the actual tool updates. Required 7-Zip, qpdf, SQLite, CHDMan, UnRAR, TrID and vgmstream files must be present for the package to pass.
 
 This is a **complete file listing**, not a claim that every tool is current or has passed extraction regression tests. Source/review labels differentiate fork-pinned updates, explicit compatibility exceptions and legacy entries still requiring upstream checking.
 

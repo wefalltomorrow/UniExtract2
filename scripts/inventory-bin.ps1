@@ -75,6 +75,14 @@ $Rows = @(
 )
 $Rows | Export-Csv -LiteralPath (Join-Path $StageRoot 'BIN-INVENTORY.csv') -NoTypeInformation -Encoding UTF8
 
+# Executable-only CSV makes the actionable utility audit manageable: thousands
+# of inherited support/data files are not separate programs.
+$ExecutableRows = @($Rows | Where-Object { $_.Extension -eq '.exe' } | Sort-Object Path)
+$ExecutableRows | Export-Csv -LiteralPath (Join-Path $StageRoot 'BIN-EXECUTABLES.csv') -NoTypeInformation -Encoding UTF8
+$LegacyExeCount = @($ExecutableRows | Where-Object { $_.ReviewStatus -eq 'legacy-base: upstream review pending' }).Count
+$MissingExeVersion = @($ExecutableRows | Where-Object { -not $_.FileVersion }).Count
+
+
 # Required helper files are checked separately from descriptive metadata.
 $Required = @('x86\7z.exe','x64\7z.exe','x86\7z.dll','x64\7z.dll',
   'qpdf\bin\qpdf.exe','upx.exe','sqlite3.exe','x64\chdman.exe','x64\UnRAR.exe',
@@ -91,12 +99,15 @@ $Summary = @(
  'Universal Extractor 2 bin inventory (generated from actual packaged binaries)',
  "Files: $($Rows.Count)"
  "Executables: $ExecCount"
+ "Legacy executables pending upstream review: $LegacyExeCount"
+ "Executable entries without embedded FileVersion: $MissingExeVersion"
  "Recognized PE binaries: $PECount"
  "PE binaries without FileVersion: $MissingVersion"
  "Fork overlay-managed entries: $OverlayCount"
  "Compatibility-pinned exceptions: $PinnedCount"
  "Legacy entries pending individual review: $($Rows.Count-$OverlayCount-$PinnedCount)"
  'File hashes and source/review status: BIN-INVENTORY.csv'
+ 'Prioritized executable-only report: BIN-EXECUTABLES.csv'
  'A legacy review label does not mean a helper is the latest available version.'
 )
 $Summary | Set-Content -LiteralPath (Join-Path $StageRoot 'BIN-INVENTORY-SUMMARY.txt') -Encoding UTF8

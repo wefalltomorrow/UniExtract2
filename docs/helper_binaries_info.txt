@@ -11,7 +11,7 @@ Name										Files							Version		Features	License					Author								Website
 											x86\7z.dll						-------		---------	-------					-------								-------															
 											x64\7z.dll						-------		---------	-------					-------								-------															
 7z SFX Archives splitter					7ZSplit.exe						0.2			---------	GNU LGPL v3				Oleg Scherbakov						http://www.7zsfx.info/en/										
-acefile										acefile.exe						0.6.11		-	-	-	modified BSD 2-clause	Daniel Roethlisberger				https://github.com/droe/acefile
+acefile										acefile.exe						0.6.14		-	-	-	modified BSD 2-clause	Daniel Roethlisberger				https://github.com/droe/acefile
 ARC - Archive utility						arc.exe							5.21i		-	-	-	GNU GPL v2				Howard Chu							http://gnuwin32.sourceforge.net/packages/arc.htm				
 ARJ32										arj.exe							3.10		!	-	!	GNU GPL v2				Andrew Belov						http://arj.sourceforge.net/										
 AspackDie									AspackDie.exe					1.41			-		Open Source				yoda								http://scifi.pages.at/yoda9k/									

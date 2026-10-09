@@ -9,7 +9,7 @@ if (-not (Test-Path -LiteralPath $BinRoot -PathType Container)) { throw "Missing
 # Source classification only. "Legacy" must never be interpreted as "current".
 $Overlay = @(
  'x86\7z.exe','x86\7z.dll','x64\7z.exe','x64\7z.dll',
- 'upx.exe','MediaInfo.dll','Champollion.exe','pea.exe',
+ 'upx.exe','MediaInfo.dll','Champollion.exe','pea.exe','acefile.exe',
  'msgunfmt.exe','innounp.exe','TrIDDefs.TRD','sqlite3.exe',
  'x86\sqlite3.dll','x64\sqlite3.dll','x64\UnRAR.exe','x64\chdman.exe',
  'x86\Formats\Asar.32.dll','x64\Formats\Asar.64.dll',
@@ -18,7 +18,6 @@ $Overlay = @(
  'x86\Formats\Py7z.32.dll','x64\Formats\Py7z.64.dll'
 )
 $Pinned = @{
- 'acefile.exe' = 'compatible-exe-pinned: Python source 0.6.14 requires repackage'
  'file.exe' = 'update-candidate: file/libmagic 5.48 needs paired Win32 binary and magic DB'
  'Bio.cs.dll' = 'update-candidate: Bio.cs 2.6.0 needs rebuilt DLL and dependent extractor regression tests'
  'magic.mgc' = 'update-candidate: must be built with the same file/libmagic version'
@@ -79,7 +78,7 @@ $Rows | Export-Csv -LiteralPath (Join-Path $StageRoot 'BIN-INVENTORY.csv') -NoTy
 # Required helper files are checked separately from descriptive metadata.
 $Required = @('x86\7z.exe','x64\7z.exe','x86\7z.dll','x64\7z.dll',
   'qpdf\bin\qpdf.exe','upx.exe','sqlite3.exe','x64\chdman.exe','x64\UnRAR.exe',
-  'TrIDDefs.TRD','x86\vgmstream\vgmstream-cli.exe','x64\vgmstream\vgmstream-cli.exe')
+  'TrIDDefs.TRD','acefile.exe','x86\vgmstream\vgmstream-cli.exe','x64\vgmstream\vgmstream-cli.exe')
 $Missing = @($Required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $BinRoot $_) -PathType Leaf) })
 if ($Missing.Count -gt 0) { throw "Missing required helpers: $($Missing -join ', ')" }
 

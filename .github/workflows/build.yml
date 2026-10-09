@@ -52,6 +52,12 @@ jobs:
           Install-ChocoPackage @('install', 'autoit.install', '--version=3.3.18', '-y', '--no-progress')
           Install-ChocoPackage @('install', 'scite4autoit3', '-y', '--no-progress')
 
+      - name: Set up Python x86 for acefile
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          architecture: 'x86'
+
       - name: Build executables
         shell: powershell
         run: .\scripts\build.ps1

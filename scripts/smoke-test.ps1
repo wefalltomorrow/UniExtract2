@@ -103,4 +103,35 @@ function Invoke-VgmstreamAudioSmokeTest {
 
 Invoke-VgmstreamAudioSmokeTest
 
+# Use an upstream ACE regression sample with a pinned Git blob hash.
+function Invoke-AcefileSmokeTest {
+    $AceExe = Join-Path $StageRoot 'bin\acefile.exe'
+    if (-not (Test-Path -LiteralPath $AceExe)) { throw "Missing acefile.exe: $AceExe" }
+    $AceCase = Join-Path $SmokeRoot 'acefile'
+    $AceOut = Join-Path $AceCase 'output'
+    New-Item -ItemType Directory -Path $AceOut -Force | Out-Null
+    $Archive = Join-Path $AceCase 'acefile-sample.ace'
+    $FixtureUrl = 'https://raw.githubusercontent.com/droe/acefile-testdata/main/blocked_unregistered/winappdbg-winappdbg_v1.6_plain.ace'
+    Invoke-WebRequest -Uri $FixtureUrl -OutFile $Archive -UseBasicParsing
+    $ActualBlob = (& git hash-object -- $Archive | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $ActualBlob -ne 'a32763f0627cc925a79c0a3824e4790d9966ba51') {
+        throw "ACE fixture Git blob hash mismatch: $ActualBlob"
+    }
+    $Version = (& $AceExe --version 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0 -or $Version -notmatch 'acefile 0\.6\.14') {
+        throw "acefile version test failed: $Version"
+    }
+    $Test = (& $AceExe -t $Archive 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "acefile integrity test failed: $Test" }
+    $Output = (& $AceExe -x -v -d $AceOut $Archive 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "acefile extraction test failed: $Output" }
+    $Extracted = @(Get-ChildItem -LiteralPath $AceOut -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Length -gt 0 })
+    if ($Extracted.Count -lt 1) {
+        throw "acefile produced no output: $Output"
+    }
+    Write-Host ("Smoke test passed [acefile]: extracted {0} files" -f $Extracted.Count)
+}
+Invoke-AcefileSmokeTest
+
 Write-Host 'All packaged extraction smoke tests passed.'

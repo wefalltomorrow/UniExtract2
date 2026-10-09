@@ -427,6 +427,29 @@ Copy-RequiredFile (Find-RequiredFile $SqliteX64 'sqlite3.dll') (Join-Path $BinRo
 Assert-CommandContains (Join-Path $BinRoot 'sqlite3.exe') @('--version') '3.53.4' 'SQLite shell'
 Add-RefreshLog 'SQLite: 3.53.4 (x86 shell + x86/x64 DLLs)'
 
+# acefile 0.6.14: upstream publishes Python source, not a standalone Windows EXE.
+# Build the pinned source using 32-bit Python for Win32 compatibility.
+$AceTar = Get-Download 'https://files.pythonhosted.org/packages/22/9e/76fd1b0759e789ce86a9adcc4c5f3d01aa2bc5125b232b44397a08f0f1cf/acefile-0.6.14.tar.gz' 'acefile-0.6.14.tar.gz' '96957fd167136ef5bc1c133fe74da2453229ad19308d6b986cbcc3c76ed5511d'
+$AceSourceDir = Join-Path $WorkRoot 'acefile-source'
+New-Item -ItemType Directory -Path $AceSourceDir -Force | Out-Null
+& tar.exe -xzf $AceTar -C $AceSourceDir
+if ($LASTEXITCODE -ne 0) { throw "Failed to unpack acefile source (tar exit $LASTEXITCODE)." }
+$AcePython = Find-RequiredFile $AceSourceDir 'acefile.py'
+$PythonMachine = (& python -c 'import struct; print(struct.calcsize("P") * 8)' | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $PythonMachine -ne '32') {
+    throw "acefile packaging requires Python x86, got '$PythonMachine'."
+}
+& python -m pip install --disable-pip-version-check --no-input 'pyinstaller==6.22.3'
+if ($LASTEXITCODE -ne 0) { throw 'Could not install pinned PyInstaller 6.22.3.' }
+$AceDist = Join-Path $WorkRoot 'acefile-dist'
+$AceBuild = Join-Path $WorkRoot 'acefile-build'
+$AceSpec = Join-Path $WorkRoot 'acefile-spec'
+& python -m PyInstaller --noconfirm --clean --onefile --console --name acefile --distpath $AceDist --workpath $AceBuild --specpath $AceSpec $AcePython
+if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed building acefile 0.6.14 (exit code $LASTEXITCODE)." }
+Copy-RequiredFile (Join-Path $AceDist 'acefile.exe') (Join-Path $BinRoot 'acefile.exe')
+Assert-CommandContains (Join-Path $BinRoot 'acefile.exe') @('--version') 'acefile 0.6.14' 'acefile'
+Add-RefreshLog 'acefile: 0.6.14 (standalone x86; pinned PyPI source + PyInstaller 6.22.3)'
+
 # vgmstream r2117 (upstream tagged build, Windows x86 + x64).
 # Preserve the complete CLI runtime directory: several codecs need adjacent DLLs.
 # Do not use the mutable "nightly" asset here; these hashes are fixed to a release tag.

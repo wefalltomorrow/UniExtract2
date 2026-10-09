@@ -262,6 +262,15 @@ Expand-ZipPackage $PeaZip $PeaExtract
 Copy-RequiredFile (Find-RequiredFile $PeaExtract 'pea.exe') (Join-Path $BinRoot 'pea.exe')
 Add-RefreshLog 'PEA: 1.33 (from PeaZip 11.3.0)'
 
+# GNU gettext 1.0. Use the static x86 package so msgunfmt.exe remains a single,
+# dependency-free helper on both 32-bit and 64-bit Windows.
+$GettextZip = Get-Download 'https://github.com/mlocati/gettext-iconv-windows/releases/download/v1.0-v1.19/gettext1.0-iconv1.19-static-32.zip' 'gettext1.0-iconv1.19-static-32.zip'
+$GettextExtract = Join-Path $WorkRoot 'gettext'
+Expand-ZipPackage $GettextZip $GettextExtract
+Copy-RequiredFile (Find-RequiredFile $GettextExtract 'msgunfmt.exe') (Join-Path $BinRoot 'msgunfmt.exe')
+Assert-CommandContains (Join-Path $BinRoot 'msgunfmt.exe') @('--version') 'gettext-tools 1.0' 'msgunfmt'
+Add-RefreshLog 'GNU gettext msgunfmt: 1.0 (static x86)'
+
 # Inno Setup Unpacker 2.71.1.
 # The upstream URL is rolling, so verify the downloaded executable before accepting it.
 $InnoZip = Get-Download 'https://www.rathlev-home.de/tools/download/innounp-2.zip' 'innounp-2.zip'

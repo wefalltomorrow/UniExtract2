@@ -222,7 +222,7 @@ Add-RefreshLog 'UPX: 5.2.1'
 
 # TC4Shell 7-Zip format plugins. These are small architecture-paired DLL packages.
 # Keep the upstream package layout out of the release and copy only the format DLLs.
-$AsarZip = Get-Download 'https://www.tc4shell.com/binary/Asar7z.zip' 'Asar7z-1.5.zip' -AllowInvalidCertificate
+$AsarZip = Get-Download 'https://www.tc4shell.com/binary/Asar.zip' 'Asar7z-1.5.zip' -AllowInvalidCertificate
 $AsarExtract = Join-Path $WorkRoot 'asar7z'
 Expand-ZipPackage $AsarZip $AsarExtract
 $Asar32 = Find-RequiredFile $AsarExtract 'Asar.32.dll'

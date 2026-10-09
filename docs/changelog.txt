@@ -1,3 +1,14 @@
+v3.1.3 (2026/10/10) - wefalltomorrow fork
+
+Refreshed actively maintained helper binaries through a reproducible packaging overlay while keeping gvp9000 v3.0.6 as the legacy compatibility base.
+Updated 7-Zip to 26.04 (x86/x64), qpdf to 12.4.2, UPX to 5.2.1, MediaInfoLib to 26.10, Exeinfo PE to 0.1.0.0, Champollion to 1.3.2, PEA to 1.33, GNU gettext msgunfmt to 1.0, innounp to 2.71.1, SQLite to 3.53.4, UnRAR x64 to 7.23 and CHDMan x64 to 0.289.
+Updated TC4Shell 7-Zip format plugins: Asar7z 1.5, eDecoder 1.20.8, Iso7z 1.8.7 and Py7z 1.2.1.
+Updated TrID definitions to the 2026/10/08 snapshot with 22,425 definitions.
+Moved Exeinfo PE and its package files into bin\Exeinfo so its signatures/dependencies no longer overlap the root PEiD helper files.
+Added helper-update exclusions so the older gvp9000 feed cannot downgrade files managed by this fork's overlay.
+Added pinned download hashes and CI validation for refreshed helper versions, architectures and 7-Zip plugin loading.
+Retained selected older x86/legacy helpers where upstream no longer publishes a compatible current Windows binary; documented these decisions in docs/HELPER-AUDIT.md.
+
 v3.1.2 (2026/10/03) - wefalltomorrow fork
 
 Added optional Game Extractor Basic integration for obscure game archives.

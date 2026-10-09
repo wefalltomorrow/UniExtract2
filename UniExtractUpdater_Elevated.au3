@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_Outfile=UniExtractUpdater.exe
 #AutoIt3Wrapper_Res_Description=Update utility for Universal Extractor
 #AutoIt3Wrapper_Res_ProductName=Universal Extractor
-#AutoIt3Wrapper_Res_Fileversion=3.1.2.0
+#AutoIt3Wrapper_Res_Fileversion=3.1.3.0
 #AutoIt3Wrapper_Res_ProductVersion=%fileversion%
 #AutoIt3Wrapper_Res_CompanyName=wefalltomorrow
 #AutoIt3Wrapper_Res_LegalCopyright=GNU General Public License v2

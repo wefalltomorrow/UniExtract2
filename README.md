@@ -45,9 +45,11 @@ The full inherited history is in [docs/changelog.txt](docs/changelog.txt). The f
 
 The source repository does not store the large third-party helper set directly.
 
-For the moment, helper-file updates continue to use gvp9000's maintained helper feed because that feed matches the modern extractor set inherited by this fork. Main-executable replacement from that feed is deliberately disabled so it cannot overwrite this fork with another build.
+The release package still uses gvp9000 v3.0.6 as a compatibility base for legacy helpers, but actively maintained tools are now refreshed by this fork's own reproducible packaging overlay. Downloads are pinned to known upstream packages and SHA-256 values where possible, then validated during the Windows CI build.
 
-The current source is synced through gvp9000's v3.0.6 changes from October 2, 2026, while keeping this fork's additional path, silent-mode, MHTML and updater fixes.
+The old gvp9000 helper feed remains available only for helpers we have not moved into the overlay yet. Fork-managed helper paths are excluded from that feed so an older remote entry cannot downgrade them. See [docs/HELPER-AUDIT.md](docs/HELPER-AUDIT.md) for the current audit, refreshed tools and compatibility-pinned exceptions.
+
+The source remains synced through gvp9000's v3.0.6 extraction changes from October 2, 2026, while keeping this fork's additional path, silent-mode, MHTML, Game Extractor and updater fixes.
 
 The standalone updater downloads the current `UniExtract.exe` from this repository's latest GitHub release. There is not yet a separate nightly executable channel, so the nightly updater target currently falls back to the latest stable build.
 
@@ -101,7 +103,7 @@ To create the full release package, run:
 .\scripts\package-release.ps1
 ```
 
-The packaging script uses the gvp9000 v3.0.6 full bundle as the current helper-binary base, then overlays this fork's compiled executables, definitions, languages, documentation and metadata. The GitHub Actions workflow performs the same build on Windows Server 2022 and runs a basic ZIP extraction smoke test against the packaged build.
+The packaging script starts from the gvp9000 v3.0.6 full bundle as a legacy compatibility base, applies `scripts/refresh-helpers.ps1` to replace maintained helpers with pinned current builds, then overlays this fork's executables, definitions, languages, documentation and metadata. GitHub Actions performs the same build on Windows Server 2022, validates helper versions/hashes, and runs both normal and Unicode-filename ZIP extraction smoke tests against the packaged build.
 
 ## Contributing
 

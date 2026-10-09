@@ -20,6 +20,7 @@ $Overlay = @(
 $Pinned = @{
  'acefile.exe' = 'compatible-exe-pinned: Python source 0.6.14 requires repackage'
  'file.exe' = 'update-candidate: file/libmagic 5.48 needs paired Win32 binary and magic DB'
+ 'Bio.cs.dll' = 'update-candidate: Bio.cs 2.6.0 needs rebuilt DLL and dependent extractor regression tests'
  'magic.mgc' = 'update-candidate: must be built with the same file/libmagic version'
  'lzip.exe' = 'compatible-exe-pinned: newer source, no official Windows executable'
  'x86\chdman.exe' = 'compatible-exe-pinned: x86 MAME no longer shipped'

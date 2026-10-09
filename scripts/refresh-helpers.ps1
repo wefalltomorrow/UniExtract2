@@ -184,8 +184,8 @@ Write-Host ''
 Write-Host 'Refreshing maintained helper binaries from pinned upstream releases...'
 
 # 7-Zip 26.04 (x86 + x64)
-$SevenX86 = Get-Download 'https://www.7-zip.org/a/7z2604.exe' '7z2604-x86.exe'
-$SevenX64 = Get-Download 'https://www.7-zip.org/a/7z2604-x64.exe' '7z2604-x64.exe'
+$SevenX86 = Get-Download 'https://www.7-zip.org/a/7z2604.exe' '7z2604-x86.exe' '39bf65045153fc26c42fa9fe47afd8cd1b11671c7f11d031e738c9a13960c009'
+$SevenX64 = Get-Download 'https://www.7-zip.org/a/7z2604-x64.exe' '7z2604-x64.exe' 'd54bf805f9f3704d1e8db2fa3498ae7ef2df0312b40b558e7c71c734430a665d'
 $SevenX86Dir = Join-Path $WorkRoot '7zip-x86'
 $SevenX64Dir = Join-Path $WorkRoot '7zip-x64'
 Expand-With7Zip $SevenX86 $SevenX86Dir
@@ -199,7 +199,7 @@ Assert-CommandContains (Join-Path $BinRoot 'x64\7z.exe') @() '7-Zip 26.04' '7-Zi
 Add-RefreshLog '7-Zip: 26.04 (x86/x64)'
 
 # qpdf 12.4.2 (32-bit MinGW build keeps compatibility with 32-bit Windows)
-$QpdfZip = Get-Download 'https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-mingw32.zip' 'qpdf-12.4.2-mingw32.zip'
+$QpdfZip = Get-Download 'https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-mingw32.zip' 'qpdf-12.4.2-mingw32.zip' '6af53218eec293debb21e8036a95dfda0d690eef09f2f9023a22db0e3ad061fa'
 $QpdfExtract = Join-Path $WorkRoot 'qpdf'
 Expand-ZipPackage $QpdfZip $QpdfExtract
 $QpdfExe = Find-RequiredFile $QpdfExtract 'qpdf.exe'
@@ -213,7 +213,7 @@ Assert-CommandContains (Join-Path $QpdfDest 'bin\qpdf.exe') @('--version') '12.4
 Add-RefreshLog 'qpdf: 12.4.2 (MinGW x86)'
 
 # UPX 5.2.1 (32-bit binary works on x86 and x64 Windows)
-$UpxZip = Get-Download 'https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-win32.zip' 'upx-5.2.1-win32.zip'
+$UpxZip = Get-Download 'https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-win32.zip' 'upx-5.2.1-win32.zip' '4a06f247b0184976c1e7fd5af9293977cdb1bf4ba9416ae58e3560bd62d871ff'
 $UpxExtract = Join-Path $WorkRoot 'upx'
 Expand-ZipPackage $UpxZip $UpxExtract
 Copy-RequiredFile (Find-RequiredFile $UpxExtract 'upx.exe') (Join-Path $BinRoot 'upx.exe')
@@ -222,7 +222,7 @@ Add-RefreshLog 'UPX: 5.2.1'
 
 # TC4Shell 7-Zip format plugins. These are small architecture-paired DLL packages.
 # Keep the upstream package layout out of the release and copy only the format DLLs.
-$EDecoderZip = Get-Download 'https://www.tc4shell.com/binary/eDecoder.zip' 'eDecoder-1.20.8.zip' -AllowInvalidCertificate
+$EDecoderZip = Get-Download 'https://www.tc4shell.com/binary/eDecoder.zip' 'eDecoder-1.20.8.zip' 'cbd6c0357df0d419a6ac4bcf89dcc972a8ccfb8d5ba0cdd2b876ad21ef4217ab' -AllowInvalidCertificate
 $EDecoderExtract = Join-Path $WorkRoot 'edecoder'
 Expand-ZipPackage $EDecoderZip $EDecoderExtract
 $EDecoder32 = Find-RequiredFile $EDecoderExtract 'eDecoder.32.dll'
@@ -233,7 +233,7 @@ Assert-FileVersionContains (Join-Path $BinRoot 'x86\Formats\eDecoder.32.dll') '1
 Assert-FileVersionContains (Join-Path $BinRoot 'x64\Formats\eDecoder.64.dll') '1.20.8' 'eDecoder x64'
 Add-RefreshLog 'eDecoder: 1.20.8 (x86/x64)'
 
-$Iso7zZip = Get-Download 'https://www.tc4shell.com/binary/Iso7z.zip' 'Iso7z-1.8.7.zip' -AllowInvalidCertificate
+$Iso7zZip = Get-Download 'https://www.tc4shell.com/binary/Iso7z.zip' 'Iso7z-1.8.7.zip' '4b41b567025cf884198d7f810994d37e4024b6d538871b1f93283bb1a67ccafd' -AllowInvalidCertificate
 $Iso7zExtract = Join-Path $WorkRoot 'iso7z'
 Expand-ZipPackage $Iso7zZip $Iso7zExtract
 $Iso7z32 = Find-RequiredFile $Iso7zExtract 'Iso7z.32.dll'
@@ -244,7 +244,7 @@ Assert-FileVersionContains (Join-Path $BinRoot 'x86\Formats\Iso7z.32.dll') '1.8.
 Assert-FileVersionContains (Join-Path $BinRoot 'x64\Formats\Iso7z.64.dll') '1.8.7' 'Iso7z x64'
 Add-RefreshLog 'Iso7z: 1.8.7 (x86/x64)'
 
-$Py7zZip = Get-Download 'https://www.tc4shell.com/binary/Py7z.zip' 'Py7z-1.2.1.zip' -AllowInvalidCertificate
+$Py7zZip = Get-Download 'https://www.tc4shell.com/binary/Py7z.zip' 'Py7z-1.2.1.zip' '46852cc664be105c62d619c7c9d9fe28e34cb1e85557b8f91a8322ca7e1ff29d' -AllowInvalidCertificate
 $Py7zExtract = Join-Path $WorkRoot 'py7z'
 Expand-ZipPackage $Py7zZip $Py7zExtract
 $Py7z32 = Find-RequiredFile $Py7zExtract 'Py7z.32.dll'
@@ -256,7 +256,7 @@ Assert-FileVersionContains (Join-Path $BinRoot 'x64\Formats\Py7z.64.dll') '1.2.1
 Add-RefreshLog 'Py7z: 1.2.1 (x86/x64)'
 
 # MediaInfoLib 26.10 (x86 DLL; UniExtract itself is compiled as x86)
-$MediaInfoZip = Get-Download 'https://mediaarea.net/download/binary/libmediainfo0/26.10/MediaInfo_DLL_26.10_Windows_i386_WithoutInstaller.zip' 'MediaInfo_DLL_26.10_Windows_i386.zip'
+$MediaInfoZip = Get-Download 'https://mediaarea.net/download/binary/libmediainfo0/26.10/MediaInfo_DLL_26.10_Windows_i386_WithoutInstaller.zip' 'MediaInfo_DLL_26.10_Windows_i386.zip' '6507e1ca54a1f96eb3afbf80c8de9f0c477f32fc614c259343568b622f192f81'
 $MediaInfoExtract = Join-Path $WorkRoot 'mediainfo'
 Expand-ZipPackage $MediaInfoZip $MediaInfoExtract
 $MediaInfoDll = Find-RequiredFile $MediaInfoExtract 'MediaInfo.dll'
@@ -267,7 +267,7 @@ Add-RefreshLog 'MediaInfoLib: 26.10 (x86)'
 # Exeinfo PE 0.1.0.0.
 # Keep the complete upstream package isolated so its own signatures/dependencies do not
 # overwrite UniExtract's root-level PEiD support files.
-$ExeinfoZip = Get-Download 'https://github.com/ExeinfoASL/Exeinfo/releases/download/v1.0.0/exeinfope.zip' 'exeinfope-0.1.0.0.zip'
+$ExeinfoZip = Get-Download 'https://github.com/ExeinfoASL/Exeinfo/releases/download/v1.0.0/exeinfope.zip' 'exeinfope-0.1.0.0.zip' '26cbdf8ff9e172018668c71c6884294a1a9619c48a64148b11db385779b13194'
 $ExeinfoExtract = Join-Path $WorkRoot 'exeinfo'
 Expand-ZipPackage $ExeinfoZip $ExeinfoExtract
 $ExeinfoExe = Find-RequiredFile $ExeinfoExtract 'exeinfope.exe'
@@ -280,7 +280,7 @@ Assert-FileVersionContains (Join-Path $ExeinfoDest 'exeinfope.exe') '0.1.0.0' 'E
 Add-RefreshLog 'Exeinfo PE: 0.1.0.0 (isolated package)'
 
 # PEA 1.33 from the current PeaZip portable release.
-$PeaZip = Get-Download 'https://github.com/peazip/PeaZip/releases/download/11.3.0/peazip_portable-11.3.0.WINDOWS.zip' 'peazip_portable-11.3.0.WINDOWS.zip'
+$PeaZip = Get-Download 'https://github.com/peazip/PeaZip/releases/download/11.3.0/peazip_portable-11.3.0.WINDOWS.zip' 'peazip_portable-11.3.0.WINDOWS.zip' '76ab0961b184e60f3534e62ce91aaf25bcb7cd409a4a7680a33d22c77a10f9de'
 $PeaExtract = Join-Path $WorkRoot 'peazip'
 Expand-ZipPackage $PeaZip $PeaExtract
 Copy-RequiredFile (Find-RequiredFile $PeaExtract 'pea.exe') (Join-Path $BinRoot 'pea.exe')
@@ -288,16 +288,16 @@ Add-RefreshLog 'PEA: 1.33 (from PeaZip 11.3.0)'
 
 # GNU gettext 1.0. Use the static x86 package so msgunfmt.exe remains a single,
 # dependency-free helper on both 32-bit and 64-bit Windows.
-$GettextZip = Get-Download 'https://github.com/mlocati/gettext-iconv-windows/releases/download/v1.0-v1.19/gettext1.0-iconv1.19-static-32.zip' 'gettext1.0-iconv1.19-static-32.zip'
+$GettextZip = Get-Download 'https://github.com/mlocati/gettext-iconv-windows/releases/download/v1.0-v1.19/gettext1.0-iconv1.19-static-32.zip' 'gettext1.0-iconv1.19-static-32.zip' '18df5c0a47745f0b5ea9f622e0d2dfd09995d49076d3d18dcee31510bc4b90d3'
 $GettextExtract = Join-Path $WorkRoot 'gettext'
 Expand-ZipPackage $GettextZip $GettextExtract
 Copy-RequiredFile (Find-RequiredFile $GettextExtract 'msgunfmt.exe') (Join-Path $BinRoot 'msgunfmt.exe')
-Assert-CommandContains (Join-Path $BinRoot 'msgunfmt.exe') @('--version') 'gettext-tools 1.0' 'msgunfmt'
+Assert-CommandContains (Join-Path $BinRoot 'msgunfmt.exe') @('--version') '(GNU gettext-tools) 1.0' 'msgunfmt'
 Add-RefreshLog 'GNU gettext msgunfmt: 1.0 (static x86)'
 
 # Inno Setup Unpacker 2.71.1.
 # The upstream URL is rolling, so verify the downloaded executable before accepting it.
-$InnoZip = Get-Download 'https://www.rathlev-home.de/tools/download/innounp-2.zip' 'innounp-2.zip'
+$InnoZip = Get-Download 'https://raw.githubusercontent.com/jrathlev/InnoUnpacker-Windows-GUI/refs/heads/master/innounp-2/bin/innounp-2.zip' 'innounp-2.zip' 'f2f037fdbc63de31248efae9ccb294398d160dc0cbad5f36d14c2f159e17bbf5'
 $InnoExtract = Join-Path $WorkRoot 'innounp'
 Expand-ZipPackage $InnoZip $InnoExtract
 $InnoExe = Find-RequiredFile $InnoExtract 'innounp.exe'
@@ -332,7 +332,7 @@ Add-RefreshLog 'UnRAR: 7.23 x64 (legacy x86 helper retained)'
 # CHDMan 0.289 x64 from the current MAME release.
 # The historical x86 helper remains for old 32-bit systems because modern MAME no longer
 # publishes an x86 Windows build.
-$MameX64 = Get-Download 'https://github.com/mamedev/mame/releases/download/mame0289/mame0289b_x64.exe' 'mame0289b_x64.exe'
+$MameX64 = Get-Download 'https://github.com/mamedev/mame/releases/download/mame0289/mame0289b_x64.exe' 'mame0289b_x64.exe' 'a1aa7912168c9d1b05e611906bc21b8b9be3935822aead36d12a1da363150b7d'
 $MameExtract = Join-Path $WorkRoot 'mame-x64'
 Expand-With7Zip $MameX64 $MameExtract
 $Chdman = Find-RequiredFile $MameExtract 'chdman.exe'

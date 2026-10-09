@@ -286,12 +286,14 @@ foreach ($LegacyExeinfoFile in @('exeinfope.exe', 'exeinfopeRUN.cfg', 'Ext_Detec
 Add-RefreshLog 'Exeinfo PE: 0.1.0.0 (isolated package; legacy flat copy removed)'
 
 # Champollion 1.3.2 Papyrus decompiler.
-$ChampollionZip = Get-Download 'https://github.com/Orvid/Champollion/releases/download/v1.3.2/Champollion.v1.3.2.zip' 'Champollion.v1.3.2.zip'
+$ChampollionZip = Get-Download 'https://github.com/Orvid/Champollion/releases/download/v1.3.2/Champollion.v1.3.2.zip' 'Champollion.v1.3.2.zip' 'ea53054276ac8006ccd3b323286bfbc6e34a454fa419d08da9bd440cbd31b383'
 $ChampollionExtract = Join-Path $WorkRoot 'champollion'
 Expand-ZipPackage $ChampollionZip $ChampollionExtract
 $ChampollionExe = Find-RequiredFile $ChampollionExtract 'Champollion.exe'
 Copy-RequiredFile $ChampollionExe (Join-Path $BinRoot 'Champollion.exe')
-Assert-FileVersionContains (Join-Path $BinRoot 'Champollion.exe') '1.3.2' 'Champollion'
+if ((Get-Item -LiteralPath (Join-Path $BinRoot 'Champollion.exe')).Length -lt 1) {
+    throw 'Champollion validation failed: copied executable is empty.'
+}
 Add-RefreshLog 'Champollion: 1.3.2'
 
 # PEA 1.33 from the current PeaZip portable release.

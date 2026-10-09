@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Version,
-    [string]$HelperBaseUrl = 'https://github.com/gvp9000/UniExtract2/releases/download/v3.0.6/UniExtract2.zip'
+    [string]$HelperBaseUrl = 'https://github.com/gvp9000/UniExtract2/releases/download/v3.0.6/UniExtract2.zip',
+    [string]$HelperBaseSha256 = '507066eaf85ff5a60ca16b192f74fb79999b8cad134792214b94483bd0527c00'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,6 +32,11 @@ foreach ($File in @('UniExtract.exe', 'UniExtractUpdater.exe', 'UniExtractUpdate
 
 Write-Host "Downloading helper base: $HelperBaseUrl"
 Invoke-WebRequest -Uri $HelperBaseUrl -OutFile $BaseZip -UseBasicParsing
+$ActualBaseSha256 = (Get-FileHash -LiteralPath $BaseZip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($HelperBaseSha256 -and $ActualBaseSha256 -ne $HelperBaseSha256.ToLowerInvariant()) {
+    throw "Helper base SHA-256 mismatch. Expected $HelperBaseSha256, got $ActualBaseSha256."
+}
+Write-Host "Helper base SHA-256 verified: $ActualBaseSha256"
 Expand-Archive -LiteralPath $BaseZip -DestinationPath $ExtractRoot -Force
 
 $PackageRoot = $null

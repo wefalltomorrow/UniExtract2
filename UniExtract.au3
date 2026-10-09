@@ -249,7 +249,8 @@ Const $chd = $archdir & "chdman.exe"
 Const $cic = "cicdec.exe"
 Const $daa = "daa2iso.exe"
 Const $enigma = "EnigmaVBUnpacker.exe"
-Const $exeinfope = Quote($bindir & "exeinfope.exe")
+Const $exeinfodir = $bindir & "Exeinfo\"
+Const $exeinfope = Quote($exeinfodir & "exeinfope.exe")
 Const $diec_path = $bindir & "die\diec.exe"
 Const $diegui_path = $bindir & "die\die.exe"
 Const $diec = Quote($diec_path, True)
@@ -1585,7 +1586,7 @@ If StringIsSpace($sFileType) Or ($sScanner = "Detect It Easy" And Not _IsStrongP
 
 		If $bUseCmd Then
 			Local Const $LogFile = $logdir & "exeinfo.log"
-			RunWait($exeinfope & ' "' & $file & '*" /sx /log:"' & $LogFile & '"', $bindir, @SW_HIDE)
+			RunWait($exeinfope & ' "' & $file & '*" /sx /log:"' & $LogFile & '"', $exeinfodir, @SW_HIDE)
 			$sFileType = _FileRead($LogFile, True)
 			If StringInStr($sFileType, "File corrupted or Buffer Error") Or StringIsSpace($sFileType) Then
 				If Not $extract Then
@@ -2618,7 +2619,7 @@ Func OpenExeInfo($f = $file)
 	RegWrite($aReturn[1], "closeExEi_whenExtRun", "REG_DWORD", 0)
 
 	; Execute and hide
-	Run($exeinfope & ' "' & $f & '"', $bindir, @SW_MINIMIZE)
+	Run($exeinfope & ' "' & $f & '"', $exeinfodir, @SW_MINIMIZE)
 	WinWait($aReturn[0], "", $Timeout)
 	WinSetState($aReturn[0], "", @SW_HIDE)
 
@@ -11037,7 +11038,11 @@ Func GUI_Error_UnknownExt()
 				; GUI_Feedback()
 				; ExitLoop ; Feedback UI disabled in this fork
 			Case $idImage
-				Run((FileExists($diegui_path)? $diegui: $exeinfope) & ' "' & $file & '"', $filedir)
+				If FileExists($diegui_path) Then
+					Run($diegui & ' "' & $file & '"', $filedir)
+				Else
+					Run($exeinfope & ' "' & $file & '"', $exeinfodir)
+				EndIf
 		EndSwitch
 	WEnd
 

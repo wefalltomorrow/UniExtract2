@@ -5035,6 +5035,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			; Decode once through the upstream CLI. -i suppresses playback loops and
 			; prevents unexpectedly huge WAV files. Stage first to avoid a partial
 			; failed decode being treated as extracted output.
+			DirCreate($tempoutdir)
 			Local $sVgmOutput = $tempoutdir & GetFileName() & ".wav"
 			Local $sVgmCommand = Quote($vgmstream, True) & ' -i -o "' & $sVgmOutput & '" "' & $file & '"'
 			_Run($sVgmCommand, $outdir, @SW_HIDE, True, True, False, False)

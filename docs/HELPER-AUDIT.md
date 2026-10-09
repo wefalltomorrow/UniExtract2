@@ -94,6 +94,12 @@ This is a **complete file listing**, not a claim that every tool is current or h
 - **acefile 0.6.11**: Python upstream is now **0.6.14** (published 20 January 2026). Its standalone Windows executable remains **outdated**, pending a reproducible packaging and regression-tested update: https://pypi.org/project/acefile/
 - **innoextract 1.9**: matches the latest upstream tagged release; retain: https://github.com/dscharrer/innoextract/releases
 - **Forensic7z 1.6**: matches the currently published plugin version; retain: https://www.tc4shell.com/en/7zip/forensic7z/
+- **ExFat7z 1.1**: matches the author's current plugin release; retain: https://www.tc4shell.com/en/7zip/exfat7z/
+- **Xpdf command-line utilities 4.06**: the current stable upstream release; retain: https://www.xpdfreader.com/download.html
+- **TrID 2.48 and 2026-10-08 definitions**: match the published versions and definitions from Marco Pontello; retain: https://mark0.net/software-e.html
+- **mtee 2.7**: matches the latest GitHub release; retain: https://github.com/isanych/mtee/releases
+- **Unshield 1.6.2**: matches the latest tagged release; retain: https://github.com/twogood/unshield/releases
+
 
 ## Release policy
 

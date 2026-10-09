@@ -24,8 +24,33 @@ jobs:
       - name: Install AutoIt toolchain
         shell: powershell
         run: |
-          choco install autoit.install --version=3.3.18 -y --no-progress
-          choco install scite4autoit3 -y --no-progress
+          $ErrorActionPreference = 'Stop'
+
+          function Install-ChocoPackage {
+            param(
+              [Parameter(Mandatory = $true)]
+              [string[]]$Arguments
+            )
+
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              Write-Host "Chocolatey attempt $attempt/3: choco $($Arguments -join ' ')"
+              & choco @Arguments
+
+              if ($LASTEXITCODE -eq 0) {
+                return
+              }
+
+              if ($attempt -lt 3) {
+                Write-Warning "Chocolatey failed with exit code $LASTEXITCODE; retrying in 15 seconds."
+                Start-Sleep -Seconds 15
+              }
+            }
+
+            throw "Chocolatey failed after 3 attempts: choco $($Arguments -join ' ')"
+          }
+
+          Install-ChocoPackage @('install', 'autoit.install', '--version=3.3.18', '-y', '--no-progress')
+          Install-ChocoPackage @('install', 'scite4autoit3', '-y', '--no-progress')
 
       - name: Build executables
         shell: powershell

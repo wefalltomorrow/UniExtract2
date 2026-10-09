@@ -8666,7 +8666,7 @@ Func _IsForkManagedHelperUpdatePath($sRelativePath)
 		"bin\x86\formats\py7z.32.dll", "bin\x64\formats\py7z.64.dll", _
 		"bin\mediainfo.dll", _
 		"bin\exeinfope.exe", "bin\ext_detector.dll", "bin\exeinfoperun.cfg", _
-		"bin\pea.exe", "bin\msgunfmt.exe", "bin\innounp.exe", "bin\triddefs.trd", _
+		"bin\champollion.exe", "bin\pea.exe", "bin\msgunfmt.exe", "bin\innounp.exe", "bin\triddefs.trd", _
 		"bin\x64\unrar.exe", "bin\x64\chdman.exe", _
 		"bin\sqlite3.exe", "bin\x86\sqlite3.dll", "bin\x64\sqlite3.dll" _
 	]

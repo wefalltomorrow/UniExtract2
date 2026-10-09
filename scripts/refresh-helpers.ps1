@@ -427,6 +427,27 @@ Copy-RequiredFile (Find-RequiredFile $SqliteX64 'sqlite3.dll') (Join-Path $BinRo
 Assert-CommandContains (Join-Path $BinRoot 'sqlite3.exe') @('--version') '3.53.4' 'SQLite shell'
 Add-RefreshLog 'SQLite: 3.53.4 (x86 shell + x86/x64 DLLs)'
 
+# vgmstream r2117 (upstream tagged build, Windows x86 + x64).
+# Preserve the complete CLI runtime directory: several codecs need adjacent DLLs.
+# Do not use the mutable "nightly" asset here; these hashes are fixed to a release tag.
+$VgmPackages = @(
+    @{ Arch = 'x86'; Url = 'https://github.com/vgmstream/vgmstream/releases/download/r2117/vgmstream-win.zip'; File = 'vgmstream-r2117-win.zip'; Sha = '4fa8f0f567a3636e45931b8462a04898fbceca17290a1458b80063b9558b323b' },
+    @{ Arch = 'x64'; Url = 'https://github.com/vgmstream/vgmstream/releases/download/r2117/vgmstream-win64.zip'; File = 'vgmstream-r2117-win64.zip'; Sha = '6c4a8a3813864fefed081bbd337dbc0ad93bf88e0b92f5db98d7ab258b22dc6c' }
+)
+foreach ($VgmPackage in $VgmPackages) {
+    $VgmZip = Get-Download $VgmPackage.Url $VgmPackage.File $VgmPackage.Sha
+    $VgmExtract = Join-Path $WorkRoot ('vgmstream-' + $VgmPackage.Arch)
+    Expand-ZipPackage $VgmZip $VgmExtract
+    $VgmExe = Find-RequiredFile $VgmExtract 'vgmstream-cli.exe'
+    $VgmSource = Split-Path -Parent $VgmExe
+    $VgmDest = Join-Path $BinRoot ($VgmPackage.Arch + '\vgmstream')
+    Remove-Item -LiteralPath $VgmDest -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $VgmDest -Force | Out-Null
+    Copy-Item -Path (Join-Path $VgmSource '*') -Destination $VgmDest -Recurse -Force
+    Assert-CommandContains (Join-Path $VgmDest 'vgmstream-cli.exe') @('-h') 'vgmstream CLI decoder' ('vgmstream ' + $VgmPackage.Arch)
+}
+Add-RefreshLog 'vgmstream: r2117 (CLI + runtime DLLs, x86/x64)'
+
 $RefreshLogPath = Join-Path $StageRoot 'HELPER-REFRESH.txt'
 @(
     'Universal Extractor 2 maintained helper overlay',

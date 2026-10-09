@@ -45,6 +45,8 @@ File for Windows							\file directory					5.46		---------	Open Source				Ian F.
 FSB files extractor							fsbext.exe						0.3.8		-	-	-	GNU GPL v2				Luigi Auriemma						http://aluigi.altervista.org/papers.htm#fsbext					
 GARbro										\GARbro directory				1.5.44		x	-	x	MIT						mψrkt								https://github.com/morkt/GARbro
 Game Extractor Basic (optional, not bundled)	\GameExtractor directory			3.16.0008	x	x	x	GNU GPL v2				WATTO Studios						https://github.com/wattostudios/GameExtractor
+vgmstream (game-audio CLI)				x86\vgmstream\vgmstream-cli.exe		r2117			BSD-like / LGPL components		vgmstream contributors				https://github.com/vgmstream/vgmstream
+											x64\vgmstream\vgmstream-cli.exe
 GNU gettext									msgunfmt.exe					1.0		-	-	-	GNU GPL v3				GNU gettext team					https://mlocati.github.io/articles/gettext-iconv-windows.html
 godotdec									godotdec.exe					2.1.2		x	-	x	BSD 3-clause			Bioruebe							https://github.com/Bioruebe/godotdec
 											BioLib							-------		---------	-------					-------								-------

@@ -27,8 +27,15 @@ The v3.1.3 overlay refreshes and validates:
 - UnRAR 7.23 x64
 - CHDMan 0.289 x64
 - SQLite 3.53.4: x86 shell plus x86/x64 DLLs
+- vgmstream r2117: x86/x64 game-audio CLI decoders and their adjacent runtime DLLs
 
 The refresh script pins SHA-256 values for downloaded release material, checks reported versions where practical, verifies the refreshed 7-Zip format plugins are actually loaded, and writes `HELPER-REFRESH.txt` into the packaged build.
+
+### Game-audio utility added after v3.1.3
+
+The next helper overlay adds the tagged vgmstream **r2117** Windows x86/x64 CLI bundles, each SHA-256 pinned. UniExtract tries vgmstream only for a short allowlist of proprietary game-audio extensions, after normal archive and Game Extractor routes have failed. The initial decoder exports a single, non-looped WAV, not every subsong of a bank. See [VGMSTREAM.md](VGMSTREAM.md).
+
+This is a post-v3.1.3 change and should only be described as shipped once a new release's Windows CI and packaged smoke tests pass.
 
 ## Already current or intentionally unchanged
 

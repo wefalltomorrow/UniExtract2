@@ -94,8 +94,8 @@ Const $title = $name & " " & $sVersion
 Const $sUrlWebsiteOriginal = "https://www.legroom.net/software/uniextract"
 Const $sUrlWebsite = "https://github.com/wefalltomorrow/UniExtract2"
 Const $sUrlGithub = "https://github.com/wefalltomorrow/UniExtract2"
-; Keep using the actively maintained gvp9000 helper feed until this fork publishes its own helper bundle.
-; Main executable updates from that feed are disabled below so they cannot overwrite this fork.
+; Keep using the gvp9000 helper feed only for legacy helpers until this fork publishes its own full helper bundle.
+; Main executable updates are disabled, and helpers refreshed by this fork are excluded from that feed so they cannot be downgraded.
 Const $sUrlUpdateStable = "https://gvp9000.github.io/UniExtract2/updates/data/"
 Const $sUrlUpdateNightly = "https://gvp9000.github.io/UniExtract2/updates/nightly/"
 Const $bForkMainUpdateEnabled = False
@@ -8653,6 +8653,36 @@ Func CheckUpdate($silent = $UPDATEMSG_PROMPT, $bCheckInterval = False, $iMode = 
 	If IsAdmin() Then RestartWithoutAdminRights()
 EndFunc
 
+; Return True for helper paths maintained by this fork's release packaging overlay.
+; The legacy gvp9000 feed is older for these files and must not overwrite them.
+Func _IsForkManagedHelperUpdatePath($sRelativePath)
+	Local $sPath = StringLower(StringReplace(StringStripWS($sRelativePath, 3), "/", "\"))
+
+	Local $aExact[] = [ _
+		"bin\x86\7z.exe", "bin\x86\7z.dll", "bin\x64\7z.exe", "bin\x64\7z.dll", _
+		"bin\upx.exe", _
+		"bin\x86\formats\edecoder.32.dll", "bin\x64\formats\edecoder.64.dll", _
+		"bin\x86\formats\iso7z.32.dll", "bin\x64\formats\iso7z.64.dll", _
+		"bin\x86\formats\py7z.32.dll", "bin\x64\formats\py7z.64.dll", _
+		"bin\mediainfo.dll", _
+		"bin\exeinfope.exe", "bin\ext_detector.dll", "bin\exeinfoperun.cfg", _
+		"bin\pea.exe", "bin\msgunfmt.exe", "bin\innounp.exe", "bin\triddefs.trd", _
+		"bin\x64\unrar.exe", "bin\x64\chdman.exe", _
+		"bin\sqlite3.exe", "bin\x86\sqlite3.dll", "bin\x64\sqlite3.dll" _
+	]
+
+	For $sManaged In $aExact
+		If $sPath = $sManaged Then Return True
+	Next
+
+	Local $aPrefixes[] = ["bin\qpdf\", "bin\exeinfo\"]
+	For $sPrefix In $aPrefixes
+		If StringLeft($sPath, StringLen($sPrefix)) = $sPrefix Then Return True
+	Next
+
+	Return False
+EndFunc
+
 ; Compare program files with server index to find if any file has an updated version available
 Func CheckUpdateHelpers($aFiles, $bShowProgress = True)
 	If $bShowProgress Then _ProgressOn(t('UPDATE_STATUS_SEARCHING'), $guimain)
@@ -8664,6 +8694,10 @@ Func CheckUpdateHelpers($aFiles, $bShowProgress = True)
 		If $bShowProgress Then _ProgressSet(($i / _Max($iSize, 200)) * 100)
 		Local $sPath = @ScriptDir & "\" & $a[0]
 		If $sPath == @ScriptFullPath Then ContinueLoop
+		If _IsForkManagedHelperUpdatePath($a[0]) Then
+			Cout("Skipping legacy helper-feed entry managed by this fork: " & $a[0])
+			ContinueLoop
+		EndIf
 
 ;~ 		Cout($sPath)
 		If Not _UpdateFileCompare($sPath, $a) Then ContinueLoop
@@ -8712,6 +8746,10 @@ Func _UpdateHelpers($aFiles)
 		$i += 1
 		Local $sPath = @ScriptDir & "\" & $a[0]
 		If $sPath == @ScriptFullPath Then ContinueLoop
+		If _IsForkManagedHelperUpdatePath($a[0]) Then
+			Cout("Skipping legacy helper-feed entry managed by this fork: " & $a[0])
+			ContinueLoop
+		EndIf
 
 		If Not _UpdateFileCompare($sPath, $a) Then ContinueLoop
 

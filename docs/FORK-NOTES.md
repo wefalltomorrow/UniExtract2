@@ -1,6 +1,6 @@
 # Fork notes
 
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-10
 
 This file records where the current fork changes came from and what was deliberately left out. It is meant to stop fixes from getting lost in a long fork chain.
 
@@ -13,6 +13,14 @@ This file records where the current fork changes came from and what was delibera
 - latest gvp9000 source reviewed and synced: `3372caa4ae88c183f413ad7d4faa7dbb8beb3c82` (2026-10-02, v3.0.6)
 
 The latest reviewed gvp9000 fork is 98 commits ahead of the upstream master used here. Its commit messages are not always descriptive, so the source changes and changelog were reviewed rather than relying on commit titles.
+
+## v3.1.3 helper refresh
+
+The full helper package is no longer treated as a static copy of gvp9000's v3.0.6 bundle. That bundle remains the compatibility base for old/specialist tools, but maintained helpers are overlaid directly from pinned upstream releases by `scripts/refresh-helpers.ps1`.
+
+The refresh is deliberately conservative. A higher source version is not enough by itself: we keep an older helper when upstream no longer publishes a suitable Windows/x86 binary or when replacing a legacy runtime would need format-specific regression samples. Examples include lzip's newer source releases, acefile's newer Python source, the old Neko runtime and the retained x86 CHDMan/UnRAR paths.
+
+The maintained overlay is excluded from the borrowed gvp9000 helper feed so it cannot be silently downgraded after installation. The complete audit and rationale are in `docs/HELPER-AUDIT.md`.
 
 ## Game Extractor integration
 

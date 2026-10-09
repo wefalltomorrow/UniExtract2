@@ -196,6 +196,41 @@ Copy-RequiredFile (Find-RequiredFile $UpxExtract 'upx.exe') (Join-Path $BinRoot 
 Assert-CommandContains (Join-Path $BinRoot 'upx.exe') @('--version') '5.2.1' 'UPX'
 Add-RefreshLog 'UPX: 5.2.1'
 
+# TC4Shell 7-Zip format plugins. These are small architecture-paired DLL packages.
+# Keep the upstream package layout out of the release and copy only the format DLLs.
+$EDecoderZip = Get-Download 'https://www.tc4shell.com/binary/eDecoder.zip' 'eDecoder-1.20.8.zip'
+$EDecoderExtract = Join-Path $WorkRoot 'edecoder'
+Expand-ZipPackage $EDecoderZip $EDecoderExtract
+$EDecoder32 = Find-RequiredFile $EDecoderExtract 'eDecoder.32.dll'
+$EDecoder64 = Find-RequiredFile $EDecoderExtract 'eDecoder.64.dll'
+Copy-RequiredFile $EDecoder32 (Join-Path $BinRoot 'x86\Formats\eDecoder.32.dll')
+Copy-RequiredFile $EDecoder64 (Join-Path $BinRoot 'x64\Formats\eDecoder.64.dll')
+Assert-FileVersionContains (Join-Path $BinRoot 'x86\Formats\eDecoder.32.dll') '1.20.8' 'eDecoder x86'
+Assert-FileVersionContains (Join-Path $BinRoot 'x64\Formats\eDecoder.64.dll') '1.20.8' 'eDecoder x64'
+Add-RefreshLog 'eDecoder: 1.20.8 (x86/x64)'
+
+$Iso7zZip = Get-Download 'https://www.tc4shell.com/binary/Iso7z.zip' 'Iso7z-1.8.7.zip'
+$Iso7zExtract = Join-Path $WorkRoot 'iso7z'
+Expand-ZipPackage $Iso7zZip $Iso7zExtract
+$Iso7z32 = Find-RequiredFile $Iso7zExtract 'Iso7z.32.dll'
+$Iso7z64 = Find-RequiredFile $Iso7zExtract 'Iso7z.64.dll'
+Copy-RequiredFile $Iso7z32 (Join-Path $BinRoot 'x86\Formats\Iso7z.32.dll')
+Copy-RequiredFile $Iso7z64 (Join-Path $BinRoot 'x64\Formats\Iso7z.64.dll')
+Assert-FileVersionContains (Join-Path $BinRoot 'x86\Formats\Iso7z.32.dll') '1.8.7' 'Iso7z x86'
+Assert-FileVersionContains (Join-Path $BinRoot 'x64\Formats\Iso7z.64.dll') '1.8.7' 'Iso7z x64'
+Add-RefreshLog 'Iso7z: 1.8.7 (x86/x64)'
+
+$Py7zZip = Get-Download 'https://www.tc4shell.com/binary/Py7z.zip' 'Py7z-1.2.1.zip'
+$Py7zExtract = Join-Path $WorkRoot 'py7z'
+Expand-ZipPackage $Py7zZip $Py7zExtract
+$Py7z32 = Find-RequiredFile $Py7zExtract 'Py7z.32.dll'
+$Py7z64 = Find-RequiredFile $Py7zExtract 'Py7z.64.dll'
+Copy-RequiredFile $Py7z32 (Join-Path $BinRoot 'x86\Formats\Py7z.32.dll')
+Copy-RequiredFile $Py7z64 (Join-Path $BinRoot 'x64\Formats\Py7z.64.dll')
+Assert-FileVersionContains (Join-Path $BinRoot 'x86\Formats\Py7z.32.dll') '1.2.1' 'Py7z x86'
+Assert-FileVersionContains (Join-Path $BinRoot 'x64\Formats\Py7z.64.dll') '1.2.1' 'Py7z x64'
+Add-RefreshLog 'Py7z: 1.2.1 (x86/x64)'
+
 # MediaInfoLib 26.10 (x86 DLL; UniExtract itself is compiled as x86)
 $MediaInfoZip = Get-Download 'https://mediaarea.net/download/binary/libmediainfo0/26.10/MediaInfo_DLL_26.10_Windows_i386_WithoutInstaller.zip' 'MediaInfo_DLL_26.10_Windows_i386.zip'
 $MediaInfoExtract = Join-Path $WorkRoot 'mediainfo'
@@ -269,7 +304,7 @@ $MameExtract = Join-Path $WorkRoot 'mame-x64'
 Expand-With7Zip $MameX64 $MameExtract
 $Chdman = Find-RequiredFile $MameExtract 'chdman.exe'
 Copy-RequiredFile $Chdman (Join-Path $BinRoot 'x64\chdman.exe')
-Assert-FileVersionContains (Join-Path $BinRoot 'x64\chdman.exe') '0.289' 'chdman x64'
+Assert-CommandContains (Join-Path $BinRoot 'x64\chdman.exe') @('-help') '0.289' 'chdman x64'
 Add-RefreshLog 'CHDMan: 0.289 x64 (legacy x86 helper retained)'
 
 # SQLite 3.53.4.

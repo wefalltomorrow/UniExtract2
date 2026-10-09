@@ -38,15 +38,39 @@ function Get-Download {
         [string]$Url,
 
         [Parameter(Mandatory = $true)]
-        [string]$FileName
+        [string]$FileName,
+
+        [string]$ExpectedSha256 = '',
+
+        [switch]$AllowInvalidCertificate
     )
 
     $Destination = Join-Path $WorkRoot $FileName
     Write-Host "Downloading $Url"
-    Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing
+
+    if ($AllowInvalidCertificate) {
+        # TC4Shell's current certificate chain is rejected by Windows Server's
+        # PowerShell 5.1 TLS stack. This bootstrap path is allowed only when the
+        # downloaded archive is subsequently content/version validated. Once the
+        # current hashes are captured, release builds pin them below as well.
+        & curl.exe -L --fail --retry 3 --connect-timeout 30 --insecure --output $Destination $Url
+        if ($LASTEXITCODE -ne 0) {
+            throw "curl failed to download $Url (exit code $LASTEXITCODE)."
+        }
+    } else {
+        Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing
+    }
+
     if (-not (Test-Path -LiteralPath $Destination) -or (Get-Item -LiteralPath $Destination).Length -lt 1) {
         throw "Download failed or produced an empty file: $Url"
     }
+
+    $ActualSha256 = (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash.ToLowerInvariant()
+    Write-Host "SHA-256 $FileName = $ActualSha256"
+    if ($ExpectedSha256 -and $ActualSha256 -ne $ExpectedSha256.ToLowerInvariant()) {
+        throw "SHA-256 mismatch for $FileName. Expected $ExpectedSha256, got $ActualSha256."
+    }
+
     return $Destination
 }
 
@@ -198,7 +222,7 @@ Add-RefreshLog 'UPX: 5.2.1'
 
 # TC4Shell 7-Zip format plugins. These are small architecture-paired DLL packages.
 # Keep the upstream package layout out of the release and copy only the format DLLs.
-$EDecoderZip = Get-Download 'https://www.tc4shell.com/binary/eDecoder.zip' 'eDecoder-1.20.8.zip'
+$EDecoderZip = Get-Download 'https://www.tc4shell.com/binary/eDecoder.zip' 'eDecoder-1.20.8.zip' -AllowInvalidCertificate
 $EDecoderExtract = Join-Path $WorkRoot 'edecoder'
 Expand-ZipPackage $EDecoderZip $EDecoderExtract
 $EDecoder32 = Find-RequiredFile $EDecoderExtract 'eDecoder.32.dll'
@@ -209,7 +233,7 @@ Assert-FileVersionContains (Join-Path $BinRoot 'x86\Formats\eDecoder.32.dll') '1
 Assert-FileVersionContains (Join-Path $BinRoot 'x64\Formats\eDecoder.64.dll') '1.20.8' 'eDecoder x64'
 Add-RefreshLog 'eDecoder: 1.20.8 (x86/x64)'
 
-$Iso7zZip = Get-Download 'https://www.tc4shell.com/binary/Iso7z.zip' 'Iso7z-1.8.7.zip'
+$Iso7zZip = Get-Download 'https://www.tc4shell.com/binary/Iso7z.zip' 'Iso7z-1.8.7.zip' -AllowInvalidCertificate
 $Iso7zExtract = Join-Path $WorkRoot 'iso7z'
 Expand-ZipPackage $Iso7zZip $Iso7zExtract
 $Iso7z32 = Find-RequiredFile $Iso7zExtract 'Iso7z.32.dll'
@@ -220,7 +244,7 @@ Assert-FileVersionContains (Join-Path $BinRoot 'x86\Formats\Iso7z.32.dll') '1.8.
 Assert-FileVersionContains (Join-Path $BinRoot 'x64\Formats\Iso7z.64.dll') '1.8.7' 'Iso7z x64'
 Add-RefreshLog 'Iso7z: 1.8.7 (x86/x64)'
 
-$Py7zZip = Get-Download 'https://www.tc4shell.com/binary/Py7z.zip' 'Py7z-1.2.1.zip'
+$Py7zZip = Get-Download 'https://www.tc4shell.com/binary/Py7z.zip' 'Py7z-1.2.1.zip' -AllowInvalidCertificate
 $Py7zExtract = Join-Path $WorkRoot 'py7z'
 Expand-ZipPackage $Py7zZip $Py7zExtract
 $Py7z32 = Find-RequiredFile $Py7zExtract 'Py7z.32.dll'

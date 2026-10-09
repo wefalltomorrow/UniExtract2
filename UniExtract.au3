@@ -5044,6 +5044,8 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 				$success = $RESULT_SUCCESS
 				LogExtractorWinner("vgmstream")
 			Else
+				; Remove partial files so later fallback routes cannot mistake them for output.
+				DirRemove($tempoutdir, 1)
 				$success = $RESULT_FAILED
 			EndIf
 

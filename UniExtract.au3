@@ -8661,6 +8661,7 @@ Func _IsForkManagedHelperUpdatePath($sRelativePath)
 	Local $aExact[] = [ _
 		"bin\x86\7z.exe", "bin\x86\7z.dll", "bin\x64\7z.exe", "bin\x64\7z.dll", _
 		"bin\upx.exe", _
+		"bin\x86\formats\asar.32.dll", "bin\x64\formats\asar.64.dll", _
 		"bin\x86\formats\edecoder.32.dll", "bin\x64\formats\edecoder.64.dll", _
 		"bin\x86\formats\iso7z.32.dll", "bin\x64\formats\iso7z.64.dll", _
 		"bin\x86\formats\py7z.32.dll", "bin\x64\formats\py7z.64.dll", _

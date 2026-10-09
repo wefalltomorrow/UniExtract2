@@ -55,6 +55,13 @@ if (-not $PackageRoot) {
 Write-Host "Helper package root: $PackageRoot"
 Copy-Item -Path (Join-Path $PackageRoot '*') -Destination $StageRoot -Recurse -Force
 
+$HelperRefreshScript = Join-Path $PSScriptRoot 'refresh-helpers.ps1'
+$HelperRefreshRoot = Join-Path $BuildRoot 'helper-refresh'
+if (-not (Test-Path -LiteralPath $HelperRefreshScript)) {
+    throw "Helper refresh script not found: $HelperRefreshScript"
+}
+& $HelperRefreshScript -StageRoot $StageRoot -WorkRoot $HelperRefreshRoot
+
 foreach ($File in @('UniExtract.exe', 'UniExtractUpdater.exe', 'UniExtractUpdater_NoAdmin.exe', 'English.ini', 'README.md', 'LICENSE', 'VERSION')) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot $File) -Destination (Join-Path $StageRoot $File) -Force
 }
@@ -86,6 +93,7 @@ Version: $Version
 Source: https://github.com/wefalltomorrow/UniExtract2
 Commit: $Commit
 Helper package base: gvp9000 UniExtract2 v3.0.6
+Maintained helper overlay: scripts\refresh-helpers.ps1
 
 Third-party helpers retain their own licenses. See docs and docs\third-party in this package.
 "@ | Set-Content -LiteralPath (Join-Path $StageRoot 'BUILD-INFO.txt') -Encoding UTF8

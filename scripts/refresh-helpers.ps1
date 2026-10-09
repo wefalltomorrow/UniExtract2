@@ -447,6 +447,7 @@ $AceSpec = Join-Path $WorkRoot 'acefile-spec'
 & python -m PyInstaller --noconfirm --clean --onefile --console --name acefile --distpath $AceDist --workpath $AceBuild --specpath $AceSpec $AcePython
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed building acefile 0.6.14 (exit code $LASTEXITCODE)." }
 Copy-RequiredFile (Join-Path $AceDist 'acefile.exe') (Join-Path $BinRoot 'acefile.exe')
+Copy-RequiredFile (Find-RequiredFile $AceSourceDir 'LICENSE.md') (Join-Path $StageRoot 'docs\third-party\acefile-LICENSE.md')
 Assert-CommandContains (Join-Path $BinRoot 'acefile.exe') @('--version') 'acefile 0.6.14' 'acefile'
 Add-RefreshLog 'acefile: 0.6.14 (standalone x86; pinned PyPI source + PyInstaller 6.22.3)'
 

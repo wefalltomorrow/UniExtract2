@@ -27,15 +27,14 @@ The v3.1.3 overlay refreshes and validates:
 - UnRAR 7.23 x64
 - CHDMan 0.289 x64
 - SQLite 3.53.4: x86 shell plus x86/x64 DLLs
-- vgmstream r2117: x86/x64 game-audio CLI decoders and their adjacent runtime DLLs
 
 The refresh script pins SHA-256 values for downloaded release material, checks reported versions where practical, verifies the refreshed 7-Zip format plugins are actually loaded, and writes `HELPER-REFRESH.txt` into the packaged build.
 
-### Game-audio utility added after v3.1.3
+### Next-release utilities (not included in v3.1.3)
 
 The next helper overlay adds the tagged vgmstream **r2117** Windows x86/x64 CLI bundles, each SHA-256 pinned. UniExtract tries vgmstream only for a short allowlist of proprietary game-audio extensions, after normal archive and Game Extractor routes have failed. The initial decoder exports a single, non-looped WAV, not every subsong of a bank. See [VGMSTREAM.md](VGMSTREAM.md).
 
-This is a post-v3.1.3 change and should only be described as shipped once a new release's Windows CI and packaged smoke tests pass.
+The same development overlay also adds acefile 0.6.14 as a frozen x86 console utility. Neither it nor vgmstream should be described as present in the published v3.1.3 package. Both require release-specific Windows CI confirmation before tagging.
 
 ## Already current or intentionally unchanged
 
@@ -58,10 +57,6 @@ Some helpers have newer source releases but no straightforward newer binary that
 ### lzip
 
 UniExtract keeps lzip 1.22 because that remains the latest official standalone Windows binary published by the project. Newer source releases exist, but replacing it with an environment-dependent third-party build would be a different packaging decision.
-
-### acefile
-
-The bundled `acefile.exe` is older than the current acefile Python source. The upstream project does not publish a matching current standalone Windows executable through its release page. Updating it would require maintaining our own packaged Python executable and regression-testing ACE extraction, so it is deferred rather than silently swapping implementations.
 
 ### CHDMan x86
 
@@ -91,7 +86,7 @@ This is a **complete file listing**, not a claim that every tool is current or h
 
 ### Newly checked utilities
 
-- **acefile 0.6.11**: Python upstream is now **0.6.14** (published 20 January 2026). Its standalone Windows executable remains **outdated**, pending a reproducible packaging and regression-tested update: https://pypi.org/project/acefile/
+- **acefile 0.6.14 (next release, pending Windows CI)**: replaces 0.6.11 with a self-contained x86 EXE built from a SHA-256-pinned PyPI source tarball using Python 3.12 x86 and PyInstaller 6.22.3. CI verifies its command-line version and tests a real upstream ACE archive with an independently checked Git blob hash. Source: https://pypi.org/project/acefile/
 - **Bio.cs 2.5.0**: upstream tagged **2.6.0** (March 2024). No prebuilt release asset was found; a rebuilt DLL would need compatibility testing against dependent Bioruebe extractors before it replaces `Bio.cs.dll`. Source: https://github.com/Bioruebe/Bio.cs/releases
 - **File/libmagic 5.46**: a newer upstream 5.48 exists; replacing `file.exe` also requires a matching `magic.mgc` compiled database and Windows/x86 compatibility validation. Treat these as one coupled update, not independent files. Upstream: https://github.com/file/file ; package versions: https://anaconda.org/conda-forge/libmagic
 - **innoextract 1.9**: matches the latest upstream tagged release; retain: https://github.com/dscharrer/innoextract/releases

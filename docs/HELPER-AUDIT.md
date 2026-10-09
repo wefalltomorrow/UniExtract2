@@ -92,6 +92,7 @@ This is a **complete file listing**, not a claim that every tool is current or h
 ### Newly checked utilities
 
 - **acefile 0.6.11**: Python upstream is now **0.6.14** (published 20 January 2026). Its standalone Windows executable remains **outdated**, pending a reproducible packaging and regression-tested update: https://pypi.org/project/acefile/
+- **File/libmagic 5.46**: a newer upstream 5.48 exists; replacing `file.exe` also requires a matching `magic.mgc` compiled database and Windows/x86 compatibility validation. Treat these as one coupled update, not independent files. Upstream: https://github.com/file/file ; package versions: https://anaconda.org/conda-forge/libmagic
 - **innoextract 1.9**: matches the latest upstream tagged release; retain: https://github.com/dscharrer/innoextract/releases
 - **Forensic7z 1.6**: matches the currently published plugin version; retain: https://www.tc4shell.com/en/7zip/forensic7z/
 - **ExFat7z 1.1**: matches the author's current plugin release; retain: https://www.tc4shell.com/en/7zip/exfat7z/

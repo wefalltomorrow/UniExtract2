@@ -69,7 +69,10 @@ $SamplePath = Join-Path $DestinationRoot 'biolib-test.bin'
 $Open = $RuntimeAssembly.GetType('BioLib.Bio',$true).GetMethod(
     'FileOpen',[Type[]]@([string],[IO.FileMode]))
 if (-not $Open) { throw 'Missing legacy FileOpen entrypoint' }
-$Stream = [IO.FileStream]$Open.Invoke($null,[object[]]@($SamplePath,[IO.FileMode]::Open))
+$OpenArgs = New-Object 'object[]' 2
+$OpenArgs[0] = [string]$SamplePath
+$OpenArgs[1] = [IO.FileMode]::Open
+$Stream = [IO.FileStream]$Open.Invoke($null,$OpenArgs)
 try {
     if ($Stream.Length -ne 3) { throw 'Legacy FileOpen returned the wrong file length' }
 } finally { $Stream.Dispose() }
@@ -79,7 +82,10 @@ try {
     $Read = $RuntimeAssembly.GetType('BioLib.Streams.BinaryReaderExtensions',$true).GetMethod(
         'Read8BitPrefixedString',[Type[]]@([IO.BinaryReader],[bool]))
     if (-not $Read) { throw 'Missing legacy Read8BitPrefixedString entrypoint' }
-    $Value = [string]$Read.Invoke($null,[object[]]@($Reader,$true))
+    $ReadArgs = New-Object 'object[]' 2
+    $ReadArgs[0] = $Reader
+    $ReadArgs[1] = [bool]$true
+    $Value = [string]$Read.Invoke($null,$ReadArgs)
     if ($Value -cne 'ABC') { throw "Legacy string reader returned '$Value' instead of 'ABC'" }
 } finally { $Reader.Dispose() }
 Write-Host 'Old Bio.cs overloads passed runtime behavior checks.'

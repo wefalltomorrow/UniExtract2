@@ -2,7 +2,7 @@
 
 Packaged UniExtract2 currently contains Detect It Easy files whose embedded PE metadata report 3.20.0.0. The latest tagged stable upstream Windows portable release is 3.21 (not the experimental 4.0 beta).
 
-This branch deliberately does not replace the packaged `bin/die/` directory. The Windows candidate job retrieves pinned official 3.21 x86 and x64 portable ZIP files, validates their published SHA-256 digests, confirms the three main executables, checks embedded file versions, and runs the bundled CLI against a known Windows PE in a restricted PATH.
+This branch deliberately does not replace the packaged `bin/die/` directory. The Windows candidate job retrieves pinned official 3.21 x86 and x64 portable ZIP files, validates their published SHA-256 digests, confirms the three main executables, compares the x64 executable hashes with those from the actual packaged UniExtract inventory, records embedded PE metadata, and runs the bundled CLI against a known Windows PE in a restricted PATH. **The official 3.21 x86 ZIP still embeds PE FileVersion 3.20.0.0**, so metadata alone is not evidence that a binary is older than the release tag.
 
 Upstream hashes:
 

@@ -40,7 +40,7 @@ The same overlay adds acefile 0.6.14 as a frozen x86 console utility. Both helpe
 
 The following notable helpers were reviewed and do not need a normal release bump at this time:
 
-- Detect It Easy: the bundled die.exe, diec.exe and diel.exe each report embedded PE FileVersion 3.20.0.0 in the packaged inventory. Upstream offers 3.21 Windows builds, so this is a pending update candidate, not confirmed current. Before updating, verify detection behavior and the bundled signature databases. Source: https://github.com/horsicq/DIE-engine/releases/tag/3.21
+- Detect It Easy: the bundled die.exe, diec.exe and diel.exe report embedded PE FileVersion 3.20.0.0. **The official upstream stable 3.21 x86 portable ZIP also embeds PE version 3.20.0.0**, so these resource fields do not establish the actual package version. The separate PR #12 compares SHA-256 file hashes with the official 3.21 Windows packages and tests CLI detection before labeling the bundled version. No replacement is made in v3.1.4. Source: https://github.com/horsicq/DIE-engine/releases/tag/3.21
 - GARbro 1.5.44: latest official release.
 - Game Extractor Basic 3.16.0008: latest public Basic release and remains optional.
 - lessmsi 2.12.9: latest official release.

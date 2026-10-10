@@ -121,10 +121,31 @@ function Invoke-AcefileSmokeTest {
     if ($LASTEXITCODE -ne 0 -or $Version -notmatch 'acefile 0\.6\.14') {
         throw "acefile version test failed: $Version"
     }
-    $Test = (& $AceExe -t $Archive 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw "acefile integrity test failed: $Test" }
-    $Output = (& $AceExe -x -v -d $AceOut $Archive 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw "acefile extraction test failed: $Output" }
+    # acefile emits successful progress and integrity totals to STDERR. In
+    # Windows PowerShell 5.1, piping native STDERR under Stop preference can
+    # turn a zero-exit command into a terminating NativeCommandError.
+    # Capture both streams to separate files and check the actual exit code.
+    function Invoke-AcefileCapture([string]$Label, [string]$Arguments) {
+        $StdoutFile = Join-Path $AceCase ("acefile-" + $Label + ".stdout.txt")
+        $StderrFile = Join-Path $AceCase ("acefile-" + $Label + ".stderr.txt")
+        $Process = Start-Process -FilePath $AceExe -ArgumentList $Arguments -NoNewWindow -PassThru -Wait -RedirectStandardOutput $StdoutFile -RedirectStandardError $StderrFile
+        $Captured = @()
+        foreach ($LogFile in @($StdoutFile, $StderrFile)) {
+            if ((Get-Item -LiteralPath $LogFile).Length -gt 0) {
+                $Captured += (Get-Content -LiteralPath $LogFile -Raw)
+            }
+        }
+        $Message = $Captured -join [Environment]::NewLine
+        if ($Process.ExitCode -ne 0) {
+            throw "acefile command '$Label' exited $($Process.ExitCode): $Message"
+        }
+        return $Message
+    }
+    $Test = Invoke-AcefileCapture 'integrity' ('-t "' + $Archive + '"')
+    if ($Test -notmatch '268 ok, 0 failed') {
+        throw "acefile integrity report did not confirm all 268 test entries: $Test"
+    }
+    $Output = Invoke-AcefileCapture 'extract' ('-x -v -d "' + $AceOut + '" "' + $Archive + '"')
     $Extracted = @(Get-ChildItem -LiteralPath $AceOut -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Length -gt 0 })
     if ($Extracted.Count -lt 1) {

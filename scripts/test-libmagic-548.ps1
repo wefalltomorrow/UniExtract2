@@ -67,7 +67,7 @@ try {
     $env:PATH = "$Stage;$env:windir\System32;$env:windir"
     $VersionProcess = Start-Process -FilePath $OutFile -ArgumentList '--version' -WorkingDirectory $Stage -Wait -PassThru -NoNewWindow -RedirectStandardOutput $VersionOut -RedirectStandardError $VersionErr
     $VersionText = Get-Content -LiteralPath $VersionOut -Raw
-    if ($VersionProcess.ExitCode -ne 0 -or $VersionText -notmatch '(?m)file-5\.48\b') {
+    if ($VersionProcess.ExitCode -ne 0 -or $VersionText -notmatch '(?m)file(?:\.exe)?-5\.48\b') {
         throw "Isolated file.exe --version failed: $VersionText"
     }
     foreach ($Case in $Candidates) {

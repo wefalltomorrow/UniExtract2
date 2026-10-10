@@ -52,6 +52,12 @@ jobs:
           Install-ChocoPackage @('install', 'autoit.install', '--version=3.3.18', '-y', '--no-progress')
           Install-ChocoPackage @('install', 'scite4autoit3', '-y', '--no-progress')
 
+      - name: Set up Python x86 for acefile
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          architecture: 'x86'
+
       - name: Build executables
         shell: powershell
         run: .\scripts\build.ps1
@@ -59,6 +65,16 @@ jobs:
       - name: Package release
         shell: powershell
         run: .\scripts\package-release.ps1
+
+      - name: Upload per-file bin audit
+        uses: actions/upload-artifact@v7
+        with:
+          name: bin-inventory-${{ github.sha }}
+          path: |
+            .build/release/BIN-INVENTORY.csv
+            .build/release/BIN-EXECUTABLES.csv
+            .build/release/BIN-INVENTORY-SUMMARY.txt
+          if-no-files-found: error
 
       - name: Smoke-test packaged build
         shell: powershell

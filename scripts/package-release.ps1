@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Version,
-    [string]$HelperBaseUrl = 'https://github.com/gvp9000/UniExtract2/releases/download/v3.0.6/UniExtract2.zip'
+    [string]$HelperBaseUrl = 'https://github.com/gvp9000/UniExtract2/releases/download/v3.0.6/UniExtract2.zip',
+    [string]$HelperBaseSha256 = '507066eaf85ff5a60ca16b192f74fb79999b8cad134792214b94483bd0527c00'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,6 +32,11 @@ foreach ($File in @('UniExtract.exe', 'UniExtractUpdater.exe', 'UniExtractUpdate
 
 Write-Host "Downloading helper base: $HelperBaseUrl"
 Invoke-WebRequest -Uri $HelperBaseUrl -OutFile $BaseZip -UseBasicParsing
+$ActualBaseSha256 = (Get-FileHash -LiteralPath $BaseZip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($HelperBaseSha256 -and $ActualBaseSha256 -ne $HelperBaseSha256.ToLowerInvariant()) {
+    throw "Helper base SHA-256 mismatch. Expected $HelperBaseSha256, got $ActualBaseSha256."
+}
+Write-Host "Helper base SHA-256 verified: $ActualBaseSha256"
 Expand-Archive -LiteralPath $BaseZip -DestinationPath $ExtractRoot -Force
 
 $PackageRoot = $null
@@ -98,6 +104,12 @@ Maintained helper overlay: scripts\refresh-helpers.ps1
 Third-party helpers retain their own licenses. See docs and docs\third-party in this package.
 "@ | Set-Content -LiteralPath (Join-Path $StageRoot 'BUILD-INFO.txt') -Encoding UTF8
 
+# Inspect all actual staged bin files (legacy tools and updated tools).
+& (Join-Path $PSScriptRoot 'inventory-bin.ps1') -StageRoot $StageRoot
+if (-not (Test-Path -LiteralPath (Join-Path $StageRoot 'BIN-INVENTORY.csv'))) {
+    throw 'Failed to generate bin inventory.'
+}
+
 $ZipName = "UniExtract2-v$Version.zip"
 $ZipPath = Join-Path $Dist $ZipName
 Compress-Archive -Path (Join-Path $StageRoot '*') -DestinationPath $ZipPath -CompressionLevel Optimal -Force
@@ -126,3 +138,19 @@ Write-Host 'Release assets:'
 Get-ChildItem -LiteralPath $Dist | Sort-Object Name | ForEach-Object {
     Write-Host (" - {0} ({1:N0} bytes)" -f $_.Name, $_.Length)
 }
+
+# Finish only when every expected distribution artifact really exists.
+$RequiredAssets = @($ZipPath,
+    (Join-Path $Dist 'UniExtract.exe'),
+    (Join-Path $Dist 'UniExtractUpdater.exe'),
+    (Join-Path $Dist 'UniExtractUpdater_NoAdmin.exe'),
+    (Join-Path $Dist 'SHA256SUMS.txt'))
+foreach ($Artifact in $RequiredAssets) {
+    if (-not (Test-Path -LiteralPath $Artifact -PathType Leaf) -or (Get-Item -LiteralPath $Artifact).Length -lt 1) {
+        throw "Missing or empty release artifact: $Artifact"
+    }
+}
+# Helpers with informational flags can leave a nonzero LASTEXITCODE. The helper
+# checks and file assertions above are authoritative for this packaging stage.
+Write-Host 'Release package and bin inventory completed successfully.'
+exit 0

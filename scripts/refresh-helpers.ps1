@@ -427,6 +427,51 @@ Copy-RequiredFile (Find-RequiredFile $SqliteX64 'sqlite3.dll') (Join-Path $BinRo
 Assert-CommandContains (Join-Path $BinRoot 'sqlite3.exe') @('--version') '3.53.4' 'SQLite shell'
 Add-RefreshLog 'SQLite: 3.53.4 (x86 shell + x86/x64 DLLs)'
 
+# acefile 0.6.14: upstream publishes Python source, not a standalone Windows EXE.
+# Build the pinned source using 32-bit Python for Win32 compatibility.
+$AceTar = Get-Download 'https://files.pythonhosted.org/packages/22/9e/76fd1b0759e789ce86a9adcc4c5f3d01aa2bc5125b232b44397a08f0f1cf/acefile-0.6.14.tar.gz' 'acefile-0.6.14.tar.gz' '96957fd167136ef5bc1c133fe74da2453229ad19308d6b986cbcc3c76ed5511d'
+$AceSourceDir = Join-Path $WorkRoot 'acefile-source'
+New-Item -ItemType Directory -Path $AceSourceDir -Force | Out-Null
+& tar.exe -xzf $AceTar -C $AceSourceDir
+if ($LASTEXITCODE -ne 0) { throw "Failed to unpack acefile source (tar exit $LASTEXITCODE)." }
+$AcePython = Find-RequiredFile $AceSourceDir 'acefile.py'
+$PythonMachine = (& python -c 'import sys; print(64 if sys.maxsize > 2**32 else 32)' | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $PythonMachine -ne '32') {
+    throw "acefile packaging requires Python x86, got '$PythonMachine'."
+}
+& python -m pip install --disable-pip-version-check --no-input 'pyinstaller==6.22.3'
+if ($LASTEXITCODE -ne 0) { throw 'Could not install pinned PyInstaller 6.22.3.' }
+$AceDist = Join-Path $WorkRoot 'acefile-dist'
+$AceBuild = Join-Path $WorkRoot 'acefile-build'
+$AceSpec = Join-Path $WorkRoot 'acefile-spec'
+& python -m PyInstaller --noconfirm --clean --onefile --console --name acefile --distpath $AceDist --workpath $AceBuild --specpath $AceSpec $AcePython
+if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed building acefile 0.6.14 (exit code $LASTEXITCODE)." }
+Copy-RequiredFile (Join-Path $AceDist 'acefile.exe') (Join-Path $BinRoot 'acefile.exe')
+Copy-RequiredFile (Find-RequiredFile $AceSourceDir 'LICENSE.md') (Join-Path $StageRoot 'docs\third-party\acefile-LICENSE.md')
+Assert-CommandContains (Join-Path $BinRoot 'acefile.exe') @('--version') 'acefile 0.6.14' 'acefile'
+Add-RefreshLog 'acefile: 0.6.14 (standalone x86; pinned PyPI source + PyInstaller 6.22.3)'
+
+# vgmstream r2117 (upstream tagged build, Windows x86 + x64).
+# Preserve the complete CLI runtime directory: several codecs need adjacent DLLs.
+# Do not use the mutable "nightly" asset here; these hashes are fixed to a release tag.
+$VgmPackages = @(
+    @{ Arch = 'x86'; Url = 'https://github.com/vgmstream/vgmstream/releases/download/r2117/vgmstream-win.zip'; File = 'vgmstream-r2117-win.zip'; Sha = '4fa8f0f567a3636e45931b8462a04898fbceca17290a1458b80063b9558b323b' },
+    @{ Arch = 'x64'; Url = 'https://github.com/vgmstream/vgmstream/releases/download/r2117/vgmstream-win64.zip'; File = 'vgmstream-r2117-win64.zip'; Sha = '6c4a8a3813864fefed081bbd337dbc0ad93bf88e0b92f5db98d7ab258b22dc6c' }
+)
+foreach ($VgmPackage in $VgmPackages) {
+    $VgmZip = Get-Download $VgmPackage.Url $VgmPackage.File $VgmPackage.Sha
+    $VgmExtract = Join-Path $WorkRoot ('vgmstream-' + $VgmPackage.Arch)
+    Expand-ZipPackage $VgmZip $VgmExtract
+    $VgmExe = Find-RequiredFile $VgmExtract 'vgmstream-cli.exe'
+    $VgmSource = Split-Path -Parent $VgmExe
+    $VgmDest = Join-Path $BinRoot ($VgmPackage.Arch + '\vgmstream')
+    Remove-Item -LiteralPath $VgmDest -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $VgmDest -Force | Out-Null
+    Copy-Item -Path (Join-Path $VgmSource '*') -Destination $VgmDest -Recurse -Force
+    Assert-CommandContains (Join-Path $VgmDest 'vgmstream-cli.exe') @('-h') 'vgmstream CLI decoder' ('vgmstream ' + $VgmPackage.Arch)
+}
+Add-RefreshLog 'vgmstream: r2117 (CLI + runtime DLLs, x86/x64)'
+
 $RefreshLogPath = Join-Path $StageRoot 'HELPER-REFRESH.txt'
 @(
     'Universal Extractor 2 maintained helper overlay',

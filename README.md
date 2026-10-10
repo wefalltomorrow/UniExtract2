@@ -37,6 +37,7 @@ Compared with the old upstream source, this fork includes:
 - Descent 3 HOG2 timestamp restoration after QuickBMS extraction
 - more accurate extraction/pipeline result classification, including innounp output
 - optional Game Extractor Basic fallback for obscure game archives that other handlers miss
+- vgmstream game-audio decoder fallback for selected proprietary formats (next release; development branch)
 - more useful extraction/pipeline logging
 
 The full inherited history is in [docs/changelog.txt](docs/changelog.txt). The fork/PR/issue review behind this version is documented in [docs/FORK-NOTES.md](docs/FORK-NOTES.md).

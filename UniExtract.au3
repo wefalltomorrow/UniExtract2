@@ -142,7 +142,7 @@ Const $TYPE_7Z = "7z", $TYPE_ACE = "ace", $TYPE_ACTUAL = "actual", $TYPE_AI = "a
 	  $TYPE_QBMS = "qbms", $TYPE_RAI = "rai", $TYPE_RAR = "rar", $TYPE_RGSS = "rgss", $TYPE_ROBO = "robo", $TYPE_RPA = "rpa", $TYPE_SFARK = "sfark", _
 	  $TYPE_SIS = "sis", $TYPE_SQLITE = "sqlite", $TYPE_SUPERDAT = "superdat", $TYPE_SWF = "swf", $TYPE_SWFEXE = "swfexe", _
 	  $TYPE_THINSTALL = "thinstall", $TYPE_TTARCH = "ttarch", $TYPE_UHA = "uha", $TYPE_UIF = "uif", $TYPE_UNITYPACKAGE = "unitypackage", _
-	  $TYPE_UNREAL = "unreal", $TYPE_VIDEO = "video", $TYPE_VIDEO_CONVERT = "videoconv", $TYPE_VISIONAIRE3 = "visionaire3", $TYPE_VSSFX = "vssfx", _
+	  $TYPE_UNREAL = "unreal", $TYPE_VGMSTREAM = "vgmstream", $TYPE_VIDEO = "video", $TYPE_VIDEO_CONVERT = "videoconv", $TYPE_VISIONAIRE3 = "visionaire3", $TYPE_VSSFX = "vssfx", _
 	  $TYPE_VSSFX_PATH = "vssfxpath", $TYPE_WISE = "wise", $TYPE_WIX = "wix", $TYPE_WOLF = "wolf", $TYPE_ZIP = "zip", $TYPE_ZOO = "zoo", _
 	  $TYPE_ZPAQ = "zpaq", $TYPE_ATLANTIS = "atlantis"
 Const $aExtractionTypes = [$TYPE_7Z, $TYPE_ACE, $TYPE_ACTUAL, $TYPE_AI, $TYPE_ALZ, $TYPE_ARC_CONV, $TYPE_AUDIO, $TYPE_BCM, $TYPE_BOOTIMG, _
@@ -151,7 +151,7 @@ Const $aExtractionTypes = [$TYPE_7Z, $TYPE_ACE, $TYPE_ACTUAL, $TYPE_AI, $TYPE_AL
 	  $TYPE_KGB, $TYPE_LZ, $TYPE_LZO, $TYPE_LZX, $TYPE_MOLE, $TYPE_MSCF, $TYPE_MSI, $TYPE_MSM, $TYPE_MSP, $TYPE_MSU, $TYPE_NBH, $TYPE_NSIS, _
 	  $TYPE_PDF, $TYPE_PEA, $TYPE_QBMS, $TYPE_RAI, $TYPE_RAR, $TYPE_RGSS, $TYPE_ROBO, $TYPE_RPA, $TYPE_SFARK, $TYPE_SIS, $TYPE_SQLITE, _
 	  $TYPE_SUPERDAT, $TYPE_SWF, $TYPE_SWFEXE, $TYPE_THINSTALL, $TYPE_TTARCH, $TYPE_UHA, $TYPE_UIF, $TYPE_UNITYPACKAGE, $TYPE_UNREAL, _
-	  $TYPE_VIDEO, $TYPE_VIDEO_CONVERT, $TYPE_VISIONAIRE3, $TYPE_VSSFX, $TYPE_VSSFX_PATH, $TYPE_WISE, $TYPE_WIX, $TYPE_WOLF, $TYPE_ZIP, _
+	  $TYPE_VGMSTREAM, $TYPE_VIDEO, $TYPE_VIDEO_CONVERT, $TYPE_VISIONAIRE3, $TYPE_VSSFX, $TYPE_VSSFX_PATH, $TYPE_WISE, $TYPE_WIX, $TYPE_WOLF, $TYPE_ZIP, _
 	  $TYPE_ZOO, $TYPE_ZPAQ, $TYPE_ATLANTIS]
 
 
@@ -263,6 +263,7 @@ Const $garbro = $bindir & "GARbro\GARbro.Console.exe"
 Const $gameextractor_dir = $bindir & "GameExtractor\"
 Const $gameextractor_jar = $gameextractor_dir & "GameExtractor.jar"
 Const $gameextractor_java = $gameextractor_dir & "jre\bin\java.exe"
+Const $vgmstream = $archdir & "vgmstream\vgmstream-cli.exe"
 Const $gcf = $archdir & "GCFScape.exe"
 Const $hlp = "helpdeco.exe"
 Const $innoextract = Quote($bindir & "innoextract.exe", True)
@@ -569,6 +570,10 @@ Func StartExtraction()
 	; Optional broad game-archive fallback. Keep this after all native/specific handlers and 7-Zip
 	; so installing Game Extractor does not slow down or override normal UniExtract routes.
 	If CheckGameExtractor() Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'))
+
+	; Game-audio decoder of last resort. Only try known game-audio extensions, and only
+	; after the existing archive extractors, so a sound bank is not mistaken for an archive.
+	If CheckVgmstream() Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_VGMSTREAM, "vgmstream game audio")
 
 	FileScan_UnixFile()
 	If $g_bArchiveIntegrityError Then
@@ -2838,6 +2843,22 @@ Func CheckGameExtractor()
 	Return extract($TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'), "", True, True)
 EndFunc
 
+; Try bundled vgmstream only for game-audio extensions after archive extraction failed.
+; Keep this narrow: other formats (especially ordinary WAV/MP3) retain existing routing.
+Func CheckVgmstream()
+	If Not FileExists($vgmstream) Then Return False
+
+	Switch StringLower($fileext)
+		Case "adx", "hca", "brstm", "bfstm", "bcstm", "bwav", "dsp", "wem", _
+			 "xwb", "xma", "fsb", "bnk", "awb", "nus3audio", "at3", "at9", "genh"
+		Case Else
+			Return False
+	EndSwitch
+
+	Cout("Testing vgmstream game-audio fallback")
+	Return extract($TYPE_VGMSTREAM, "vgmstream game audio", "", True, True)
+EndFunc
+
 ; Determine if file can be extracted with GARbro
 Func CheckGarbro($arcdisp = 0)
 	HasNetFramework(4.6)
@@ -5007,6 +5028,26 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			HasPlugin($unreal)
 			; Currently extracts files from all packages in folder, not only the selected one!
 			_Run($unreal & ' -export -all -sounds -3rdparty -path="' & $filedir & '" -out="' & $outdir & '" *', $outdir, @SW_MINIMIZE, True, True, False)
+
+		Case $TYPE_VGMSTREAM
+			If Not HasPlugin($vgmstream, $returnFail) Then Return False
+
+			; Decode once through the upstream CLI. -i suppresses playback loops and
+			; prevents unexpectedly huge WAV files. Stage first to avoid a partial
+			; failed decode being treated as extracted output.
+			DirCreate($tempoutdir)
+			Local $sVgmOutput = $tempoutdir & GetFileName() & ".wav"
+			Local $sVgmCommand = Quote($vgmstream, True) & ' -i -o "' & $sVgmOutput & '" "' & $file & '"'
+			_Run($sVgmCommand, $outdir, @SW_HIDE, True, True, False, False)
+			If FileExists($sVgmOutput) And FileGetSize($sVgmOutput) > 44 Then
+				MoveFiles($tempoutdir, $outdir, False, "", True, True)
+				$success = $RESULT_SUCCESS
+				LogExtractorWinner("vgmstream")
+			Else
+				; Remove partial files so later fallback routes cannot mistake them for output.
+				DirRemove($tempoutdir, 1)
+				$success = $RESULT_FAILED
+			EndIf
 
 		Case $TYPE_VIDEO
 			HasFFMPEG()
@@ -8667,7 +8708,7 @@ Func _IsForkManagedHelperUpdatePath($sRelativePath)
 		"bin\x86\formats\py7z.32.dll", "bin\x64\formats\py7z.64.dll", _
 		"bin\mediainfo.dll", _
 		"bin\exeinfope.exe", "bin\ext_detector.dll", "bin\exeinfoperun.cfg", _
-		"bin\champollion.exe", "bin\pea.exe", "bin\msgunfmt.exe", "bin\innounp.exe", "bin\triddefs.trd", _
+		"bin\champollion.exe", "bin\pea.exe", "bin\msgunfmt.exe", "bin\innounp.exe", "bin\triddefs.trd", "bin\acefile.exe", _
 		"bin\x64\unrar.exe", "bin\x64\chdman.exe", _
 		"bin\sqlite3.exe", "bin\x86\sqlite3.dll", "bin\x64\sqlite3.dll" _
 	]
@@ -8676,7 +8717,7 @@ Func _IsForkManagedHelperUpdatePath($sRelativePath)
 		If $sPath = $sManaged Then Return True
 	Next
 
-	Local $aPrefixes[] = ["bin\qpdf\", "bin\exeinfo\"]
+	Local $aPrefixes[] = ["bin\qpdf\", "bin\exeinfo\", "bin\x86\vgmstream\", "bin\x64\vgmstream\"]
 	For $sPrefix In $aPrefixes
 		If StringLeft($sPath, StringLen($sPrefix)) = $sPrefix Then Return True
 	Next

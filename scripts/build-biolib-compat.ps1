@@ -24,7 +24,16 @@ function Add-LegacyOverload([string]$File,[string]$Signature,[string]$Overload) 
     if ($Index -lt 0 -or $Text.IndexOf($Signature,$Index + $Signature.Length,[StringComparison]::Ordinal) -ge 0) {
         throw "Signature missing or duplicated in $File"
     }
-    $Text = $Text.Replace($Signature,$Overload + [Environment]::NewLine + '        ' + $Signature)
+    # Insert before the upstream XML documentation instead of between the
+    # original documentation and its extended signature.
+    $Comment = $Text.LastIndexOf('/// <summary>',$Index,[StringComparison]::Ordinal)
+    if ($Comment -lt 0) { throw "No documentation block for the upstream method in $File" }
+    $Line = $Text.LastIndexOf([char]10,$Comment) + 1
+    $Indent = $Text.Substring($Line,$Comment-$Line)
+    if ($Indent.Trim().Length -ne 0) { throw "Unexpected method comment indentation in $File" }
+    $Extra = $Indent + '/// <summary>Retains the original CLR signature for existing client binaries.</summary>' +
+        [Environment]::NewLine + $Indent + $Overload + [Environment]::NewLine + [Environment]::NewLine
+    $Text = $Text.Insert($Line,$Extra)
     [IO.File]::WriteAllText($File,$Text,(New-Object Text.UTF8Encoding($false)))
 }
 Add-LegacyOverload (Join-Path $Dir 'Bio.cs') 'public static FileStream FileOpen(string path, FileMode fileMode, FileAccess fileAccess = FileAccess.ReadWrite) {' 'public static FileStream FileOpen(string path, FileMode fileMode) { return FileOpen(path, fileMode, FileAccess.ReadWrite); }'
@@ -52,6 +61,29 @@ foreach ($Check in $Checks) {
     if ($Found.Count -ne 1) { throw "Missing CLR method: $($Check.Type).$($Check.Name)($($Check.Args))" }
     Write-Host "Verified CLR method $($Check.Type).$($Check.Name)($($Check.Args))"
 }
+# Exercise the actual old two-argument entrypoints, in addition to checking
+# their metadata; this catches accidental wrappers that compile but misbehave.
+$RuntimeAssembly = [Reflection.Assembly]::LoadFrom($DLL)
+$SamplePath = Join-Path $DestinationRoot 'biolib-test.bin'
+[IO.File]::WriteAllBytes($SamplePath,[byte[]]@(1,2,3))
+$Open = $RuntimeAssembly.GetType('BioLib.Bio',$true).GetMethod(
+    'FileOpen',[Type[]]@([string],[IO.FileMode]))
+if (-not $Open) { throw 'Missing legacy FileOpen entrypoint' }
+$Stream = [IO.FileStream]$Open.Invoke($null,[object[]]@($SamplePath,[IO.FileMode]::Open))
+try {
+    if ($Stream.Length -ne 3) { throw 'Legacy FileOpen returned the wrong file length' }
+} finally { $Stream.Dispose() }
+$Memory = [IO.MemoryStream]::new([byte[]]@(3,65,66,67))
+$Reader = [IO.BinaryReader]::new($Memory)
+try {
+    $Read = $RuntimeAssembly.GetType('BioLib.Streams.BinaryReaderExtensions',$true).GetMethod(
+        'Read8BitPrefixedString',[Type[]]@([IO.BinaryReader],[bool]))
+    if (-not $Read) { throw 'Missing legacy Read8BitPrefixedString entrypoint' }
+    $Value = [string]$Read.Invoke($null,[object[]]@($Reader,$true))
+    if ($Value -cne 'ABC') { throw "Legacy string reader returned '$Value' instead of 'ABC'" }
+} finally { $Reader.Dispose() }
+Write-Host 'Old Bio.cs overloads passed runtime behavior checks.'
+
 $Bin = Join-Path $Bundle 'bin'
 New-Item -ItemType Directory -Force -Path $Bin | Out-Null
 Copy-Item -LiteralPath $DLL -Destination (Join-Path $Bin 'Bio.cs.dll') -Force
@@ -65,6 +97,7 @@ Copy-Item -LiteralPath $Lic[0].FullName -Destination (Join-Path $LicDir 'Bio.cs-
     "Upstream pinned commit: $PinnedCommit"
     'Target framework: net45'
     'Legacy FileOpen and Read8BitPrefixedString signatures preserved'
+    'Both legacy overloads passed small runtime behavior checks'
     'Dependent extractor behavioral tests remain outstanding'
     "SHA-256: $((Get-FileHash -LiteralPath $DLL -Algorithm SHA256).Hash.ToLowerInvariant())"
 ) | Set-Content -LiteralPath (Join-Path $Bundle 'BIOLIB-ABI.txt') -Encoding UTF8

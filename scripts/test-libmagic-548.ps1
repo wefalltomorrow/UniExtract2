@@ -20,10 +20,28 @@ if (-not (Test-Path -LiteralPath $SourceExe -PathType Leaf) -or
 }
 # Also verify the official version-pinned package archive itself, not merely
 # trusting a mutable package database or resource FileVersion metadata.
-$Archive = Join-Path $Work 'mingw-w64-x86_64-file-5.48-1-any.pkg.tar.zst'
-Invoke-WebRequest -Uri $PackageURL -OutFile $Archive -UseBasicParsing
+# setup-msys2 installs verified Pacman packages into its local package cache.
+# Prefer that exact cached archive to a separate HTTPS download, which can be
+# rejected by mirror anti-bot servers even when pacman succeeds.
+$Cache = Join-Path $Msys2Location 'var\cache\pacman\pkg'
+$PackageName = 'mingw-w64-x86_64-file-5.48-1-any.pkg.tar.zst'
+$Matches = @(Get-ChildItem -LiteralPath $Cache -Filter $PackageName -File -ErrorAction SilentlyContinue)
+if ($Matches.Count -lt 1) {
+    # Request an authenticated package download through pacman, not through
+    # PowerShell's web client. Fail closed if the package cannot be cached.
+    Write-Host 'Refreshing the local signed pacman package cache...'
+    $Pacman = Join-Path $Msys2Location 'usr\bin\pacman.exe'
+    & $Pacman --noconfirm -Sw mingw-w64-x86_64-file
+    if ($LASTEXITCODE -ne 0) { throw "pacman failed to cache file/libmagic 5.48 ($LASTEXITCODE)" }
+    $Matches = @(Get-ChildItem -LiteralPath $Cache -Filter $PackageName -File -ErrorAction SilentlyContinue)
+}
+if ($Matches.Count -ne 1) {
+    throw "Could not find exactly one authentic $PackageName in the local pacman cache."
+}
+$Archive = $Matches[0].FullName
 $Hash = (Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($Hash -ne $ExpectedPackageHash) { throw "Upstream package SHA256 mismatch: $Hash" }
+if ($Hash -ne $ExpectedPackageHash) { throw "Cached upstream file/libmagic package SHA256 mismatch: $Hash" }
+Write-Host "Official MSYS2 5.48-1 package SHA256 verified: $Hash"
 
 # Dependency closure is determined from the PE import tables, not guessed
 # from the upstream package's top-level dependency list.

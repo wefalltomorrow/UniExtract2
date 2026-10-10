@@ -1,0 +1,30 @@
+name: Bio.cs ABI candidate
+
+on:
+  push:
+    branches:
+      - biolib-2-6-compat
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-biolib:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build patched Bio.cs 2.6 and verify old CLR method signatures
+        shell: powershell
+        run: .\scripts\build-biolib-compat.ps1
+      - name: Upload unshipped compatibility candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: BioLib-2.6.0-candidate
+          path: |
+            .build/biolib-validation/bundle/**
+          if-no-files-found: error

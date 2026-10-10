@@ -435,7 +435,7 @@ New-Item -ItemType Directory -Path $AceSourceDir -Force | Out-Null
 & tar.exe -xzf $AceTar -C $AceSourceDir
 if ($LASTEXITCODE -ne 0) { throw "Failed to unpack acefile source (tar exit $LASTEXITCODE)." }
 $AcePython = Find-RequiredFile $AceSourceDir 'acefile.py'
-$PythonMachine = (& python -c 'import struct; print(struct.calcsize("P") * 8)' | Out-String).Trim()
+$PythonMachine = (& python -c 'import sys; print(64 if sys.maxsize > 2**32 else 32)' | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or $PythonMachine -ne '32') {
     throw "acefile packaging requires Python x86, got '$PythonMachine'."
 }

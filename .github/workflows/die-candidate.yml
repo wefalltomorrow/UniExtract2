@@ -1,0 +1,29 @@
+name: Detect It Easy 3.21 candidate
+
+on:
+  push:
+    branches:
+      - die-3-21-candidate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-die:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download and verify official x86/x64 builds
+        shell: powershell
+        run: .\scripts\test-die-321.ps1
+      - name: Upload candidate audit
+        uses: actions/upload-artifact@v7
+        with:
+          name: die-3.21-windows-candidate-report
+          path: |
+            .build/die321/DIE-321-BINARIES.csv
+            .build/die321/*-scan.stdout.txt
+            .build/die321/*-scan.stderr.txt
+          if-no-files-found: error

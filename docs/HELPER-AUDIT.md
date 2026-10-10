@@ -30,11 +30,11 @@ The v3.1.3 overlay refreshes and validates:
 
 The refresh script pins SHA-256 values for downloaded release material, checks reported versions where practical, verifies the refreshed 7-Zip format plugins are actually loaded, and writes `HELPER-REFRESH.txt` into the packaged build.
 
-### Next-release utilities (not included in v3.1.3)
+### New for v3.1.4
 
-The next helper overlay adds the tagged vgmstream **r2117** Windows x86/x64 CLI bundles, each SHA-256 pinned. UniExtract tries vgmstream only for a short allowlist of proprietary game-audio extensions, after normal archive and Game Extractor routes have failed. The initial decoder exports a single, non-looped WAV, not every subsong of a bank. See [VGMSTREAM.md](VGMSTREAM.md).
+The v3.1.4 helper overlay adds the tagged vgmstream **r2117** Windows x86/x64 CLI bundles, each SHA-256 pinned. UniExtract tries vgmstream only for a short allowlist of proprietary game-audio extensions, after normal archive and Game Extractor routes have failed. The initial decoder exports a single, non-looped WAV, not every subsong of a bank. See [VGMSTREAM.md](VGMSTREAM.md).
 
-The same development overlay also adds acefile 0.6.14 as a frozen x86 console utility. Neither it nor vgmstream should be described as present in the published v3.1.3 package. Both require release-specific Windows CI confirmation before tagging.
+The same overlay adds acefile 0.6.14 as a frozen x86 console utility. Both helpers passed the Windows PR #9 packaged smoke tests, including ADX-to-WAV and a real ACE archive (268 entries passed integrity checks and 247 files were extracted). They were **not** present in v3.1.3; v3.1.4 is the first planned published release containing them.
 
 ## Already current or intentionally unchanged
 
@@ -76,7 +76,7 @@ The fork still uses gvp9000's helper update feed for legacy helpers that have no
 
 This is an intermediate step toward owning the complete helper bundle and update metadata in this fork.
 
-## Automated complete file inventory (unreleased development)
+## Automated complete file inventory (v3.1.4)
 
 The Windows packaging process generates **BIN-INVENTORY.csv** directly from the fully populated staged `bin` folder, after the maintained helper overlay has run. Every file, including nested DLLs, runtime support files, format plugins and legacy command-line programs, receives an actual SHA-256 digest, size, path and available embedded version and PE architecture information.
 
@@ -86,8 +86,8 @@ This is a **complete file listing**, not a claim that every tool is current or h
 
 ### Newly checked utilities
 
-- **acefile 0.6.14 (next release, pending Windows CI)**: replaces 0.6.11 with a self-contained x86 EXE built from a SHA-256-pinned PyPI source tarball using Python 3.12 x86 and PyInstaller 6.22.3. CI verifies its command-line version and tests a real upstream ACE archive with an independently checked Git blob hash. Source: https://pypi.org/project/acefile/
-- **Bio.cs 2.5.0**: upstream tagged **2.6.0** (March 2024). No prebuilt release asset was found; a rebuilt DLL would need compatibility testing against dependent Bioruebe extractors before it replaces `Bio.cs.dll`. Source: https://github.com/Bioruebe/Bio.cs/releases
+- **acefile 0.6.14 (v3.1.4)**: replaces 0.6.11 with a self-contained x86 EXE built from a SHA-256-pinned PyPI source tarball using Python 3.12 x86 and PyInstaller 6.22.3. CI verifies its command-line version and tests a real upstream ACE archive with an independently checked Git blob hash. Source: https://pypi.org/project/acefile/
+- **Bio.cs 2.5.0 (retained)**: upstream tagged **2.6.0** (March 2024). A net45 candidate in PR #10 builds successfully and preserves legacy CLR signatures, but dependent extractor regression tests remain outstanding. The release continues to ship the known-working 2.5.0 DLL; see `docs/BIOLIB-ABI.md`. Source: https://github.com/Bioruebe/Bio.cs/releases
 - **File/libmagic 5.46**: a newer upstream 5.48 exists; replacing `file.exe` also requires a matching `magic.mgc` compiled database and Windows/x86 compatibility validation. Treat these as one coupled update, not independent files. Upstream: https://github.com/file/file ; package versions: https://anaconda.org/conda-forge/libmagic
 - **innoextract 1.9**: matches the latest upstream tagged release; retain: https://github.com/dscharrer/innoextract/releases
 - **Forensic7z 1.6**: matches the currently published plugin version; retain: https://www.tc4shell.com/en/7zip/forensic7z/

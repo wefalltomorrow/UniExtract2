@@ -25,6 +25,7 @@ Compared with the old upstream source, this fork includes:
 - updated integrations for 7-Zip, UnRAR, innounp, TrID, UPX, SQLite, lessmsi and other helpers
 - improved batch queue, multipart archive and context-menu handling
 - stricter corrupt-archive and wrong-password handling
+- explicit FreeArc `ArC\\x01` header detection before generic .bin/game scanners; GARbro PD/KAAS false-positive protection for installer sidecars
 - password-protected PDF extraction through qpdf
 - ECM and ARJ Software JAR extraction support
 - corrected FreeSpace / FreeSpace 2 VP folder extraction

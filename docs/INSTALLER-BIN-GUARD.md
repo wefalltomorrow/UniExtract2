@@ -2,6 +2,8 @@
 
 A large installer sidecar named setup-1.bin beside setup.exe was misrouted to GARbro in UniExtract 3.1.4. DiE and TrID reported FreeARC, but the broad GARbro probe ran first, recognised the data as PD/KAAS, and extracted 152 numbered entries with no explicit success confirmation.
 
+Root-cause review of upstream GARbro's `ArcFormats/Kaas/ArcKAAS.cs` confirms that PD/KAAS has `Signature = 0`, normally registers only `.pd`, and constructs each numbered `basename#NNNN` entry from a permissively decrypted index. Those names are not filenames recovered from the original `.bin`. See https://github.com/morkt/GARbro/blob/master/ArcFormats/Kaas/ArcKAAS.cs. For `.bin` inputs, a PD/KAAS claim alone is now rejected as insufficient evidence.
+
 This change preserves the original DiE FreeARC hint separately when Exeinfo replaces a weak result. On .bin inputs, it defers broad game extractors when a numbered sidecar has a same-base companion EXE or when independent DiE and TrID reports agree on FreeARC. Ordinary game archives and other extensions retain their existing routing. Later specific detector routes may attempt FreeARC/unarc.
 
 The final pipeline records the actual GARbro or unarc extractor when successful rather than an earlier failed 7-Zip probe. Windows CI regression-tests the actual extracted AutoIt guard function against matching sidecar, unrelated .bin, two-detector FreeARC, one-detector-only, and non-bin cases.

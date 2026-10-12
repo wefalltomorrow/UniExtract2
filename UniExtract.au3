@@ -3719,6 +3719,23 @@ Func ResolveStrictPipeline($bApplyPrimaryAndTrid = True, $bApplyUnix = True)
 		Return False
 	EndIf
 
+	; Never let a weaker DiE/TrID/unix guess reclassify a file whose exact
+	; header proved it is ordinary media or a document. Legitimate format
+	; handlers remain available even when the user renamed the extension.
+	If _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Then
+		Cout("Verified non-archive header overrides speculative detector-based extractor routing")
+		Switch $g_sVerifiedFileSignature
+			Case "pdf"
+				If extract($TYPE_PDF, "PDF file", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_PDF, "PDF file")
+				If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_PDF, "PDF file")
+			Case "ogg", "flac", "wav"
+				If extract($TYPE_AUDIO, "Audio file", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_AUDIO, "Audio file")
+			Case "mp4", "ebml", "avi"
+				If extract($TYPE_VIDEO, "Video file", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_VIDEO, "Video file")
+		EndSwitch
+		terminate($STATUS_NOTPACKED, $file, $g_sVerifiedFileSignature, "Verified " & $g_sVerifiedFileSignature & " file (not a game archive)")
+	EndIf
+
 	Cout("Strict fallback: resolving stored detector hints")
 	$g_bStrictPipeline = False
 

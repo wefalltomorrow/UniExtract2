@@ -212,7 +212,7 @@ Global $g_sDetectionWinner = "", $g_sExtractorWinner = "", $g_sDetectedTypeForSu
 Global $g_sPipelineRows = "", $g_iPipelineSeq = 0
 Global $g_sPipelineTimeline = "", $g_sPipelineLine = "", $g_sPipelineToolVersions = ""
 Global $g_iPipelineWarn = 0, $g_iPipelineFail = 0, $g_iPipelineOk = 0, $g_iPipelineRun = 0
-Global $g_bStrictPipeline = True, $g_sStoredTridType = "", $g_sStoredUnixType = ""
+Global $g_bStrictPipeline = True, $g_sStoredTridType = "", $g_sStoredUnixType = "", $g_sDieDetectionHint = ""
 Global $oldpath, $oldoutdir, $sUnicodeName, $createdir
 Global $g_aUnicodeSidecarCopies[0]
 Global $guiprefs, $TBgui = 0, $exStyle = -1, $idTrayStatusExt, $BatchBut, $idProgress, $sComError = 0
@@ -514,6 +514,7 @@ Func StartExtraction()
 	$g_bStrictPipeline = True
 	$g_sStoredTridType = ""
 	$g_sStoredUnixType = ""
+	$g_sDieDetectionHint = ""
 
 	; If an extractor is specified via command line parameter, we simply use that without scanning
 	If $sArcTypeOverride Then Return extract($sArcTypeOverride, $sArcTypeOverride & " " & t('TERM_FILE'))
@@ -550,7 +551,9 @@ Func StartExtraction()
 	; Do not skip game probing when BMS.db has a format-specific script for this extension.
 	; This preserves the strict media fast-path while preventing false-positive media detection
 	; from bypassing a known game/archive extractor (for example Descent 3 .mn3/.hog).
-	If _ShouldSkipNonFatalProbesForPrimaryMatch() And Not _HasGameBmsForExtension($fileext) Then
+	If _ShouldAvoidBroadGameProbeForBin() Then
+		Cout("Skipping broad ISO/game probes for installer sidecar or corroborated FreeARC .bin; deferring to specific detector routes")
+	ElseIf _ShouldSkipNonFatalProbesForPrimaryMatch() And Not _HasGameBmsForExtension($fileext) Then
 		Cout("Skipping non-fatal ISO/game probes because primary detector already identified media")
 	Else
 		CheckIso()
@@ -569,7 +572,9 @@ Func StartExtraction()
 
 	; Optional broad game-archive fallback. Keep this after all native/specific handlers and 7-Zip
 	; so installing Game Extractor does not slow down or override normal UniExtract routes.
-	If CheckGameExtractor() Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'))
+	If Not _ShouldAvoidBroadGameProbeForBin() Then
+		If CheckGameExtractor() Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'))
+	EndIf
 
 	; Game-audio decoder of last resort. Only try known game-audio extensions, and only
 	; after the existing archive extractors, so a sound bank is not mistaken for an archive.
@@ -1575,6 +1580,8 @@ Func FileScan_ExeInfo($bUseCmd = $extract)
 	EndIf
 
 	$sDiePipeline = $sFileType
+	; Preserve DiE independently even if Exeinfo replaces a weak detector result.
+	$g_sDieDetectionHint = $sDiePipeline
 	If $bDieRan Then
 		_PipelineStep("DETECTOR", "Detect It Easy", _PipelineDetectorStatus($sDiePipeline, _IsStrongPrimaryDetectorHit($sDiePipeline)), _PipelineCompactDetails($sDiePipeline))
 	Else
@@ -2859,8 +2866,30 @@ Func CheckVgmstream()
 	Return extract($TYPE_VGMSTREAM, "vgmstream game audio", "", True, True)
 EndFunc
 
+; Broad game-archive scanners can misrecognise multi-GB installer data
+; (for example setup-1.bin beside setup.exe), extracting huge numbered blobs.
+; Preserve normal game formats while deferring .bin installer cases to
+; their more specific archive/installer handlers.
+Func _ShouldAvoidBroadGameProbeForBin()
+	If StringLower($fileext) <> "bin" Then Return False
+
+	Local $aSidecar = StringRegExp($filename, "(?i)^(.+)-[0-9]+$", 1)
+	If IsArray($aSidecar) Then
+		If FileExists($filedir & "\" & $aSidecar[0] & ".exe") Then Return True
+	EndIf
+
+	; DiE + TrID independently reported FreeARC for the supplied file.
+	; Exeinfo can replace the weak DiE result without invalidating that hint.
+	If StringInStr($g_sDieDetectionHint, "FreeArc") And StringInStr($g_sStoredTridType, "FreeArc") Then Return True
+	Return False
+EndFunc
+
 ; Determine if file can be extracted with GARbro
 Func CheckGarbro($arcdisp = 0)
+	If _ShouldAvoidBroadGameProbeForBin() Then
+		Cout("GARbro probe rejected for installer sidecar/corroborated FreeARC .bin")
+		Return False
+	EndIf
 	HasNetFramework(4.6)
 	Cout("Testing GARbro")
 	_CreateTrayMessageBox(t('TERM_TESTING') & ' GARbro ' & t('TERM_ARCHIVE'))
@@ -5303,6 +5332,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 	EndIf
 
 	If $success = $RESULT_SUCCESS And $arctype = $TYPE_ALZ And $g_sExtractorWinner = "" Then LogExtractorWinner("unalz")
+	If $success = $RESULT_SUCCESS And $arctype = $TYPE_GARBRO And $g_sExtractorWinner = "" Then LogExtractorWinner("GARbro")
 
 	; QuickBMS extracts Descent 3 HOG2 data but does not restore each entry's Unix mtime.
 	; Run only after successful QBMS extraction. The helper verifies HOG2 magic and bounds,
@@ -6541,6 +6571,10 @@ Func LogPerFileSummary($sFinalStatus, $sArcDisp = "")
 	If $sFinalStatus = "unknownexe" Then
 		$sExtractor = "unsupported"
 	EndIf
+
+	; The final summary should describe GARbro's claimed format, not a
+	; stale ZIP/7-Zip fallback label from an earlier failed probe.
+	If $sExtractor = "GARbro" And Not StringIsSpace($sArcDisp) And $sArcDisp <> "0" Then $sDetect = "GARbro identified: " & _NormalizeOneLine($sArcDisp)
 
 	If $sForcedDetect <> "" Then $sDetect = $sForcedDetect
 

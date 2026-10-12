@@ -155,6 +155,35 @@ function Invoke-AcefileSmokeTest {
 }
 Invoke-AcefileSmokeTest
 
+# Full-pipeline regression: an ArC\x01 header must never be accepted as GARbro
+# PD/KAAS, even if a numbered installer sidecar and setup.exe are adjacent.
+# A tiny intentionally invalid FreeArc stub is used so this test does not ship
+# or execute copyrighted game content and cannot decompress tens of gigabytes.
+function Invoke-FreeArcRoutingSmokeTest {
+    $Case = Join-Path $SmokeRoot 'freearc-header-falsepositive'
+    $Output = Join-Path $Case 'output'
+    New-Item -ItemType Directory -Path $Output -Force | Out-Null
+    $Archive = Join-Path $Case 'setup-1.bin'
+    [IO.File]::WriteAllBytes($Archive, [byte[]]@(0x41,0x72,0x43,0x01,0,0,0,0))
+    [IO.File]::WriteAllBytes((Join-Path $Case 'setup.exe'),[byte[]]@(0x4d,0x5a))
+    $Arguments = '"' + $Archive + '" "' + $Output + '" /silent'
+    $Process = Start-Process -FilePath $Exe -ArgumentList $Arguments -PassThru
+    if (-not $Process.WaitForExit(60000)) {
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+        throw 'FreeArc header routing regression timed out.'
+    }
+    if ($Process.ExitCode -eq 0) {
+        throw 'Invalid FreeArc fixture was incorrectly considered successfully extracted.'
+    }
+    $FakePd = @(Get-ChildItem -LiteralPath $Output -File -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^setup-1#\d{4}' })
+    if ($FakePd.Count -gt 0) {
+        throw 'GARbro generated PD/KAAS pseudo-files for a FreeArc signature.'
+    }
+    Write-Host "FreeArc header routing passed: failed closed (exit $($Process.ExitCode)) without GARbro pseudo-files."
+}
+Invoke-FreeArcRoutingSmokeTest
+
 # Ensure the production package really contains the new x64 helper, its
 # matching magic database and all dependency DLLs. Exercise the staged tool
 # from a clean PATH to catch accidental use of system-installed MSYS2.

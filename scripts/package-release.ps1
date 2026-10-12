@@ -67,6 +67,7 @@ if (-not (Test-Path -LiteralPath $HelperRefreshScript)) {
     throw "Helper refresh script not found: $HelperRefreshScript"
 }
 & $HelperRefreshScript -StageRoot $StageRoot -WorkRoot $HelperRefreshRoot
+& $HelperRefreshScript -StageRoot $StageRoot -WorkRoot $HelperRefreshRoot
 
 # Prefer a self-contained, hash-pinned x64 file/libmagic 5.48 bundle while
 # retaining the legacy x86 file.exe and magic.mgc in the package root.
@@ -78,6 +79,7 @@ if ($env:MSYS2_LOCATION) {
 } else {
     Write-Warning 'No MSYS2_LOCATION: x64 libmagic 5.48 was not staged; legacy file.exe remains available.'
 }
+
 
 foreach ($File in @('UniExtract.exe', 'UniExtractUpdater.exe', 'UniExtractUpdater_NoAdmin.exe', 'English.ini', 'README.md', 'LICENSE', 'VERSION')) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot $File) -Destination (Join-Path $StageRoot $File) -Force

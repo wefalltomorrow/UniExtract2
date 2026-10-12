@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_Outfile=.\UniExtract.exe
 #AutoIt3Wrapper_Res_Description=Universal Extractor
 #AutoIt3Wrapper_Res_ProductName=Universal Extractor
-#AutoIt3Wrapper_Res_Fileversion=3.1.5.0
+#AutoIt3Wrapper_Res_Fileversion=3.1.6.0
 #AutoIt3Wrapper_Res_ProductVersion=%fileversion%
 #AutoIt3Wrapper_Res_CompanyName=wefalltomorrow
 #AutoIt3Wrapper_Res_Language=1033
@@ -212,7 +212,7 @@ Global $g_sDetectionWinner = "", $g_sExtractorWinner = "", $g_sDetectedTypeForSu
 Global $g_sPipelineRows = "", $g_iPipelineSeq = 0
 Global $g_sPipelineTimeline = "", $g_sPipelineLine = "", $g_sPipelineToolVersions = ""
 Global $g_iPipelineWarn = 0, $g_iPipelineFail = 0, $g_iPipelineOk = 0, $g_iPipelineRun = 0
-Global $g_bStrictPipeline = True, $g_sStoredTridType = "", $g_sStoredUnixType = "", $g_sDieDetectionHint = ""
+Global $g_bStrictPipeline = True, $g_sStoredTridType = "", $g_sStoredUnixType = "", $g_sDieDetectionHint = "", $g_sVerifiedFileSignature = ""
 Global $oldpath, $oldoutdir, $sUnicodeName, $createdir
 Global $g_aUnicodeSidecarCopies[0]
 Global $guiprefs, $TBgui = 0, $exStyle = -1, $idTrayStatusExt, $BatchBut, $idProgress, $sComError = 0
@@ -515,6 +515,8 @@ Func StartExtraction()
 	$g_sStoredTridType = ""
 	$g_sStoredUnixType = ""
 	$g_sDieDetectionHint = ""
+	$g_sVerifiedFileSignature = _GetVerifiedFileSignature($file)
+	If $g_sVerifiedFileSignature <> "" Then Cout("Verified file-header format: " & $g_sVerifiedFileSignature & " (not inferred from filename)")
 
 	; If an extractor is specified via command line parameter, we simply use that without scanning
 	If $sArcTypeOverride Then Return extract($sArcTypeOverride, $sArcTypeOverride & " " & t('TERM_FILE'))
@@ -547,46 +549,68 @@ Func StartExtraction()
 		terminate($STATUS_FILEINFO, $filenamefull, $fileext)
 	EndIf
 
-	; File signatures override broad heuristic detectors. A verified FreeArc
-	; header on a .bin must never be sent to GARbro's signatureless PD/KAAS
-	; recognizer. The bundled unarc may not support repack-specific codecs,
-	; in which case report unsupported rather than trying an unrelated format.
-	If _HasFreeArcMagic($file) Then
-		LogDetectionWinner("FreeArc header (ArC 01)", "FreeArc archive")
-		Cout("Verified FreeArc magic bytes; using FreeArc extractor before broad game probes")
+	; Exact file headers are stronger evidence than file extensions, scanner
+	; heuristics or speculative game extractors. The format is read once from
+	; the input header, independently of the chosen extension.
+	If $g_sVerifiedFileSignature = "freearc" Then
+		LogDetectionWinner("Verified file header", "FreeArc archive")
+		Cout("Verified FreeArc magic bytes; using FreeArc extractor before any speculative probes")
 		If extract($TYPE_FREEARC, "FreeArc archive", "", True, True) Then _
 			terminate($STATUS_SUCCESS, $filenamefull, $TYPE_FREEARC, "FreeArc archive")
 		If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_FREEARC, "FreeArc archive")
-		Cout("FreeArc was identified conclusively, but the bundled unarc helper could not extract it; refusing unrelated GARbro/ZIP fallbacks")
-		terminate($STATUS_NOTSUPPORTED, $file, $TYPE_FREEARC, "FreeArc archive (unsupported extraction method or installer compression)")
+		If $g_bArchiveIntegrityError Then terminate($STATUS_FAILED, $file, $TYPE_FREEARC, "Corrupt FreeArc archive")
+		Cout("FreeArc signature verified; bundled unarc cannot extract it. Refusing unrelated format fallbacks.")
+		terminate($STATUS_NOTSUPPORTED, $file, $TYPE_FREEARC, "FreeArc archive (unsupported extractor or compression)")
 	EndIf
 
-	; Else perform additional extraction methods
-	; Do not skip game probing when BMS.db has a format-specific script for this extension.
-	; This preserves the strict media fast-path while preventing false-positive media detection
-	; from bypassing a known game/archive extractor (for example Descent 3 .mn3/.hog).
-	If _ShouldAvoidBroadGameProbeForBin() Then
-		Cout("Skipping broad ISO/game probes for installer sidecar or corroborated FreeARC .bin; deferring to specific detector routes")
-	ElseIf _ShouldSkipNonFatalProbesForPrimaryMatch() And Not _HasGameBmsForExtension($fileext) Then
-		Cout("Skipping non-fatal ISO/game probes because primary detector already identified media")
+	If _IsVerified7ZipFormat($g_sVerifiedFileSignature) Then
+		; A failed 7-Zip extraction cannot reclassify a verified ZIP/RAR/7z/etc.
+		; as a game archive just because another tool produced pseudo-files.
+		LogDetectionWinner("Verified file header", $g_sVerifiedFileSignature & " archive/compressed data")
+		If check7z(0, False, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_7Z, $g_sVerifiedFileSignature & " archive")
+		If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_7Z, $g_sVerifiedFileSignature & " archive")
+		If $g_bArchiveIntegrityError Then terminate($STATUS_FAILED, $file, $TYPE_7Z, "Corrupt " & $g_sVerifiedFileSignature & " archive")
+		Cout("Verified archive header but 7-Zip cannot extract it; refusing speculative ISO/game probes")
+		terminate($STATUS_NOTSUPPORTED, $file, $TYPE_7Z, $g_sVerifiedFileSignature & " archive (unsupported extractor)")
+	EndIf
+
+	If _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Then
+		LogDetectionWinner("Verified file header", $g_sVerifiedFileSignature & " file")
+	EndIf
+
+	; Keep specifically matched QuickBMS scripts before the generic 7-Zip
+	; probe (e.g. Descent 3 .mn3/.hog). Never let a broad script guess beat
+	; an exact, non-game file header.
+	If $g_sVerifiedFileSignature = "" And _HasGameBmsForExtension($fileext) Then
+		Cout("Game-specific extension present in BMS.db; trying its script before generic archive probing")
+		CheckGame(False, False)
+	EndIf
+
+	If Not _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Then
+		; User definitions and 7-Zip run before broad game/ISO probes. A weak
+		; QuickBMS/GARbro hit must never preempt a genuine readable archive.
+		CheckExt()
+		If check7z(0, False, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
+		If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
+		If $g_bArchiveIntegrityError Then
+			Cout("Definitive archive corruption/broken-volume failure detected; refusing speculative extractor fallback")
+			terminate($STATUS_FAILED, $file, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
+		EndIf
+	EndIf
+
+	; A known image/document/media header is not a game archive simply
+	; because a permissive extractor lists plausible-looking entries.
+	Local $bSkipGameProbes = _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Or _
+		_ShouldAvoidBroadGameProbeForBin() Or _ShouldSkipNonFatalProbesForPrimaryMatch()
+	If $bSkipGameProbes Then
+		Cout("Skipping speculative ISO/GARbro/QuickBMS/TotalObserver probes: trusted header or protected detector context")
 	Else
 		CheckIso()
 		CheckGame()
 		CheckTotalObserver()
 	EndIf
 
-	; Use file extension if signature not recognized
-	CheckExt()
-
-	If check7z(0, False, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
-	If $g_bArchiveIntegrityError Then
-		Cout("Definitive archive corruption/broken-volume failure detected after general 7-Zip probe; aborting further fallback scans")
-		terminate($STATUS_FAILED, $file, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
-	EndIf
-
-	; Optional broad game-archive fallback. Keep this after all native/specific handlers and 7-Zip
-	; so installing Game Extractor does not slow down or override normal UniExtract routes.
-	If Not _ShouldAvoidBroadGameProbeForBin() Then
+	If Not $bSkipGameProbes Then
 		If CheckGameExtractor() Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'))
 	EndIf
 
@@ -2806,8 +2830,7 @@ Func CheckGame($bUseGaup = True, $bUseGarbro = True)
 		; Check GAUP first
 		Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $gaup & '" "' & $file & '"', $filedir, @SW_HIDE, -1)
 
-		If @error Or StringInStr($return, "Target directory:", 0) Or StringInStr($return, "0 files found", 0) Or StringInStr($return, "Error", 0) _
-		Or StringInStr($return, "exception occured", 0) Or StringInStr($return, "not supported", 0) Or $return == "" Then
+		If Not _IsPositiveQuickBmsListing($return) Then
 
 		Else
 			_DeleteTrayMessageBox()
@@ -2880,14 +2903,104 @@ Func CheckVgmstream()
 	Return extract($TYPE_VGMSTREAM, "vgmstream game audio", "", True, True)
 EndFunc
 
-; Read only four bytes regardless of input size. The FreeArc format is
-; identified by the exact "ArC" + 0x01 signature at offset zero.
+; Centralised signature evidence, independent of extension or tool guesses.
+; Only include unambiguous signatures at offset zero (or fixed offsets).
+; Avoid treating a generic MZ/SFX header as an archive: installers are handled
+; separately by IsExe and the primary detector routing.
+Func _GetVerifiedFileSignature($sPath)
+	Local $hInput = FileOpen($sPath, $FO_BINARY)
+	If $hInput = -1 Then Return ""
+	Local $bHeader = FileRead($hInput, 16)
+	FileClose($hInput)
+	Local $n = BinaryLen($bHeader)
+	If $n < 4 Then Return ""
+	If BinaryMid($bHeader, 1, 4) = Binary("0x41724301") Then Return "freearc"
+	If $n >= 6 And BinaryMid($bHeader, 1, 6) = Binary("0x377ABCAF271C") Then Return "7z"
+	If BinaryMid($bHeader, 1, 4) = Binary("0x504B0304") Or _
+		BinaryMid($bHeader, 1, 4) = Binary("0x504B0506") Then Return "zip"
+	If $n >= 7 And BinaryMid($bHeader, 1, 7) = Binary("0x526172211A0700") Then Return "rar"
+	If $n >= 8 And BinaryMid($bHeader, 1, 8) = Binary("0x526172211A070100") Then Return "rar"
+	If BinaryMid($bHeader, 1, 3) = Binary("0x1F8B08") Then Return "gzip"
+	If $n >= 4 And BinaryMid($bHeader, 1, 3) = Binary("0x425A68") And _
+		Dec(StringTrimLeft(String(BinaryMid($bHeader, 4, 1)), 2)) >= 0x31 And _
+		Dec(StringTrimLeft(String(BinaryMid($bHeader, 4, 1)), 2)) <= 0x39 Then Return "bzip2"
+	If $n >= 6 And BinaryMid($bHeader, 1, 6) = Binary("0xFD377A585A00") Then Return "xz"
+	If $n >= 8 And BinaryMid($bHeader, 1, 8) = Binary("0x89504E470D0A1A0A") Then Return "png"
+	If BinaryMid($bHeader, 1, 3) = Binary("0xFFD8FF") Then Return "jpeg"
+	If $n >= 6 And (BinaryMid($bHeader, 1, 6) = Binary("0x474946383761") Or _
+		BinaryMid($bHeader, 1, 6) = Binary("0x474946383961")) Then Return "gif"
+	If BinaryMid($bHeader, 1, 5) = Binary("0x255044462D") Then Return "pdf"
+	If BinaryMid($bHeader, 1, 4) = Binary("0x4F676753") Then Return "ogg"
+	If BinaryMid($bHeader, 1, 4) = Binary("0x664C6143") Then Return "flac"
+	If BinaryMid($bHeader, 1, 4) = Binary("0x1A45DFA3") Then Return "ebml"
+	If $n >= 12 And BinaryMid($bHeader, 5, 4) = Binary("0x66747970") Then Return "mp4"
+	If $n >= 12 And BinaryMid($bHeader, 1, 4) = Binary("0x52494646") Then
+		Switch BinaryMid($bHeader, 9, 4)
+			Case Binary("0x57415645")
+				Return "wav"
+			Case Binary("0x41564920")
+				Return "avi"
+			Case Binary("0x57454250")
+				Return "webp"
+		EndSwitch
+	EndIf
+	Return ""
+EndFunc
+
+Func _IsVerified7ZipFormat($sFormat)
+	Switch $sFormat
+		Case "7z", "zip", "rar", "gzip", "bzip2", "xz"
+			Return True
+	EndSwitch
+	Return False
+EndFunc
+
+Func _IsVerifiedNonArchiveFormat($sFormat)
+	Return $sFormat <> "" And $sFormat <> "freearc" And Not _IsVerified7ZipFormat($sFormat)
+EndFunc
+
+; Verified headers should NOT disable a specialised, matching extension
+; handler (e.g. UnRAR or password-aware PDF extraction). A mismatched
+; extension must never override stronger binary format evidence.
+Func _VerifiedHeaderMatchesExtension($sFormat, $sExt)
+	$sExt = StringLower($sExt)
+	Switch $sFormat
+		Case "freearc"
+			Return $sExt = "arc" Or $sExt = "farc"
+		Case "7z"
+			Return $sExt = "7z"
+		Case "zip"
+			Return $sExt = "zip" Or $sExt = "apk"
+		Case "rar"
+			Return $sExt = "rar"
+		Case "gzip"
+			Return $sExt = "gz" Or $sExt = "gzip"
+		Case "bzip2"
+			Return $sExt = "bz2"
+		Case "xz"
+			Return $sExt = "xz"
+		Case "pdf"
+			Return $sExt = "pdf"
+	EndSwitch
+	Return False
+EndFunc
+
+; Retain the original helper name for existing BIN guard tests and callers.
 Func _HasFreeArcMagic($sPath)
 	Local $hInput = FileOpen($sPath, $FO_BINARY)
 	If $hInput = -1 Then Return False
 	Local $bHeader = FileRead($hInput, 4)
 	FileClose($hInput)
 	Return BinaryLen($bHeader) = 4 And $bHeader = Binary("0x41724301")
+EndFunc
+
+; Broad QuickBMS scripts can claim arbitrary data based on weak guesses.
+; Require an actual positive file count, not merely an absence of errors.
+Func _IsPositiveQuickBmsListing($sListing)
+	If StringStripWS($sListing, 3) = "" Then Return False
+	If StringRegExp($sListing, "(?i)\b(error|exception|not supported|failed|unsupported)\b") Then Return False
+	If StringInStr($sListing, "Target directory:", 0) Then Return False
+	Return StringRegExp($sListing, "(?i)\b[1-9][0-9]*\s+files?\s+found\b") = 1
 EndFunc
 
 ; Broad game-archive scanners can misrecognise multi-GB installer data
@@ -2911,9 +3024,11 @@ EndFunc
 
 ; PD/KAAS has no fixed signature (GARbro's PdOpener declares Signature=0).
 ; Its normal extension is .pd, and it synthesises basename#NNNN filenames.
-; On unrelated .bin files this can create huge, misleading pseudo-extractions.
+; On unrelated file types this can create huge, misleading pseudo-extractions.
+; Only the native .pd extension is sufficient evidence for this signatureless
+; opener; all other extensions require actual format evidence rather than guesses.
 Func _ShouldRejectWeakGarbroClaim($sClaim)
-	Return StringLower($fileext) = "bin" And StringUpper(StringStripWS($sClaim, 3)) = "PD/KAAS"
+	Return StringLower($fileext) <> "pd" And StringUpper(StringStripWS($sClaim, 3)) = "PD/KAAS"
 EndFunc
 
 ; Determine if file can be extracted with GARbro
@@ -2927,9 +3042,14 @@ Func CheckGarbro($arcdisp = 0)
 	_CreateTrayMessageBox(t('TERM_TESTING') & ' GARbro ' & t('TERM_ARCHIVE'))
 	Local $sGarbroListCmd = Quote($garbro, True) & ' l "' & $file & '" || ' & Quote($garbro, True) & ' list "' & $file & '"'
 	Local $return = FetchStdout(@ComSpec & ' /d /c ' & $sGarbroListCmd, $filedir, @SW_HIDE)
-	If Not @error And Not StringInStr($return, "Error: Input file has an unknown format") And Not StringInStr($return, "Error: Archive is empty") Then
+	If Not @error And Not StringIsSpace($return) And Not StringInStr($return, "Error: Input file has an unknown format") And Not StringInStr($return, "Error: Archive is empty") Then
 		Local $sGarbroInfoCmd = Quote($garbro, True) & ' i "' & $file & '" || ' & Quote($garbro, True) & ' info "' & $file & '"'
 		$return = StringStripWS(StringStripCR(FetchStdout(@ComSpec & ' /d /c ' & $sGarbroInfoCmd, $filedir, @SW_HIDE, -1)), 8)
+		If $return = "" Or StringInStr($return, "unknown", 0) Or StringInStr($return, "Error", 0) Then
+			Cout("Ignoring GARbro result without a credible archive format")
+			_DeleteTrayMessageBox()
+			Return False
+		EndIf
 		If _ShouldRejectWeakGarbroClaim($return) Then
 			Cout("Ignoring weak GARbro PD/KAAS claim on .bin: signatureless .pd image format; not sufficient evidence to extract installer data")
 			_DeleteTrayMessageBox()
@@ -3253,8 +3373,7 @@ Func CheckIso($returnSuccess = False, $returnFail = False)
 
 	Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $iso & '" "' & $file & '"', $filedir, @SW_HIDE)
 	_DeleteTrayMessageBox()
-	If StringInStr($return, "Target directory:") Or StringInStr($return, "0 files found")  Or $return == "" _
-	Or StringInStr($return, "exception occured") Or StringInStr($return, "not supported by this WCX plugin") Then
+	If Not _IsPositiveQuickBmsListing($return) Then
 		$isofailed = True
 		Return False
 	EndIf
@@ -3296,8 +3415,7 @@ Func CheckTotalObserver($arcdisp = 0)
 	Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $observer & '" "' & $file & '"', $filedir, @SW_HIDE)
 
 	_DeleteTrayMessageBox()
-	If StringInStr($return, "not supported by this WCX plugin") Or StringInStr($return, "0 files found") Or _
-	   StringInStr($return, "exception occured") Or StringInStr($return, "EXCEPTION HANDLER") Then
+	If Not _IsPositiveQuickBmsListing($return) Then
 	   $observerfailed = True
 	   Return False
 	EndIf
@@ -3601,6 +3719,23 @@ Func ResolveStrictPipeline($bApplyPrimaryAndTrid = True, $bApplyUnix = True)
 		Return False
 	EndIf
 
+	; Never let a weaker DiE/TrID/unix guess reclassify a file whose exact
+	; header proved it is ordinary media or a document. Legitimate format
+	; handlers remain available even when the user renamed the extension.
+	If _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Then
+		Cout("Verified non-archive header overrides speculative detector-based extractor routing")
+		Switch $g_sVerifiedFileSignature
+			Case "pdf"
+				If extract($TYPE_PDF, "PDF file", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_PDF, "PDF file")
+				If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_PDF, "PDF file")
+			Case "ogg", "flac", "wav"
+				If extract($TYPE_AUDIO, "Audio file", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_AUDIO, "Audio file")
+			Case "mp4", "ebml", "avi"
+				If extract($TYPE_VIDEO, "Video file", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_VIDEO, "Video file")
+		EndSwitch
+		terminate($STATUS_NOTPACKED, $file, $g_sVerifiedFileSignature, "Verified " & $g_sVerifiedFileSignature & " file (not a game archive)")
+	EndIf
+
 	Cout("Strict fallback: resolving stored detector hints")
 	$g_bStrictPipeline = False
 
@@ -3815,6 +3950,13 @@ EndFunc
 ; Perform special actions for some file types
 Func InitialCheckExt()
 	If Not $extract Then Return
+
+	; Never route a known archive/image/media signature using an unrelated extension.
+	; PDF retains its dedicated password-aware extractor when correctly named.
+	If $g_sVerifiedFileSignature <> "" And Not _VerifiedHeaderMatchesExtension($g_sVerifiedFileSignature, $fileext) Then
+		Cout("Deferring extension-first probes: a verified file header has higher priority")
+		Return
+	EndIf
 
 	Switch $fileext
 		; Split files have no additional file magic and will be misdetected
@@ -6402,6 +6544,12 @@ Func _PipelineWriteReport($sLogPath, $sFinalStatus)
 EndFunc
 
 Func LogDetectionWinner($sTool, $sType)
+	; Once an exact header has won, less reliable detector guesses can still
+	; appear in the timeline but cannot overwrite the format in the summary.
+	If $g_sDetectionWinner = "Verified file header" And $sTool <> "Verified file header" And $g_sVerifiedFileSignature <> "" Then
+		Cout("Ignoring lower-confidence format override from " & $sTool & ": " & $sType)
+		Return
+	EndIf
 	$g_sDetectionWinner = _NormalizeOneLine($sTool)
 	$g_sDetectedTypeForSummary = _NormalizeOneLine($sType)
 	Cout("DETECTION WINNER: " & $g_sDetectionWinner & " -> " & $g_sDetectedTypeForSummary)

@@ -184,4 +184,56 @@ function Invoke-FreeArcRoutingSmokeTest {
 }
 Invoke-FreeArcRoutingSmokeTest
 
+# Real packaged-app integration checks: filename suffixes must never override
+# verified header evidence or turn ordinary non-archives into game pseudo-files.
+function Invoke-VerifiedHeaderRoutingSmokeTest {
+    $CaseRoot = Join-Path $SmokeRoot 'verified-header-routing'
+    $PayloadRoot = Join-Path $CaseRoot 'payload'
+    $ExtractedRoot = Join-Path $CaseRoot 'extracted'
+    New-Item -ItemType Directory -Force -Path $PayloadRoot, $ExtractedRoot | Out-Null
+    $ExpectedText = 'Native ZIP content must win over game-archive guesses'
+    $Payload = Join-Path $PayloadRoot 'verified.txt'
+    Set-Content -LiteralPath $Payload -Value $ExpectedText -Encoding ASCII
+    $Zip = Join-Path $CaseRoot 'legitimate.zip'
+    Compress-Archive -LiteralPath $Payload -DestinationPath $Zip -CompressionLevel Optimal -Force
+    $Disguised = Join-Path $CaseRoot 'legitimate.bin'
+    Move-Item -LiteralPath $Zip -Destination $Disguised -Force
+
+    $Arguments = '"' + $Disguised + '" "' + $ExtractedRoot + '" /silent'
+    $Process = Start-Process -FilePath $Exe -ArgumentList $Arguments -PassThru
+    if (-not $Process.WaitForExit(60000)) {
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+        throw 'Header-based ZIP extraction timed out.'
+    }
+    $ActualFiles = @(Get-ChildItem -LiteralPath $ExtractedRoot -Recurse -File -ErrorAction SilentlyContinue)
+    $Found = @($ActualFiles | Where-Object { $_.Name -eq 'verified.txt' })
+    $PseudoFiles = @($ActualFiles | Where-Object { $_.Name -match 'legitimate#\d{4}' })
+    if ($Found.Count -ne 1 -or $PseudoFiles.Count -gt 0) {
+        throw "Valid ZIP renamed .bin was misidentified or failed extraction (exit $($Process.ExitCode))."
+    }
+    $ActualText = (Get-Content -LiteralPath $Found[0].FullName -Raw).Trim()
+    if ($ActualText -ne $ExpectedText) {
+        throw "Extracted ZIP data did not match expected payload: $ActualText"
+    }
+
+    # A PNG signature with a misleading .zip extension is NOT an archive.
+    # Never create GARbro/QuickBMS pseudo-output for an invalid image stub.
+    $Fake = Join-Path $CaseRoot 'fake.zip'
+    $FakeOutput = Join-Path $CaseRoot 'fake-output'
+    New-Item -ItemType Directory -Force -Path $FakeOutput | Out-Null
+    [IO.File]::WriteAllBytes($Fake, [byte[]]@(0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0,0,0,0))
+    $Arguments = '"' + $Fake + '" "' + $FakeOutput + '" /silent'
+    $Process = Start-Process -FilePath $Exe -ArgumentList $Arguments -PassThru
+    if (-not $Process.WaitForExit(60000)) {
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+        throw 'Misleading-extension PNG routing timed out.'
+    }
+    $FakeFiles = @(Get-ChildItem -LiteralPath $FakeOutput -Recurse -File -ErrorAction SilentlyContinue)
+    if ($FakeFiles.Count -gt 0) {
+        throw "Ordinary PNG header with misleading .zip extension was falsely extracted ($($FakeFiles.Count) files)."
+    }
+    Write-Host 'Verified-header routing smoke passed: ZIP renamed .bin extracted correctly, PNG renamed .zip did not produce pseudo-files.'
+}
+Invoke-VerifiedHeaderRoutingSmokeTest
+
 Write-Host 'All packaged extraction smoke tests passed.'

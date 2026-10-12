@@ -66,6 +66,10 @@ jobs:
         shell: powershell
         run: .\tests\installer-bin-guard.ps1
 
+      - name: Verify detection confidence and header priority
+        shell: powershell
+        run: .\tests\detection-confidence.ps1
+
       - name: Package release
         shell: powershell
         run: .\scripts\package-release.ps1

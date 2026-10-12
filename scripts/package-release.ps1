@@ -68,6 +68,17 @@ if (-not (Test-Path -LiteralPath $HelperRefreshScript)) {
 }
 & $HelperRefreshScript -StageRoot $StageRoot -WorkRoot $HelperRefreshRoot
 
+# Prefer a self-contained, hash-pinned x64 file/libmagic 5.48 bundle while
+# retaining the legacy x86 file.exe and magic.mgc in the package root.
+# Local builds without MSYS2 remain possible; official CI must provide it.
+if ($env:MSYS2_LOCATION) {
+    & (Join-Path $PSScriptRoot 'stage-libmagic-548.ps1') -StageRoot $StageRoot -Msys2Location $env:MSYS2_LOCATION
+} elseif ($env:REQUIRE_LIBMAGIC_548 -eq '1') {
+    throw 'Official package requires pinned file/libmagic 5.48, but MSYS2_LOCATION was not set.'
+} else {
+    Write-Warning 'No MSYS2_LOCATION: x64 libmagic 5.48 was not staged; legacy file.exe remains available.'
+}
+
 foreach ($File in @('UniExtract.exe', 'UniExtractUpdater.exe', 'UniExtractUpdater_NoAdmin.exe', 'English.ini', 'README.md', 'LICENSE', 'VERSION')) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot $File) -Destination (Join-Path $StageRoot $File) -Force
 }

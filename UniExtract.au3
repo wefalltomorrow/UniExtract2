@@ -5333,6 +5333,7 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 
 	If $success = $RESULT_SUCCESS And $arctype = $TYPE_ALZ And $g_sExtractorWinner = "" Then LogExtractorWinner("unalz")
 	If $success = $RESULT_SUCCESS And $arctype = $TYPE_GARBRO And $g_sExtractorWinner = "" Then LogExtractorWinner("GARbro")
+	If $success = $RESULT_SUCCESS And $arctype = $TYPE_FREEARC And $g_sExtractorWinner = "" Then LogExtractorWinner("unarc")
 
 	; QuickBMS extracts Descent 3 HOG2 data but does not restore each entry's Unix mtime.
 	; Run only after successful QBMS extraction. The helper verifies HOG2 magic and bounds,

@@ -62,6 +62,10 @@ jobs:
         shell: powershell
         run: .\scripts\build.ps1
 
+      - name: Regression-test installer BIN guard
+        shell: powershell
+        run: .\tests\installer-bin-guard.ps1
+
       - name: Package release
         shell: powershell
         run: .\scripts\package-release.ps1

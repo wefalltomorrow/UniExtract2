@@ -23,7 +23,7 @@ The v3.1.3 overlay refreshes and validates:
 - PEA 1.33 from PeaZip 11.3.0
 - GNU gettext `msgunfmt` 1.0, static x86
 - innounp 2.71.1
-- TrID definitions dated 2026-10-08, 22,425 definitions
+- TrID definitions dated 2026-10-12, 22,456 definitions (SHA-256 pinned and checked with trid.exe)
 - UnRAR 7.23 x64
 - CHDMan 0.289 x64
 - SQLite 3.53.4: x86 shell plus x86/x64 DLLs
@@ -93,7 +93,7 @@ This is a **complete file listing**, not a claim that every tool is current or h
 - **Forensic7z 1.6**: matches the currently published plugin version; retain: https://www.tc4shell.com/en/7zip/forensic7z/
 - **ExFat7z 1.1**: matches the author's current plugin release; retain: https://www.tc4shell.com/en/7zip/exfat7z/
 - **Xpdf command-line utilities 4.06**: the current stable upstream release; retain: https://www.xpdfreader.com/download.html
-- **TrID 2.48 and 2026-10-08 definitions**: match the published versions and definitions from Marco Pontello; retain: https://mark0.net/software-e.html
+- **TrID 2.48 and 2026-10-12 definitions (22,456)**: match the published versions and definitions from Marco Pontello; retain: https://mark0.net/software-e.html
 - **mtee 2.7**: matches the latest GitHub release; retain: https://github.com/isanych/mtee/releases
 - **Unshield 1.6.2**: matches the latest tagged release; retain: https://github.com/twogood/unshield/releases
 - **Bioruebe godotdec 2.1.2, cicdec 3.0.1, rmvdec 2.2.0, spoondec 2.0.1, utagedec 1.0.0**: match their published upstream release tags; retain these implementations unless format-specific regression evidence calls for a change.

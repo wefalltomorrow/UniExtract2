@@ -2953,6 +2953,32 @@ Func _IsVerifiedNonArchiveFormat($sFormat)
 	Return $sFormat <> "" And $sFormat <> "freearc" And Not _IsVerified7ZipFormat($sFormat)
 EndFunc
 
+; Verified headers should NOT disable a specialised, matching extension
+; handler (e.g. UnRAR or password-aware PDF extraction). A mismatched
+; extension must never override stronger binary format evidence.
+Func _VerifiedHeaderMatchesExtension($sFormat, $sExt)
+	$sExt = StringLower($sExt)
+	Switch $sFormat
+		Case "freearc"
+			Return $sExt = "arc" Or $sExt = "farc"
+		Case "7z"
+			Return $sExt = "7z"
+		Case "zip"
+			Return $sExt = "zip" Or $sExt = "apk"
+		Case "rar"
+			Return $sExt = "rar"
+		Case "gzip"
+			Return $sExt = "gz" Or $sExt = "gzip"
+		Case "bzip2"
+			Return $sExt = "bz2"
+		Case "xz"
+			Return $sExt = "xz"
+		Case "pdf"
+			Return $sExt = "pdf"
+	EndSwitch
+	Return False
+EndFunc
+
 ; Retain the original helper name for existing BIN guard tests and callers.
 Func _HasFreeArcMagic($sPath)
 	Local $hInput = FileOpen($sPath, $FO_BINARY)
@@ -3902,7 +3928,7 @@ Func InitialCheckExt()
 
 	; Never route a known archive/image/media signature using an unrelated extension.
 	; PDF retains its dedicated password-aware extractor when correctly named.
-	If $g_sVerifiedFileSignature <> "" And Not ($g_sVerifiedFileSignature = "pdf" And $fileext = "pdf") Then
+	If $g_sVerifiedFileSignature <> "" And Not _VerifiedHeaderMatchesExtension($g_sVerifiedFileSignature, $fileext) Then
 		Cout("Deferring extension-first probes: a verified file header has higher priority")
 		Return
 	EndIf

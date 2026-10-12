@@ -1,0 +1,45 @@
+name: libmagic 5.48 x64 candidate
+
+on:
+  push:
+    branches:
+      - libmagic-5-48-candidate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-libmagic:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install MSYS2 and file/libmagic 5.48
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          pacboy: file:p
+      - name: Set up Python for PE import closure
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+      - name: Stage isolated candidate and run format detection tests
+        shell: powershell
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        run: .\scripts\test-libmagic-548.ps1
+      - name: Upload candidate runtime bundle and audit
+        uses: actions/upload-artifact@v7
+        with:
+          name: libmagic-5.48-x64-candidate
+          path: |
+            .build/file548/CANDIDATE-*.txt
+            .build/file548/CANDIDATE-INVENTORY.csv
+            .build/file548/*.stdout.txt
+            .build/file548/*.stderr.txt
+            .build/file548/libmagic-5.48-x64-candidate.zip
+          if-no-files-found: error

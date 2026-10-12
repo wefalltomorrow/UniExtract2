@@ -155,4 +155,54 @@ function Invoke-AcefileSmokeTest {
 }
 Invoke-AcefileSmokeTest
 
+# Ensure the production package really contains the new x64 helper, its
+# matching magic database and all dependency DLLs. Exercise the staged tool
+# from a clean PATH to catch accidental use of system-installed MSYS2.
+function Invoke-Libmagic548PackagedSmokeTest {
+    $RuntimeRoot = Join-Path $StageRoot 'bin\x64\libmagic548'
+    $FileTool = Join-Path $RuntimeRoot 'file.exe'
+    $Magic = Join-Path $RuntimeRoot 'magic.mgc'
+    $Required = @('file.exe','magic.mgc','libmagic-1.dll','libsystre-0.dll','libtre-5.dll','libintl-8.dll','libiconv-2.dll')
+    $Present = Test-Path -LiteralPath $FileTool -PathType Leaf
+    if (-not $Present) {
+        if ($env:REQUIRE_LIBMAGIC_548 -eq '1') {
+            throw 'Required packaged libmagic 5.48 binary is missing.'
+        }
+        Write-Warning 'Packaged x64 libmagic not staged; legacy fallback remains in place.'
+        return
+    }
+    foreach ($Name in $Required) {
+        if (-not (Test-Path -LiteralPath (Join-Path $RuntimeRoot $Name) -PathType Leaf)) {
+            throw "Incomplete packaged libmagic 5.48 runtime: missing $Name"
+        }
+    }
+    foreach ($Name in @('file.exe','magic.mgc')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $StageRoot 'bin' $Name) -PathType Leaf)) {
+            throw "Packaged legacy file/magic fallback missing: $Name"
+        }
+    }
+    $SavedPath = $env:PATH
+    try {
+        $env:PATH = "$RuntimeRoot;$env:windir\System32;$env:windir"
+        $Version = (& $FileTool --version 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0 -or $Version -notmatch '5\.48') {
+            throw "Packaged libmagic version test failed: $Version"
+        }
+        $Samples = @(
+            @{Name='pe';Path=(Join-Path $env:windir 'System32\notepad.exe');Pattern='PE32|Windows executable|executable'},
+            @{Name='zip';Path=(Join-Path $SmokeRoot 'basic\smoke-test.zip');Pattern='Zip archive data|ZIP archive data'}
+        )
+        foreach ($Case in $Samples) {
+            $Output = (& $FileTool -b -m $Magic $Case.Path 2>&1 | Out-String)
+            if ($LASTEXITCODE -ne 0 -or $Output -notmatch $Case.Pattern) {
+                throw "Packaged libmagic $($Case.Name) detection failed: $Output"
+            }
+        }
+    } finally {
+        $env:PATH = $SavedPath
+    }
+    Write-Host 'Packaged libmagic 5.48 x64 version, PE and ZIP detection passed.'
+}
+Invoke-Libmagic548PackagedSmokeTest
+
 Write-Host 'All packaged extraction smoke tests passed.'

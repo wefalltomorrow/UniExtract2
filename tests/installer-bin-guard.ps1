@@ -6,6 +6,11 @@ $Repo = Split-Path -Parent $PSScriptRoot
 $Source = Get-Content -LiteralPath (Join-Path $Repo 'UniExtract.au3') -Raw
 $Match = [regex]::Match($Source, '(?ms)^Func _ShouldAvoidBroadGameProbeForBin\(\)\r?\n.*?^EndFunc')
 if (-not $Match.Success) { throw 'Installer sidecar detector missing from UniExtract.au3' }
+$MagicMatch = [regex]::Match($Source, '(?ms)^Func _HasFreeArcMagic\(\$sPath\)\r?\n.*?^EndFunc')
+if (-not $MagicMatch.Success) { throw 'FreeArc header check missing from UniExtract.au3.' }
+if (-not $Source.Contains('If _HasFreeArcMagic($file) Then')) {
+    throw 'The extraction pipeline must prioritize FreeArc magic before broad game probes.'
+}
 $PdMatch = [regex]::Match($Source, '(?ms)^Func _ShouldRejectWeakGarbroClaim\(\$sClaim\)\r?\n.*?^EndFunc')
 if (-not $PdMatch.Success) { throw 'Signatureless PD/KAAS recognition guard missing from source.' }
 if (-not $Source.Contains('If _ShouldAvoidBroadGameProbeForBin() Then') -or
@@ -24,7 +29,12 @@ if (-not $AutoItExe) { throw 'AutoIt3 interpreter not installed.' }
 $TestRoot = Join-Path $Repo '.build\installer-bin-guard-test'
 New-Item -ItemType Directory -Path $TestRoot -Force | Out-Null
 New-Item -Path (Join-Path $TestRoot 'setup.exe') -ItemType File -Force | Out-Null
+[IO.File]::WriteAllBytes((Join-Path $TestRoot 'free.arc'), [byte[]]@(0x41,0x72,0x43,0x01,0x00))
+[IO.File]::WriteAllBytes((Join-Path $TestRoot 'not-arc.bin'), [byte[]]@(0x41,0x72,0x43,0x02,0x00))
+[IO.File]::WriteAllBytes((Join-Path $TestRoot 'short.bin'), [byte[]]@(0x41,0x72,0x43))
 $Harness = @'
+#include <FileConstants.au3>
+Global $file = @ScriptDir & "\not-arc.bin"
 Global $fileext = "bin"
 Global $filename = "setup-1"
 Global $filedir = @ScriptDir
@@ -55,7 +65,19 @@ TestGuard("only DiE identifies FreeARC", False)
 $g_sStoredTridType = "FreeArc compressed archive"
 $fileext = "arc"
 TestGuard("other extension retains broad game probes", False)
+If Not _HasFreeArcMagic(@ScriptDir & "\free.arc") Then Exit 1
+If _HasFreeArcMagic(@ScriptDir & "\not-arc.bin") Then Exit 1
+If _HasFreeArcMagic(@ScriptDir & "\short.bin") Then Exit 1
+If _HasFreeArcMagic(@ScriptDir & "\missing.bin") Then Exit 1
+ConsoleWrite("PASS: FreeArc header matches exactly four magic bytes" & @CRLF)
 $fileext = "bin"
+$filename = "payload"
+$g_sDieDetectionHint = ""
+$g_sStoredTridType = ""
+$file = @ScriptDir & "\free.arc"
+TestGuard("magic bytes alone exclude broad game probes for BIN", True)
+$file = @ScriptDir & "\not-arc.bin"
+TestGuard("similar but incorrect magic is not considered FreeArc", False)
 If Not _ShouldRejectWeakGarbroClaim("PD/KAAS") Then Exit 1
 If _ShouldRejectWeakGarbroClaim("ZIP") Then Exit 1
 $fileext = "pd"
@@ -66,7 +88,7 @@ Exit 0
 
 '@
 $Path = Join-Path $TestRoot 'guard-test.au3'
-[IO.File]::WriteAllText($Path, $Harness + $Match.Value + [Environment]::NewLine + $PdMatch.Value + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
+[IO.File]::WriteAllText($Path, $Harness + $MagicMatch.Value + [Environment]::NewLine + $Match.Value + [Environment]::NewLine + $PdMatch.Value + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
 # AutoIt3.exe is a Windows GUI-subsystem process. PowerShell can omit
 # LASTEXITCODE when invoking it with '&'; Start-Process reliably waits for it.
 $StdOut = Join-Path $TestRoot 'stdout.txt'

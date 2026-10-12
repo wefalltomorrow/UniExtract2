@@ -16,6 +16,14 @@ $PackageName = 'mingw-w64-x86_64-file-5.48-1-any.pkg.tar.zst'
 $PackageSha256 = '844a8e6451f51aa9bfcbbdf92248b0e406891a51738ad2d8161835d7100d4f3f'
 $Cache = Join-Path $Msys2Location 'var\cache\pacman\pkg'
 $Cached = @(Get-ChildItem -LiteralPath $Cache -File -Filter $PackageName -ErrorAction SilentlyContinue)
+if ($Cached.Count -eq 0) {
+    # setup-msys2 can clean the pacman cache after installation. Ask pacman
+    # to cache the installed package again; the digest check below is mandatory.
+    $Pacman = Join-Path $Msys2Location 'usr\bin\pacman.exe'
+    & $Pacman --noconfirm -Sw mingw-w64-x86_64-file
+    if ($LASTEXITCODE -ne 0) { throw "pacman could not cache pinned file/libmagic 5.48 ($LASTEXITCODE)" }
+    $Cached = @(Get-ChildItem -LiteralPath $Cache -File -Filter $PackageName -ErrorAction SilentlyContinue)
+}
 if ($Cached.Count -ne 1) {
     throw "Exactly one cached official $PackageName is required. Found $($Cached.Count)."
 }

@@ -2917,7 +2917,9 @@ Func _GetVerifiedFileSignature($sPath)
 	If $n >= 7 And BinaryMid($bHeader, 1, 7) = Binary("0x526172211A0700") Then Return "rar"
 	If $n >= 8 And BinaryMid($bHeader, 1, 8) = Binary("0x526172211A070100") Then Return "rar"
 	If BinaryMid($bHeader, 1, 3) = Binary("0x1F8B08") Then Return "gzip"
-	If BinaryMid($bHeader, 1, 3) = Binary("0x425A68") Then Return "bzip2"
+	If $n >= 4 And BinaryMid($bHeader, 1, 3) = Binary("0x425A68") And _
+		Dec(StringTrimLeft(String(BinaryMid($bHeader, 4, 1)), 2)) >= 0x31 And _
+		Dec(StringTrimLeft(String(BinaryMid($bHeader, 4, 1)), 2)) <= 0x39 Then Return "bzip2"
 	If $n >= 6 And BinaryMid($bHeader, 1, 6) = Binary("0xFD377A585A00") Then Return "xz"
 	If $n >= 8 And BinaryMid($bHeader, 1, 8) = Binary("0x89504E470D0A1A0A") Then Return "png"
 	If BinaryMid($bHeader, 1, 3) = Binary("0xFFD8FF") Then Return "jpeg"

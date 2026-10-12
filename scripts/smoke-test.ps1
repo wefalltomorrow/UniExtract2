@@ -207,7 +207,8 @@ function Invoke-VerifiedHeaderRoutingSmokeTest {
     }
     $ActualFiles = @(Get-ChildItem -LiteralPath $ExtractedRoot -Recurse -File -ErrorAction SilentlyContinue)
     $Found = @($ActualFiles | Where-Object { $_.Name -eq 'verified.txt' })
-    if ($Found.Count -ne 1 -or ($ActualFiles | Where-Object { $_.Name -match 'legitimate#\d{4}' }).Count -gt 0) {
+    $PseudoFiles = @($ActualFiles | Where-Object { $_.Name -match 'legitimate#\d{4}' })
+    if ($Found.Count -ne 1 -or $PseudoFiles.Count -gt 0) {
         throw "Valid ZIP renamed .bin was misidentified or failed extraction (exit $($Process.ExitCode))."
     }
     $ActualText = (Get-Content -LiteralPath $Found[0].FullName -Raw).Trim()

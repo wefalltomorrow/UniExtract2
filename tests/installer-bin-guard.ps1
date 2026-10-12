@@ -88,6 +88,10 @@ $file = @ScriptDir & "\not-arc.bin"
 TestGuard("similar but incorrect magic is not considered FreeArc", False)
 If Not _ShouldRejectWeakGarbroClaim("PD/KAAS") Then Exit 1
 If _ShouldRejectWeakGarbroClaim("ZIP") Then Exit 1
+$fileext = "dat"
+If Not _ShouldRejectWeakGarbroClaim("PD/KAAS") Then Exit 1
+$fileext = "zip"
+If Not _ShouldRejectWeakGarbroClaim("PD/KAAS") Then Exit 1
 $fileext = "pd"
 If _ShouldRejectWeakGarbroClaim("PD/KAAS") Then Exit 1
 ConsoleWrite("PASS: PD/KAAS BIN false positive rejected; other formats retained" & @CRLF)

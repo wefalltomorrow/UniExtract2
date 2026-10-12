@@ -10,7 +10,7 @@ $StartMatch = [regex]::Match($Source, '(?ms)^Func StartExtraction\(\)\r?\n.*?^En
 if (-not $StartMatch.Success) { throw 'StartExtraction function missing.' }
 $Start = $StartMatch.Value
 $ExtensionIndex = $Start.IndexOf("CheckExt()")
-$NativeIndex = $Start.IndexOf('If check7z(0, False, True, True)')
+$NativeIndex = $Start.IndexOf('If check7z(0, False, True, True)', $ExtensionIndex)
 $GameIndex = $Start.IndexOf("CheckIso()")
 if ($ExtensionIndex -lt 0 -or $NativeIndex -le $ExtensionIndex -or $GameIndex -le $NativeIndex) {
     throw 'Speculative ISO/game probes must not precede native extraction and generic 7-Zip.'

@@ -11,6 +11,12 @@ if (-not $MagicMatch.Success) { throw 'FreeArc header check missing from UniExtr
 if (-not $Source.Contains('If _HasFreeArcMagic($file) Then')) {
     throw 'The extraction pipeline must prioritize FreeArc magic before broad game probes.'
 }
+$InitialCheck = [regex]::Match($Source, '(?ms)^Func InitialCheckExt\(\)\r?\n.*?^EndFunc').Value
+$BinCase = [regex]::Match($InitialCheck, '(?ms)^\s*Case "bin"\r?\n(.*?)(?=^\s*Case |^\s*EndSwitch)', 'Multiline').Value
+if (-not $BinCase.Contains('If _HasFreeArcMagic($file) Then') -or
+    $BinCase.IndexOf('If _HasFreeArcMagic($file) Then') -gt $BinCase.IndexOf('_TryExtCheck7z()')) {
+    throw 'The .bin extension probe must defer to verified FreeArc magic before probing 7-Zip.'
+}
 $PdMatch = [regex]::Match($Source, '(?ms)^Func _ShouldRejectWeakGarbroClaim\(\$sClaim\)\r?\n.*?^EndFunc')
 if (-not $PdMatch.Success) { throw 'Signatureless PD/KAAS recognition guard missing from source.' }
 if (-not $Source.Contains('If _ShouldAvoidBroadGameProbeForBin() Then') -or

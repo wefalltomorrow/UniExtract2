@@ -8,8 +8,9 @@ $Match = [regex]::Match($Source, '(?ms)^Func _ShouldAvoidBroadGameProbeForBin\(\
 if (-not $Match.Success) { throw 'Installer sidecar detector missing from UniExtract.au3' }
 $MagicMatch = [regex]::Match($Source, '(?ms)^Func _HasFreeArcMagic\(\$sPath\)\r?\n.*?^EndFunc')
 if (-not $MagicMatch.Success) { throw 'FreeArc header check missing from UniExtract.au3.' }
-if (-not $Source.Contains('If _HasFreeArcMagic($file) Then')) {
-    throw 'The extraction pipeline must prioritize FreeArc magic before broad game probes.'
+if (-not $Source.Contains('If $g_sVerifiedFileSignature = "freearc" Then') -or
+    -not $Source.Contains('If _HasFreeArcMagic($file) Then')) {
+    throw 'Verified FreeArc magic must be prioritized both in the central pipeline and BIN extension guard.'
 }
 $InitialCheck = [regex]::Match($Source, '(?ms)^Func InitialCheckExt\(\)\r?\n.*?^EndFunc').Value
 $BinCase = [regex]::Match($InitialCheck, '(?ms)^\s*Case "bin"\r?\n(.*?)(?=^\s*Case |^\s*EndSwitch)', 'Multiline').Value
@@ -19,9 +20,10 @@ if (-not $BinCase.Contains('If _HasFreeArcMagic($file) Then') -or
 }
 $PdMatch = [regex]::Match($Source, '(?ms)^Func _ShouldRejectWeakGarbroClaim\(\$sClaim\)\r?\n.*?^EndFunc')
 if (-not $PdMatch.Success) { throw 'Signatureless PD/KAAS recognition guard missing from source.' }
-if (-not $Source.Contains('If _ShouldAvoidBroadGameProbeForBin() Then') -or
-    -not $Source.Contains('If Not _ShouldAvoidBroadGameProbeForBin() Then')) {
-    throw 'Both main and Game Extractor fallback must respect the BIN guard.'
+if (-not $Source.Contains('_ShouldAvoidBroadGameProbeForBin() Or _ShouldSkipNonFatalProbesForPrimaryMatch()') -or
+    -not $Source.Contains('If Not $bSkipGameProbes Then') -or
+    -not $Source.Contains('If _ShouldAvoidBroadGameProbeForBin() Then')) {
+    throw 'Both speculative game probes and Game Extractor must respect the installer BIN guard.'
 }
 if (-not $Source.Contains('LogExtractorWinner("GARbro")') -or
     -not $Source.Contains('LogExtractorWinner("unarc")')) {

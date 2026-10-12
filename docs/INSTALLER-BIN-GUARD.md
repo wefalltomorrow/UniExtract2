@@ -1,6 +1,6 @@
 # Installer BIN sidecar and GARbro false-positive regression
 
-A large installer sidecar named setup-1.bin beside setup.exe was misrouted to GARbro in UniExtract 3.1.4. DiE and TrID reported FreeARC, but the broad GARbro probe ran first, recognised the data as PD/KAAS, and extracted 152 numbered entries with no explicit success confirmation.
+A large installer sidecar named setup-1.bin beside setup.exe was misrouted to GARbro in UniExtract 3.1.4. A screenshot of the actual file in HxD confirms the exact `41 72 43 01` (`ArC\x01`) **FreeArc magic bytes at offset zero**. The user independently confirmed the supplied CODEX Unpacker successfully extracted their setup*.bin files with its original `Password=ABC` setting unchanged (the password requirement itself has not been isolated experimentally). DiE and TrID reported FreeARC, but the broad GARbro probe ran first, recognised the data as PD/KAAS, and extracted 152 numbered entries with no explicit success confirmation.
 
 Root-cause review of upstream GARbro's `ArcFormats/Kaas/ArcKAAS.cs` confirms that PD/KAAS has `Signature = 0`, normally registers only `.pd`, and constructs each numbered `basename#NNNN` entry from a permissively decrypted index. Those names are not filenames recovered from the original `.bin`. See https://github.com/morkt/GARbro/blob/master/ArcFormats/Kaas/ArcKAAS.cs. For `.bin` inputs, a PD/KAAS claim alone is now rejected as insufficient evidence.
 
@@ -23,3 +23,9 @@ A `CODEX Unpacker.7z` supplied alongside the incident contains `unpack.exe`, `un
 This corroborates the **FreeArc/installer-data** diagnosis and suggests password-aware extraction is important. We have not proven the password is required by the original file (the provided configuration merely supplies it), nor that the stock bundled `unarc.exe` supports the same encryption/compression. The working third-party binary's provenance, license and trustworthiness are unknown. **Do not copy or automatically invoke either executable in production.**
 
 A future separate opt-in FreeArc installer extraction path should prefer audited FreeArc tooling, accept a user-provided password without logging it, validate both the archive and resulting payloads, and never default to GARbro's signatureless PD/KAAS recognizer.
+
+## Verified FreeArc signature routing
+
+On any archive with the exact `ArC\x01` four-byte header, UniExtract now routes directly to its existing FreeArc extractor after detector scans and before general ISO/GARbro probes. If the bundled `unarc.exe` cannot extract it, UniExtract reports unsupported FreeArc extraction rather than inventing a ZIP/PD/KAAS type. Normal `.bin` files lacking those bytes continue through ordinary routing. The Windows AutoIt regression harness tests exact, altered, truncated and nonexistent input headers, plus the broader game-probe guards.
+
+**Password support not yet implemented:** the existing stock `unarc.exe` does not expose the same encrypted/custom unpacker configuration as the third-party `unarc.dll` wrapper. The user's archive is confirmed FreeArc, but we have not yet demonstrated that the bundled unarc can decode this archive or safely accept the password. Do not embed `ABC` as a default or automatically execute the supplied third-party program.

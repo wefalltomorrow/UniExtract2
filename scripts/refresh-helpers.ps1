@@ -345,8 +345,8 @@ Copy-RequiredFile $InnoExe (Join-Path $BinRoot 'innounp.exe')
 Assert-CommandContains (Join-Path $BinRoot 'innounp.exe') @() '2.71.1' 'innounp'
 Add-RefreshLog 'innounp: 2.71.1'
 
-# TrID definitions rolling download: 12/10/2026 candidate SHA-256 confirmed on Windows CI.
-# This is provisional until the exact definition count is confirmed below by trid.exe.
+# TrID definitions snapshot: 12/10/2026, 22456 definitions.
+# SHA-256 and count independently checked by 2 Windows CI jobs on 2026-10-12.
 # The upstream URL is rolling. Validate the definition count so a later upstream update
 # fails loudly instead of silently changing a historical release build.
 $TridDefsZip = Get-Download 'https://mark0.net/download/triddefs.zip' 'triddefs.zip' 'c49638a68a8091e7f05807c0ed166c9101808a861bcf12593aef6f8454d8b668'
@@ -356,10 +356,10 @@ Copy-RequiredFile (Find-RequiredFile $TridDefsExtract 'TrIDDefs.TRD') (Join-Path
 $TridProbe = Join-Path $WorkRoot 'trid-probe.bin'
 Set-Content -LiteralPath $TridProbe -Value 'UniExtract helper refresh probe' -Encoding ASCII
 $TridOutput = (& (Join-Path $BinRoot 'trid.exe') $TridProbe 2>&1 | Out-String)
-if ($TridOutput -notmatch 'Definitions found:\s*22425') {
-    throw ('TrID definitions validation failed. Expected 22425 definitions from the 08/10/2026 snapshot.' + [Environment]::NewLine + $TridOutput)
+if ($TridOutput -notmatch 'Definitions found:\s*22456') {
+    throw ('TrID definitions validation failed. Expected 22456 definitions from the 12/10/2026 snapshot.' + [Environment]::NewLine + $TridOutput)
 }
-Add-RefreshLog 'TrID definitions: 08/10/2026 (22425 definitions)'
+Add-RefreshLog 'TrID definitions: 12/10/2026 (22456 definitions)'
 
 # UnRAR 7.23 x64. RARLAB no longer publishes a matching current Win32 UnRAR binary,
 # so retain the compatibility x86 copy from the helper base and refresh the x64 path.

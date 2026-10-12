@@ -547,6 +547,20 @@ Func StartExtraction()
 		terminate($STATUS_FILEINFO, $filenamefull, $fileext)
 	EndIf
 
+	; File signatures override broad heuristic detectors. A verified FreeArc
+	; header on a .bin must never be sent to GARbro's signatureless PD/KAAS
+	; recognizer. The bundled unarc may not support repack-specific codecs,
+	; in which case report unsupported rather than trying an unrelated format.
+	If _HasFreeArcMagic($file) Then
+		LogDetectionWinner("FreeArc header (ArC 01)", "FreeArc archive")
+		Cout("Verified FreeArc magic bytes; using FreeArc extractor before broad game probes")
+		If extract($TYPE_FREEARC, "FreeArc archive", "", True, True) Then _
+			terminate($STATUS_SUCCESS, $filenamefull, $TYPE_FREEARC, "FreeArc archive")
+		If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_FREEARC, "FreeArc archive")
+		Cout("FreeArc was identified conclusively, but the bundled unarc helper could not extract it; refusing unrelated GARbro/ZIP fallbacks")
+		terminate($STATUS_NOTSUPPORTED, $file, $TYPE_FREEARC, "FreeArc archive (unsupported extraction method or installer compression)")
+	EndIf
+
 	; Else perform additional extraction methods
 	; Do not skip game probing when BMS.db has a format-specific script for this extension.
 	; This preserves the strict media fast-path while preventing false-positive media detection
@@ -2866,12 +2880,23 @@ Func CheckVgmstream()
 	Return extract($TYPE_VGMSTREAM, "vgmstream game audio", "", True, True)
 EndFunc
 
+; Read only four bytes regardless of input size. The FreeArc format is
+; identified by the exact "ArC" + 0x01 signature at offset zero.
+Func _HasFreeArcMagic($sPath)
+	Local $hInput = FileOpen($sPath, $FO_BINARY)
+	If $hInput = -1 Then Return False
+	Local $bHeader = FileRead($hInput, 4)
+	FileClose($hInput)
+	Return BinaryLen($bHeader) = 4 And $bHeader = Binary("0x41724301")
+EndFunc
+
 ; Broad game-archive scanners can misrecognise multi-GB installer data
 ; (for example setup-1.bin beside setup.exe), extracting huge numbered blobs.
 ; Preserve normal game formats while deferring .bin installer cases to
 ; their more specific archive/installer handlers.
 Func _ShouldAvoidBroadGameProbeForBin()
 	If StringLower($fileext) <> "bin" Then Return False
+	If _HasFreeArcMagic($file) Then Return True
 
 	Local $aSidecar = StringRegExp($filename, "(?i)^(.+)-[0-9]+$", 1)
 	If IsArray($aSidecar) Then

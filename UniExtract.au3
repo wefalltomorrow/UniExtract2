@@ -2884,6 +2884,13 @@ Func _ShouldAvoidBroadGameProbeForBin()
 	Return False
 EndFunc
 
+; PD/KAAS has no fixed signature (GARbro's PdOpener declares Signature=0).
+; Its normal extension is .pd, and it synthesises basename#NNNN filenames.
+; On unrelated .bin files this can create huge, misleading pseudo-extractions.
+Func _ShouldRejectWeakGarbroClaim($sClaim)
+	Return StringLower($fileext) = "bin" And StringUpper(StringStripWS($sClaim, 3)) = "PD/KAAS"
+EndFunc
+
 ; Determine if file can be extracted with GARbro
 Func CheckGarbro($arcdisp = 0)
 	If _ShouldAvoidBroadGameProbeForBin() Then
@@ -2898,6 +2905,11 @@ Func CheckGarbro($arcdisp = 0)
 	If Not @error And Not StringInStr($return, "Error: Input file has an unknown format") And Not StringInStr($return, "Error: Archive is empty") Then
 		Local $sGarbroInfoCmd = Quote($garbro, True) & ' i "' & $file & '" || ' & Quote($garbro, True) & ' info "' & $file & '"'
 		$return = StringStripWS(StringStripCR(FetchStdout(@ComSpec & ' /d /c ' & $sGarbroInfoCmd, $filedir, @SW_HIDE, -1)), 8)
+		If _ShouldRejectWeakGarbroClaim($return) Then
+			Cout("Ignoring weak GARbro PD/KAAS claim on .bin: signatureless .pd image format; not sufficient evidence to extract installer data")
+			_DeleteTrayMessageBox()
+			Return False
+		EndIf
 		If $return == "ZIP" Then check7z()
 
 		extract($TYPE_GARBRO, $arcdisp? $arcdisp: $return & ' ' & t('TERM_GAME') & t('TERM_FILE'))

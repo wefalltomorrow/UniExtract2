@@ -345,10 +345,11 @@ Copy-RequiredFile $InnoExe (Join-Path $BinRoot 'innounp.exe')
 Assert-CommandContains (Join-Path $BinRoot 'innounp.exe') @() '2.71.1' 'innounp'
 Add-RefreshLog 'innounp: 2.71.1'
 
-# TrID definitions snapshot: 08/10/2026, 22425 definitions.
+# TrID definitions rolling download: 12/10/2026 candidate SHA-256 confirmed on Windows CI.
+# This is provisional until the exact definition count is confirmed below by trid.exe.
 # The upstream URL is rolling. Validate the definition count so a later upstream update
 # fails loudly instead of silently changing a historical release build.
-$TridDefsZip = Get-Download 'https://mark0.net/download/triddefs.zip' 'triddefs.zip' '782f6910641942c736c8e33ec7c197dedfe4d1df59d5970bc97b97ebbaf65788'
+$TridDefsZip = Get-Download 'https://mark0.net/download/triddefs.zip' 'triddefs.zip' 'c49638a68a8091e7f05807c0ed166c9101808a861bcf12593aef6f8454d8b668'
 $TridDefsExtract = Join-Path $WorkRoot 'triddefs'
 Expand-ZipPackage $TridDefsZip $TridDefsExtract
 Copy-RequiredFile (Find-RequiredFile $TridDefsExtract 'TrIDDefs.TRD') (Join-Path $BinRoot 'TrIDDefs.TRD')

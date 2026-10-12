@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_Outfile=.\UniExtract.exe
 #AutoIt3Wrapper_Res_Description=Universal Extractor
 #AutoIt3Wrapper_Res_ProductName=Universal Extractor
-#AutoIt3Wrapper_Res_Fileversion=3.1.5.0
+#AutoIt3Wrapper_Res_Fileversion=3.1.6.0
 #AutoIt3Wrapper_Res_ProductVersion=%fileversion%
 #AutoIt3Wrapper_Res_CompanyName=wefalltomorrow
 #AutoIt3Wrapper_Res_Language=1033

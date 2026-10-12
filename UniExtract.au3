@@ -3020,9 +3020,11 @@ EndFunc
 
 ; PD/KAAS has no fixed signature (GARbro's PdOpener declares Signature=0).
 ; Its normal extension is .pd, and it synthesises basename#NNNN filenames.
-; On unrelated .bin files this can create huge, misleading pseudo-extractions.
+; On unrelated file types this can create huge, misleading pseudo-extractions.
+; Only the native .pd extension is sufficient evidence for this signatureless
+; opener; all other extensions require actual format evidence rather than guesses.
 Func _ShouldRejectWeakGarbroClaim($sClaim)
-	Return StringLower($fileext) = "bin" And StringUpper(StringStripWS($sClaim, 3)) = "PD/KAAS"
+	Return StringLower($fileext) <> "pd" And StringUpper(StringStripWS($sClaim, 3)) = "PD/KAAS"
 EndFunc
 
 ; Determine if file can be extracted with GARbro

@@ -574,6 +574,10 @@ Func StartExtraction()
 		terminate($STATUS_NOTSUPPORTED, $file, $TYPE_7Z, $g_sVerifiedFileSignature & " archive (unsupported extractor)")
 	EndIf
 
+	If _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Then
+		LogDetectionWinner("Verified file header", $g_sVerifiedFileSignature & " file")
+	EndIf
+
 	; Keep specifically matched QuickBMS scripts before the generic 7-Zip
 	; probe (e.g. Descent 3 .mn3/.hog). Never let a broad script guess beat
 	; an exact, non-game file header.
@@ -6523,6 +6527,12 @@ Func _PipelineWriteReport($sLogPath, $sFinalStatus)
 EndFunc
 
 Func LogDetectionWinner($sTool, $sType)
+	; Once an exact header has won, less reliable detector guesses can still
+	; appear in the timeline but cannot overwrite the format in the summary.
+	If $g_sDetectionWinner = "Verified file header" And $sTool <> "Verified file header" And $g_sVerifiedFileSignature <> "" Then
+		Cout("Ignoring lower-confidence format override from " & $sTool & ": " & $sType)
+		Return
+	EndIf
 	$g_sDetectionWinner = _NormalizeOneLine($sTool)
 	$g_sDetectedTypeForSummary = _NormalizeOneLine($sType)
 	Cout("DETECTION WINNER: " & $g_sDetectionWinner & " -> " & $g_sDetectedTypeForSummary)

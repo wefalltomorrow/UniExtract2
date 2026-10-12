@@ -1,5 +1,16 @@
 # file/libmagic 5.48 Windows candidate
 
+## Integrated draft branch (12 October 2026)
+
+The isolated candidate is now wired into UniExtract's **draft PR #13**, rebased by a merge commit onto the v3.1.5 FreeArc hotfix. The published v3.1.5 release is unchanged.
+
+- On 64-bit Windows, `UniExtract.au3` selects `bin\\x64\\libmagic548\\file.exe` with its matching `magic.mgc` when the pair is present.
+- The existing `bin\\file.exe` and `bin\\magic.mgc` remain the baseline on x86 Windows and fallback when the x64 candidate is absent or returns no usable result.
+- The Windows package workflow installs the authentic MSYS2 5.48 candidate, checks the exact official package digest **and** all seven staged binary/database hashes, and copies the transitive runtime DLLs into an isolated directory.
+- The standalone bundle is tested with a clean `PATH` so system MSYS2 dependencies cannot hide missing DLLs. Packaged smoke tests check the x64 tool on Windows PE and ZIP fixtures while retaining the old helper pair.
+- Shipping is **not approved** until the merged Windows build and regression suites pass and the broader detector/extractor compatibility review is completed.
+
+
 This is a **standalone validation experiment**, not a replacement for the current `bin/file.exe` and `bin/magic.mgc`. The bundled 32-bit legacy helper stays untouched.
 
 Upstream MSYS2 `mingw-w64-x86_64-file` version 5.48-1 publishes:

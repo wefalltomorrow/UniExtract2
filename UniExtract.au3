@@ -3830,6 +3830,13 @@ Func InitialCheckExt()
 			_TryExtExtractEcm()
 
 		Case "bin"
+			; Exact FreeArc magic outranks generic 7-Zip and ISO/WCX probes.
+			; Leave extraction to the signature route after DiE and TrID have logged
+			; their results; do not allow a weak candidate to consume it first.
+			If _HasFreeArcMagic($file) Then
+				Cout("Verified FreeArc header; skipping generic .bin extension probes")
+				Return
+			EndIf
 			; Try generic archive handling before ISO/WCX probing.
 			; This avoids sending ZIP/RAR/7z content in .bin files through QuickBMS first.
 			If _TryExtCheck7z() Then Return

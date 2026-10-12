@@ -2955,7 +2955,11 @@ EndFunc
 
 ; Retain the original helper name for existing BIN guard tests and callers.
 Func _HasFreeArcMagic($sPath)
-	Return _GetVerifiedFileSignature($sPath) = "freearc"
+	Local $hInput = FileOpen($sPath, $FO_BINARY)
+	If $hInput = -1 Then Return False
+	Local $bHeader = FileRead($hInput, 4)
+	FileClose($hInput)
+	Return BinaryLen($bHeader) = 4 And $bHeader = Binary("0x41724301")
 EndFunc
 
 ; Broad QuickBMS scripts can claim arbitrary data based on weak guesses.

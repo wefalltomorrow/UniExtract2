@@ -177,7 +177,7 @@ function Invoke-Libmagic548PackagedSmokeTest {
         }
     }
     foreach ($Name in @('file.exe','magic.mgc')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $StageRoot 'bin' $Name) -PathType Leaf)) {
+        if (-not (Test-Path -LiteralPath (Join-Path (Join-Path $StageRoot 'bin') $Name) -PathType Leaf)) {
             throw "Packaged legacy file/magic fallback missing: $Name"
         }
     }

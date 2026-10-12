@@ -1401,12 +1401,32 @@ Func RenameWithTridExtension($sPath = $file, $bAnalyse = False)
 	Return True
 EndFunc
 
+; Prefer the pinned libmagic 5.48 candidate on x64 Windows when a complete
+; standalone bundle is present. Retain the existing bundled x86 file/magic pair
+; for 32-bit Windows and any machine without the x64 bundle.
+Func _UnixFileToolCommand()
+	If $iOsArch = 64 Then
+		Local $sCandidateExe = $archdir & "libmagic548\file.exe"
+		Local $sCandidateMagic = $archdir & "libmagic548\magic.mgc"
+		If FileExists($sCandidateExe) And FileExists($sCandidateMagic) Then _
+			Return Quote($sCandidateExe, True) & " -m " & Quote($sCandidateMagic)
+	EndIf
+	Return $filetool
+EndFunc
+
 ; Scan file with unix file tool
 Func FileScan_UnixFile()
 	_CreateTrayMessageBox(t('SCANNING_FILE', "Unix File Tool"))
 
 	Cout("Start file scan using unix file tool")
-	Local $sFileType = FetchStdout($filetool & ' "' & $file & '"', $filedir, @SW_HIDE)
+	Local $sCommand = _UnixFileToolCommand()
+	Local $sFileType = FetchStdout($sCommand & ' "' & $file & '"', $filedir, @SW_HIDE)
+	; A missing/broken x64 runtime must not remove file-type detection entirely.
+	; Retry with the legacy helper if 5.48 failed to identify the input.
+	If $sCommand <> $filetool And (StringStripWS($sFileType, 3) = "" Or StringLower(StringStripWS($sFileType, 3)) = "data") Then
+		Cout("libmagic 5.48 x64 returned no useful result; retrying bundled legacy file.exe")
+		$sFileType = FetchStdout($filetool & ' "' & $file & '"', $filedir, @SW_HIDE)
+	EndIf
 	$sFileType = StringReplace(StringReplace($sFileType, $file & ": ", ""), @CRLF, "")
 
 	If $sFileType And $sFileType <> "data" Then

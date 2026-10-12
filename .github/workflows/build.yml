@@ -89,6 +89,8 @@ jobs:
 
       - name: Smoke-test packaged build
         shell: powershell
+        env:
+          REQUIRE_LIBMAGIC_548: '1'
         run: .\scripts\smoke-test.ps1
 
       - name: Upload build artifact

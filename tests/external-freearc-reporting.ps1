@@ -80,5 +80,15 @@ if (-not $Proc.WaitForExit(30000)) {
 }
 if (Test-Path $Stdout) { Get-Content $Stdout | ForEach-Object { Write-Host $_ } }
 if (Test-Path $Stderr) { Get-Content $Stderr | ForEach-Object { Write-Host $_ } }
-if ($Proc.ExitCode -ne 0) { throw "External FreeArc unit test failed: $($Proc.ExitCode)" }
+# GUI-subsystem AutoIt.exe occasionally leaves ExitCode unset when launched
+# with Start-Process -PassThru on Windows PowerShell 5.1. The test harness
+# prints its success sentinel only after every assertion and Exit 0.
+$Proc.Refresh()
+$OutputText = if (Test-Path -LiteralPath $Stdout) { Get-Content -LiteralPath $Stdout -Raw } else { '' }
+if ($OutputText -notmatch 'External FreeArc opt-in/parser/report unit tests passed') {
+    throw "External FreeArc unit test did not reach its success marker. Exit code: $($Proc.ExitCode)"
+}
+if ($null -ne $Proc.ExitCode -and $Proc.ExitCode -ne 0) {
+    throw "External FreeArc unit test failed with exit code $($Proc.ExitCode)"
+}
 Write-Host 'FreeArc backend compatibility tests passed.'

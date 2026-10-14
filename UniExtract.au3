@@ -208,7 +208,7 @@ Global $g_bInnoExtractUsable = False
 Global $g_bSymlinkOnlyWarning = False
 Global $g_bArchiveIntegrityError = False
 Global $g_sPrimaryDetectRaw = "", $g_sPrimaryDetectMatch = "", $g_sPrimaryDetectScanner = "", $g_bPrimaryStrongHit = False
-Global $g_sDetectionWinner = "", $g_sExtractorWinner = "", $g_sDetectedTypeForSummary = ""
+Global $g_sDetectionWinner = "", $g_sExtractorWinner = "", $g_sDetectedTypeForSummary = "", $g_sLastExtractorAttempt = ""
 Global $g_sPipelineRows = "", $g_iPipelineSeq = 0
 Global $g_sPipelineTimeline = "", $g_sPipelineLine = "", $g_sPipelineToolVersions = ""
 Global $g_iPipelineWarn = 0, $g_iPipelineFail = 0, $g_iPipelineOk = 0, $g_iPipelineRun = 0
@@ -500,6 +500,7 @@ Func StartExtraction()
 	$g_bPrimaryStrongHit = False
 	$g_sDetectionWinner = ""
 	$g_sExtractorWinner = ""
+	$g_sLastExtractorAttempt = ""
 	$g_sDetectedTypeForSummary = ""
 	$g_sPipelineRows = ""
 	$g_sPipelineTimeline = ""
@@ -4209,6 +4210,106 @@ Func _CopyUnicodeSidecarFile($sSource, $sDest)
 	Return False
 EndFunc
 
+
+; Opt-in compatibility for custom FreeArc-based installers. We never ship or
+; auto-discover the opaque external binaries. The user must explicitly enable
+; the backend and supply its directory in UniExtract.ini [FreeArc].
+; The config template may include a password. NEVER log its contents.
+Func _PrepareExternalFreeArcConfig($sTemplate, $sArchive, $sDestination)
+	Local $aLines = StringSplit(StringReplace(String($sTemplate), @CRLF, @LF), @LF, $STR_NOCOUNT)
+	If Not IsArray($aLines) Then Return ""
+	Local $bInput = False, $bOutput = False, $bWork = False
+	Local $sResult = ""
+	For $i = 0 To UBound($aLines) - 1
+		Local $sLine = $aLines[$i]
+		If StringRegExp($sLine, "(?i)^\s*InputFile\s*=") Then
+			$sLine = "InputFile=" & $sArchive
+			$bInput = True
+		ElseIf StringRegExp($sLine, "(?i)^\s*OutputPath\s*=") Then
+			$sLine = "OutputPath=" & $sDestination
+			$bOutput = True
+		ElseIf StringRegExp($sLine, "(?i)^\s*WorkPath\s*=") Then
+			; Always use the isolated working directory rather than a
+			; potentially unsafe absolute path from the user template.
+			$sLine = "WorkPath=.\temp"
+			$bWork = True
+		EndIf
+		$sResult &= ($i > 0 ? @CRLF : "") & $sLine
+	Next
+	If Not $bInput Or Not $bOutput Or Not $bWork Then Return ""
+	Return $sResult
+EndFunc
+
+Func _TryUserExternalFreeArc($sArchive, $sDestination)
+	If StringStripWS(IniRead($prefs, "FreeArc", "ExternalUnpackerEnabled", "0"), 3) <> "1" Then Return False
+	Local $sSourceDir = StringStripWS(IniRead($prefs, "FreeArc", "ExternalUnpackerDir", ""), 3)
+	If $sSourceDir = "" Or Not FileExists($sSourceDir & "\unpack.exe") Or _
+		Not FileExists($sSourceDir & "\unarc.dll") Or Not FileExists($sSourceDir & "\config.ini") Or _
+		Not FileExists($sSourceDir & "\arc.ini") Then
+		Cout("External FreeArc backend enabled but unpack.exe, unarc.dll, config.ini or arc.ini is missing")
+		Return False
+	EndIf
+
+	Local $sTemplate = FileRead($sSourceDir & "\config.ini")
+	If @error Or $sTemplate = "" Then
+		Cout("Cannot read external FreeArc configuration template")
+		Return False
+	EndIf
+	Local $sConfig = _PrepareExternalFreeArcConfig($sTemplate, $sArchive, $sDestination)
+	If $sConfig = "" Then
+		Cout("External FreeArc template must contain InputFile, OutputPath and WorkPath")
+		Return False
+	EndIf
+
+	; The executable and DLL are user-provided, never redistributed.
+	; Isolate the template/password and work files from the source directory.
+	Local $sStage = @TempDir & "\UniExtract2-FreeArc-" & @AutoItPID & "-" & Random(100000, 999999, 1)
+	If Not DirCreate($sStage) Then Return False
+	Local $bReady = True
+	Local $aRequired[] = ["unpack.exe", "unarc.dll", "arc.ini"]
+	For $i = 0 To UBound($aRequired) - 1
+		If Not FileCopy($sSourceDir & "\" & $aRequired[$i], $sStage & "\" & $aRequired[$i], $FC_OVERWRITE) Then
+			$bReady = False
+			ExitLoop
+		EndIf
+	Next
+	If $bReady Then
+		Local $hConfig = FileOpen($sStage & "\config.ini", $FO_OVERWRITE)
+		If $hConfig = -1 Then
+			$bReady = False
+		Else
+			FileWrite($hConfig, $sConfig)
+			FileClose($hConfig)
+		EndIf
+	EndIf
+
+	Local $bSucceeded = False
+	If $bReady Then
+		DirCreate($sStage & "\temp")
+		Local $aBefore = DirGetSize($sDestination, 1)
+		Local $nBeforeFiles = (IsArray($aBefore) ? $aBefore[1] : 0)
+		Local $nBeforeBytes = (IsArray($aBefore) ? $aBefore[0] : 0)
+		Cout("Trying explicitly enabled, user-supplied FreeArc compatible extractor (password kept out of logs)")
+		$g_sLastExtractorAttempt = "External FreeArc unpack.exe"
+		_PipelineStep("COMMAND", "External FreeArc unpack.exe", "RUN", "User-configured backend (credentials redacted)")
+		Local $iExitCode = RunWait('"' & $sStage & '\unpack.exe" "config.ini"', $sStage, @SW_HIDE)
+		Local $bLaunchError = @error
+		Local $aAfter = DirGetSize($sDestination, 1)
+		Local $bIncreased = IsArray($aAfter) And ($aAfter[1] > $nBeforeFiles Or $aAfter[0] > $nBeforeBytes)
+		$bSucceeded = (Not $bLaunchError And $iExitCode = 0 And $bIncreased)
+		_PipelineStep("OUTPUT", "External FreeArc unpack.exe", ($bSucceeded ? "OK" : "FAIL"), _
+			"exit = " & $iExitCode & "; new or enlarged output = " & $bIncreased)
+		Cout("User-supplied FreeArc result: exit code " & $iExitCode & "; valid new output = " & $bIncreased)
+	EndIf
+
+	; Best effort removal of temporary configuration/password and staged DLL.
+	; Never modify the original user-supplied unpacker or its config template.
+	If FileExists($sStage & "\config.ini") Then FileDelete($sStage & "\config.ini")
+	DirRemove($sStage, 1)
+	If $bSucceeded Then LogExtractorWinner("External FreeArc unpack.exe (user-supplied)")
+	Return $bSucceeded
+EndFunc
+
 ; Extract known archive formats
 Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess = False, $returnFail = False)
 	$g_bInnoExtractUsable = False
@@ -4543,7 +4644,12 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			MoveFiles($tempoutdir, $outdir, False, "", True, True)
 
 		Case $TYPE_FREEARC
+			$g_sLastExtractorAttempt = "unarc.exe"
 			_Run($freearc & ' x -dp"' & $outdir & '" "' & $file & '"', $filedir, @SW_HIDE, True, True, False, False)
+			If $success <> $RESULT_SUCCESS And _TryUserExternalFreeArc($file, $outdir) Then
+				$g_bArchiveIntegrityError = False
+				$success = $RESULT_SUCCESS
+			EndIf
 
 		Case $TYPE_FSB
 			_Run($fsb & ' -o -1 -A -d "' & $outdir & '" "' & $file & '"', $filedir, @SW_MINIMIZE, True, True, False)
@@ -6443,25 +6549,47 @@ Func _PipelineToolVersionsHtml()
 EndFunc
 
 Func _PipelineFinalBadgeText($sFinalStatus)
-	If $g_iPipelineFail > 0 Then Return "FAILED"
-	If $g_iPipelineWarn > 0 Then Return "SUCCESS WITH WARNINGS"
-	If StringLower($sFinalStatus) = "unknown" Then Return "UNSUPPORTED / UNKNOWN"
-	Return "FULL SUCCESS"
+	Switch StringLower(String($sFinalStatus))
+		Case "success"
+			If $g_iPipelineFail > 0 Then Return "SUCCESS WITH ERRORS"
+			If $g_iPipelineWarn > 0 Then Return "SUCCESS WITH WARNINGS"
+			Return "FULL SUCCESS"
+		Case "notsupported", "unknown", "unknownext", "unknownexe", "notpacked"
+			Return "UNSUPPORTED / NOT EXTRACTED"
+		Case "password"
+			Return "PASSWORD REQUIRED"
+		Case "failed", "invalidfile", "missingpart", "canceled", "nofreespace"
+			Return "EXTRACTION FAILED"
+	EndSwitch
+	Return "NOT EXTRACTED"
+EndFunc
+
+Func _PipelineFinalBadgeClass($sFinalStatus)
+	Switch StringLower(String($sFinalStatus))
+		Case "success"
+			If $g_iPipelineFail > 0 Then Return "warn"
+			If $g_iPipelineWarn > 0 Then Return "warn"
+			Return "ok"
+		Case "notsupported", "unknown", "unknownext", "unknownexe", "notpacked"
+			Return "info"
+	EndSwitch
+	Return "fail"
 EndFunc
 
 Func _PipelineSummaryHtml($sLogPath, $sFinalStatus)
 	Local $sBadge = _PipelineFinalBadgeText($sFinalStatus)
-	Local $sBadgeClass = _PipelineStatusClass(($g_iPipelineFail > 0 ? "FAIL" : ($g_iPipelineWarn > 0 ? "WARN" : "OK")))
+	Local $sBadgeClass = _PipelineFinalBadgeClass($sFinalStatus)
 	Local $sOutputLink = ""
 	If $outdir <> "" Then $sOutputLink = '<a class="outputpath" href="' & _PipelineHtmlEscape(_PipelineFileUrl($outdir)) & '">' & _PipelineHtmlEscape($outdir) & '</a>'
 	If $sOutputLink = "" Then $sOutputLink = '<span class="muted">not available</span>'
 	Local $sDetect = ($g_sDetectionWinner <> "" ? $g_sDetectionWinner & ($g_sDetectedTypeForSummary <> "" ? " → " & $g_sDetectedTypeForSummary : "") : "not captured")
-	Local $sExtractor = ($g_sExtractorWinner <> "" ? $g_sExtractorWinner : $sFinalStatus)
+	Local $sExtractor = ($g_sExtractorWinner <> "" ? $g_sExtractorWinner : ($g_sLastExtractorAttempt <> "" ? $g_sLastExtractorAttempt & " (unsuccessful)" : "none"))
+	Local $sExtractorCaption = ($g_sExtractorWinner <> "" ? "Extractor winner" : "Extractor attempted")
 	Local $sLine = (StringStripWS($g_sPipelineLine, 3) <> "" ? StringTrimRight($g_sPipelineLine, 3) : "not captured")
 	Local $sHtml = '<div class="summary"><div class="finalbadge ' & $sBadgeClass & '">' & _PipelineHtmlEscape($sBadge) & '</div>'
 	$sHtml &= '<div class="summarygrid">'
 	$sHtml &= '<div><b>Detector winner</b><br>' & _PipelineHtmlEscape($sDetect) & '</div>'
-	$sHtml &= '<div><b>Extractor winner</b><br>' & _PipelineHtmlEscape($sExtractor) & '</div>'
+	$sHtml &= '<div><b>' & $sExtractorCaption & '</b><br>' & _PipelineHtmlEscape($sExtractor) & '</div>'
 	$sHtml &= '<div><b>Warnings</b><br>' & $g_iPipelineWarn & '</div>'
 	$sHtml &= '<div><b>Failures</b><br>' & $g_iPipelineFail & '</div>'
 	$sHtml &= '<div><b>Commands</b><br>' & $g_iPipelineRun & '</div>'
@@ -6676,6 +6804,7 @@ Func LogPerFileSummary($sFinalStatus, $sArcDisp = "")
 	EndIf
 
 	Local $sExtractor = $g_sExtractorWinner
+	If $sExtractor = "" And $g_sLastExtractorAttempt <> "" Then $sExtractor = $g_sLastExtractorAttempt & " (unsuccessful)"
 	If $sExtractor = "" Then
 		Local $sDisp = StringLower(_NormalizeOneLine($sArcDisp))
 		Local $sTypeNorm = StringLower(_NormalizeOneLine($Type))
@@ -7942,6 +8071,7 @@ Func _PipelineOutputStatus($sLog)
 	If StringInStr($sLog, "Break signaled", 1) Or StringInStr($sLog, "Program aborted", 1) Or StringInStr($sLog, "User break", 1) Then Return "CANCELED"
 	If StringInStr($sLog, "There is not enough space on the disk", 1) Or StringInStr($sLog, "Not enough free space available", 1) Then Return "NOFREESPACE"
 
+	If StringInStr($sLog, "ERROR: archive structure corrupted", 1) Or StringInStr($sLog, "descriptor failed CRC check", 1) Then Return "FAIL"
 	If StringInStr($sLog, "Could not find a necessary file", 1) Or _
 		   StringInStr($sLog, "Error (Exception)", 1) Or _
 		   StringInStr($sLog, "Missing volume", 1) Or _

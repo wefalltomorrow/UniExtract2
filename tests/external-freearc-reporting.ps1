@@ -44,10 +44,10 @@ Func Check($sName, $bResult)
     ConsoleWrite("PASS " & $sName & @CRLF)
 EndFunc
 
-Local $sTemplate = "InputFile=.\setup-1.bin" & @CRLF & _
+Global $sTemplate = "InputFile=.\setup-1.bin" & @CRLF & _
     "OutputPath=.\CODEX-DATA" & @CRLF & "Password=ABC" & @CRLF & _
     "CfgFile=.\arc.ini" & @CRLF & "WorkPath=.\temp"
-Local $sCfg = _PrepareExternalFreeArcConfig($sTemplate, "D:\Some Folder\setup-1.bin", "D:\Extracted Game")
+Global $sCfg = _PrepareExternalFreeArcConfig($sTemplate, "D:\Some Folder\setup-1.bin", "D:\Extracted Game")
 Check("input path", StringInStr($sCfg, "InputFile=D:\Some Folder\setup-1.bin", 1) > 0)
 Check("destination path", StringInStr($sCfg, "OutputPath=D:\Extracted Game", 1) > 0)
 Check("supplied password unchanged", StringInStr($sCfg, "Password=ABC", 1) > 0)
@@ -72,7 +72,11 @@ $Test = Join-Path $Dir 'external-freearc-test.au3'
 [IO.File]::WriteAllText($Test, $Harness + ($Fns -join [Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
 $Stdout = Join-Path $Dir 'stdout.txt'
 $Stderr = Join-Path $Dir 'stderr.txt'
-$Proc = Start-Process -FilePath $AutoItExe -ArgumentList ('"' + $Test + '"') -Wait -PassThru -RedirectStandardOutput $Stdout -RedirectStandardError $Stderr
+$Proc = Start-Process -FilePath $AutoItExe -ArgumentList ('"' + $Test + '"') -PassThru -RedirectStandardOutput $Stdout -RedirectStandardError $Stderr
+if (-not $Proc.WaitForExit(30000)) {
+    Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue
+    throw 'External FreeArc unit-test AutoIt process timed out (possible interpreter error dialog).'
+}
 if (Test-Path $Stdout) { Get-Content $Stdout | ForEach-Object { Write-Host $_ } }
 if (Test-Path $Stderr) { Get-Content $Stderr | ForEach-Object { Write-Host $_ } }
 if ($Proc.ExitCode -ne 0) { throw "External FreeArc unit test failed: $($Proc.ExitCode)" }

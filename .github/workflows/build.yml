@@ -70,6 +70,10 @@ jobs:
         shell: powershell
         run: .\tests\detection-confidence.ps1
 
+      - name: Test opt-in FreeArc backend and status reporting
+        shell: powershell
+        run: .\tests\external-freearc-reporting.ps1
+
       - name: Package release
         shell: powershell
         run: .\scripts\package-release.ps1

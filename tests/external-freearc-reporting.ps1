@@ -34,6 +34,7 @@ if (-not $AutoItExe) { throw 'AutoIt3 interpreter not installed.' }
 $Dir = Join-Path $Repo '.build\freearc-backend-regression'
 New-Item -ItemType Directory -Path $Dir -Force | Out-Null
 $Harness = @'
+#include <StringConstants.au3>
 Global $g_iPipelineWarn = 0, $g_iPipelineFail = 0
 
 Func Check($sName, $bResult)

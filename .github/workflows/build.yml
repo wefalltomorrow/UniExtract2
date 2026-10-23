@@ -96,6 +96,10 @@ jobs:
         shell: powershell
         run: .\scripts\smoke-test.ps1
 
+      - name: Smoke-test packaged external FreeArc integration
+        shell: powershell
+        run: .\tests\external-freearc-packaged.ps1
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:

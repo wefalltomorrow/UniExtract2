@@ -1,11 +1,11 @@
 [CmdletBinding()]
-param()
+param([string]$StageRoot)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$StageRoot = Join-Path $RepoRoot '.build\release'
+if (-not $StageRoot) { $StageRoot = Join-Path $RepoRoot '.build\release' }
 $Exe = Join-Path $StageRoot 'UniExtract.exe'
 
 if (-not (Test-Path -LiteralPath $Exe)) {
@@ -170,6 +170,10 @@ function Invoke-NormalFreeArcSmokeTest {
         throw 'Normal FreeArc extraction did not reproduce the exact fixture payload.'
     }
     if ($null -ne $Process.ExitCode -and $Process.ExitCode -ne 0) { throw 'Normal FreeArc extraction returned failure.' }
+    $Logs = @(Get-ChildItem -LiteralPath (Join-Path $StageRoot 'log') -Filter '*_FREEARC_freearc-normal.arc.log' -File | Sort-Object LastWriteTime -Descending)
+    if ($Logs.Count -eq 0 -or -not ([IO.File]::ReadAllText($Logs[0].FullName).Contains('EXTRACTOR WINNER: unarc'))) {
+        throw 'Normal FreeArc did not report the bundled unarc decoder as its winner.'
+    }
     Write-Host 'Normal FreeArc extraction passed with the external backend disabled.'
 }
 Invoke-NormalFreeArcSmokeTest

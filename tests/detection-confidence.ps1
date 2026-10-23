@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([string]$AutoItExe)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -32,9 +32,10 @@ foreach ($Name in @('CheckIso', 'CheckGame', 'CheckTotalObserver')) {
 }
 
 $AutoItExe = @(
+    $AutoItExe,
     'C:\Program Files (x86)\AutoIt3\AutoIt3.exe',
     (Join-Path $env:ProgramFiles 'AutoIt3\AutoIt3.exe')
-) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 if (-not $AutoItExe) { throw 'AutoIt3 interpreter missing from Windows runner.' }
 
 $TestRoot = Join-Path $Repo '.build\detection-confidence-test'

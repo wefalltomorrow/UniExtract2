@@ -1,4 +1,4 @@
-#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=.\Support\Icons\uniextract_exe.ico
 #AutoIt3Wrapper_Outfile=.\UniExtract.exe
 #AutoIt3Wrapper_Res_Description=Universal Extractor
@@ -216,6 +216,7 @@ Global $g_bStrictPipeline = True, $g_sStoredTridType = "", $g_sStoredUnixType = 
 Global $oldpath, $oldoutdir, $sUnicodeName, $createdir
 Global $g_aUnicodeSidecarCopies[0]
 Global $guiprefs, $TBgui = 0, $exStyle = -1, $idTrayStatusExt, $BatchBut, $idProgress, $sComError = 0
+Global $g_sExternalFreeArcStage = "", $g_iExternalFreeArcPid = 0, $g_hExternalFreeArcJob = 0
 Global $Tray_Statusbox, $isexe = False, $Message, $run = 0, $runtitle, $idOptDeleteSourceFile[3]
 Global $gaDropFiles[1], $aFiletype[0][2], $queueArray[0], $aTridDefinitions[0][0], $aFileDefinitions[0][0], $aExeinfoDefinitions[0][0], $aGUIs[0], $aWarnings[0]
 Global $guimain = False, $keepopenitem, $topmostitem, $showitem, $clearitem, $logitem, $silentitem, $GUI_Main_Extract, $GUI_Main_Scan, $filecont
@@ -4211,104 +4212,197 @@ Func _CopyUnicodeSidecarFile($sSource, $sDest)
 EndFunc
 
 
-; Opt-in compatibility for custom FreeArc-based installers. We never ship or
-; auto-discover the opaque external binaries. The user must explicitly enable
-; the backend and supply its directory in UniExtract.ini [FreeArc].
-; The config template may include a password. NEVER log its contents.
+; Configs may contain credentials: never log their text or helper stdout/stderr.
 Func _PrepareExternalFreeArcConfig($sTemplate, $sArchive, $sDestination)
+	If StringRegExp($sArchive & $sDestination, '[\r\n\x00]') Then Return ""
 	Local $aLines = StringSplit(StringReplace(String($sTemplate), @CRLF, @LF), @LF, $STR_NOCOUNT)
-	If Not IsArray($aLines) Then Return ""
-	Local $bInput = False, $bOutput = False, $bWork = False
-	Local $sResult = ""
+	Local $iInput = 0, $iOutput = 0, $iWork = 0, $iCfg = 0, $sResult = ""
 	For $i = 0 To UBound($aLines) - 1
 		Local $sLine = $aLines[$i]
-		If StringRegExp($sLine, "(?i)^\s*InputFile\s*=") Then
+		If StringRegExp($sLine, '^\s*\[') Then Return ""
+		If StringRegExp($sLine, '(?i)^\s*InputFile\s*=') Then
 			$sLine = "InputFile=" & $sArchive
-			$bInput = True
-		ElseIf StringRegExp($sLine, "(?i)^\s*OutputPath\s*=") Then
+			$iInput += 1
+		ElseIf StringRegExp($sLine, '(?i)^\s*OutputPath\s*=') Then
 			$sLine = "OutputPath=" & $sDestination
-			$bOutput = True
-		ElseIf StringRegExp($sLine, "(?i)^\s*WorkPath\s*=") Then
-			; Always use the isolated working directory rather than a
-			; potentially unsafe absolute path from the user template.
+			$iOutput += 1
+		ElseIf StringRegExp($sLine, '(?i)^\s*WorkPath\s*=') Then
 			$sLine = "WorkPath=.\temp"
-			$bWork = True
+			$iWork += 1
+		ElseIf StringRegExp($sLine, '(?i)^\s*CfgFile\s*=') Then
+			$sLine = "CfgFile=.\arc.ini"
+			$iCfg += 1
 		EndIf
 		$sResult &= ($i > 0 ? @CRLF : "") & $sLine
 	Next
-	If Not $bInput Or Not $bOutput Or Not $bWork Then Return ""
+	If $iInput <> 1 Or $iOutput <> 1 Or $iWork <> 1 Or $iCfg <> 1 Then Return ""
 	Return $sResult
+EndFunc
+
+; Returns -1 for inaccessible paths and reparse points, otherwise file count.
+Func _ExternalFreeArcFileCount($sPath)
+	Local $aAttr = DllCall("kernel32.dll", "dword", "GetFileAttributesW", "wstr", $sPath)
+	If @error Then Return -1
+	If $aAttr[0] = 0xFFFFFFFF Or BitAND($aAttr[0], 0x400) Then Return -1
+	If Not BitAND($aAttr[0], 0x10) Then Return 1
+	Local $hSearch = FileFindFirstFile($sPath & "\*"), $iCount = 0
+	If $hSearch = -1 Then Return 0
+	While True
+		Local $sName = FileFindNextFile($hSearch)
+		If @error Then ExitLoop
+		Local $iChild = _ExternalFreeArcFileCount($sPath & "\" & $sName)
+		If $iChild < 0 Then
+			$iCount = -1
+			ExitLoop
+		EndIf
+		$iCount += $iChild
+	WEnd
+	FileClose($hSearch)
+	Return $iCount
+EndFunc
+
+Func _ExternalFreeArcDestinationEmpty($sPath)
+	If Not FileExists($sPath) Then Return True
+	If _ExternalFreeArcFileCount($sPath) <> 0 Then Return False
+	Local $hSearch = FileFindFirstFile($sPath & "\*")
+	If $hSearch = -1 Then Return True
+	FileClose($hSearch)
+	Return False
+EndFunc
+
+Func _ExternalFreeArcCleanup()
+	If $g_hExternalFreeArcJob Then DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $g_hExternalFreeArcJob)
+	$g_hExternalFreeArcJob = 0
+	If $g_iExternalFreeArcPid Then _KillProcessTree($g_iExternalFreeArcPid)
+	If $g_iExternalFreeArcPid Then StdioClose($g_iExternalFreeArcPid)
+	$g_iExternalFreeArcPid = 0
+	$run = 0
+	If $g_sExternalFreeArcStage = "" Then Return
+	FileDelete($g_sExternalFreeArcStage & "\config.ini")
+	If Not DirRemove($g_sExternalFreeArcStage, 1) Then Cout("External FreeArc temporary files could not all be removed")
+	$g_sExternalFreeArcStage = ""
+EndFunc
+
+Func _ExternalFreeArcRun($sStage, $iTimeout)
+	; A kill-on-close job cleans up attached child processes even after the wrapper exits.
+	Local $aJob = DllCall("kernel32.dll", "handle", "CreateJobObjectW", "ptr", 0, "ptr", 0)
+	If @error Then Return -1
+	If Not $aJob[0] Then Return -1
+	$g_hExternalFreeArcJob = $aJob[0]
+	Local $tLimits = DllStructCreate("int64;int64;dword Flags;ulong_ptr;ulong_ptr;dword;ulong_ptr;dword;dword;uint64[6];ulong_ptr[4]")
+	DllStructSetData($tLimits, "Flags", 0x2000)
+	Local $aSet = DllCall("kernel32.dll", "bool", "SetInformationJobObject", "handle", $g_hExternalFreeArcJob, "int", 9, "struct*", $tLimits, "dword", DllStructGetSize($tLimits))
+	If @error Then Return -1
+	If Not $aSet[0] Then Return -1
+	; Discard both streams: wrappers may print the supplied password.
+	Local $iPid = Run('"' & $sStage & '\unpack.exe" "config.ini"', $sStage, @SW_HIDE, $STDOUT_CHILD + $STDERR_CHILD)
+	If @error Or Not $iPid Then Return -1
+	$g_iExternalFreeArcPid = $iPid
+	$run = $iPid ; Integrate with tray cancellation.
+	Local $aOpen = DllCall("kernel32.dll", "handle", "OpenProcess", "dword", 0x100501, "bool", False, "dword", $iPid)
+	If @error Then Return -1
+	If Not $aOpen[0] Then Return -1
+	Local $hProcess = $aOpen[0], $hTimer = TimerInit(), $iExit = -1
+	Local $aAssign = DllCall("kernel32.dll", "bool", "AssignProcessToJobObject", "handle", $g_hExternalFreeArcJob, "handle", $hProcess)
+	Local $bAssigned = Not @error
+	If $bAssigned Then $bAssigned = $aAssign[0]
+	If Not $bAssigned Then
+		DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hProcess)
+		Return -1
+	EndIf
+	While True
+		StdoutRead($iPid)
+		StderrRead($iPid)
+		If TimerDiff($hTimer) > $iTimeout * 1000 Or $run <> $iPid Then ExitLoop
+		Local $aWait = DllCall("kernel32.dll", "dword", "WaitForSingleObject", "handle", $hProcess, "dword", 20)
+		If @error Then ExitLoop
+		If $aWait[0] = 0 Then
+			Local $aExit = DllCall("kernel32.dll", "bool", "GetExitCodeProcess", "handle", $hProcess, "dword*", 0)
+			If Not @error And $aExit[0] Then $iExit = $aExit[2]
+			$g_iExternalFreeArcPid = 0
+			ExitLoop
+		EndIf
+		If $aWait[0] <> 258 Or TimerDiff($hTimer) > $iTimeout * 1000 Or $run <> $iPid Then ExitLoop
+	WEnd
+	DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hProcess)
+	DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $g_hExternalFreeArcJob)
+	$g_hExternalFreeArcJob = 0
+	If $g_iExternalFreeArcPid Then _KillProcessTree($g_iExternalFreeArcPid)
+	$g_iExternalFreeArcPid = 0
+	$run = 0
+	StdioClose($iPid)
+	Return $iExit
 EndFunc
 
 Func _TryUserExternalFreeArc($sArchive, $sDestination)
 	If StringStripWS(IniRead($prefs, "FreeArc", "ExternalUnpackerEnabled", "0"), 3) <> "1" Then Return False
 	Local $sSourceDir = StringStripWS(IniRead($prefs, "FreeArc", "ExternalUnpackerDir", ""), 3)
-	If $sSourceDir = "" Or Not FileExists($sSourceDir & "\unpack.exe") Or _
-		Not FileExists($sSourceDir & "\unarc.dll") Or Not FileExists($sSourceDir & "\config.ini") Or _
-		Not FileExists($sSourceDir & "\arc.ini") Then
-		Cout("External FreeArc backend enabled but unpack.exe, unarc.dll, config.ini or arc.ini is missing")
-		Return False
-	EndIf
-
-	Local $sTemplate = FileRead($sSourceDir & "\config.ini")
-	If @error Or $sTemplate = "" Then
-		Cout("Cannot read external FreeArc configuration template")
-		Return False
-	EndIf
-	Local $sConfig = _PrepareExternalFreeArcConfig($sTemplate, $sArchive, $sDestination)
-	If $sConfig = "" Then
-		Cout("External FreeArc template must contain InputFile, OutputPath and WorkPath")
-		Return False
-	EndIf
-
-	; The executable and DLL are user-provided, never redistributed.
-	; Isolate the template/password and work files from the source directory.
-	Local $sStage = @TempDir & "\UniExtract2-FreeArc-" & @AutoItPID & "-" & Random(100000, 999999, 1)
-	If Not DirCreate($sStage) Then Return False
-	Local $bReady = True
-	Local $aRequired[] = ["unpack.exe", "unarc.dll", "arc.ini"]
+	Local $aRequired[] = ["unpack.exe", "unarc.dll", "config.ini", "arc.ini"]
 	For $i = 0 To UBound($aRequired) - 1
-		If Not FileCopy($sSourceDir & "\" & $aRequired[$i], $sStage & "\" & $aRequired[$i], $FC_OVERWRITE) Then
-			$bReady = False
-			ExitLoop
+		If $sSourceDir = "" Or Not FileExists($sSourceDir & "\" & $aRequired[$i]) Then
+			Cout("External FreeArc backend is missing a required file")
+			Return False
 		EndIf
 	Next
+	$sArchive = _PathFull($sArchive)
+	$sDestination = StringRegExpReplace(_PathFull($sDestination), '\\+$', '')
+	If Not FileExists($sArchive) Or Not _ExternalFreeArcDestinationEmpty($sDestination) Then
+		Cout("External FreeArc requires an existing input and a new or empty output directory")
+		Return False
+	EndIf
+	Local $sParent = StringRegExpReplace($sDestination, '\\[^\\]+$', '')
+	If $sParent = $sDestination Or Not DirCreate($sParent) Then Return False
+	Local $sStage = _TempFile($sParent, ".UniExtract2-FreeArc-", "", 16)
+	Local $aCreate = DllCall("kernel32.dll", "bool", "CreateDirectoryW", "wstr", $sStage, "ptr", 0)
+	If @error Then Return False
+	If Not $aCreate[0] Then Return False
+	$g_sExternalFreeArcStage = $sStage
+	OnAutoItExitRegister("_ExternalFreeArcCleanup")
+	Local $sOutput = $sStage & "\output"
+	Local $sTemplate = FileRead($sSourceDir & "\config.ini")
+	Local $iEncoding = FileGetEncoding($sSourceDir & "\config.ini")
+	Local $sConfig = _PrepareExternalFreeArcConfig($sTemplate, $sArchive, $sOutput)
+	Local $bReady = ($sConfig <> "" And $iEncoding <> -1)
+	For $i = 0 To UBound($aRequired) - 1
+		If $aRequired[$i] = "config.ini" Then ContinueLoop
+		If Not FileCopy($sSourceDir & "\" & $aRequired[$i], $sStage & "\" & $aRequired[$i], 0) Then $bReady = False
+	Next
 	If $bReady Then
-		Local $hConfig = FileOpen($sStage & "\config.ini", $FO_OVERWRITE)
+		Local $hConfig = FileOpen($sStage & "\config.ini", BitOR($FO_OVERWRITE, $iEncoding))
 		If $hConfig = -1 Then
 			$bReady = False
 		Else
-			FileWrite($hConfig, $sConfig)
+			$bReady = FileWrite($hConfig, $sConfig)
 			FileClose($hConfig)
+			; Reject encoding loss rather than changing the password or paths.
+			If Not (FileRead($sStage & "\config.ini") == $sConfig) Then $bReady = False
 		EndIf
 	EndIf
-
 	Local $bSucceeded = False
-	If $bReady Then
-		DirCreate($sStage & "\temp")
-		Local $aBefore = DirGetSize($sDestination, 1)
-		Local $nBeforeFiles = (IsArray($aBefore) ? $aBefore[1] : 0)
-		Local $nBeforeBytes = (IsArray($aBefore) ? $aBefore[0] : 0)
-		Cout("Trying explicitly enabled, user-supplied FreeArc compatible extractor (password kept out of logs)")
+	If $bReady And DirCreate($sStage & "\temp") And DirCreate($sOutput) Then
+		Local $iTimeout = Number(IniRead($prefs, "FreeArc", "ExternalUnpackerTimeoutSeconds", "21600"))
+		If $iTimeout < 1 Or $iTimeout > 86400 Then $iTimeout = 21600
 		$g_sLastExtractorAttempt = "External FreeArc unpack.exe"
-		_PipelineStep("COMMAND", "External FreeArc unpack.exe", "RUN", "User-configured backend (credentials redacted)")
-		Local $iExitCode = RunWait('"' & $sStage & '\unpack.exe" "config.ini"', $sStage, @SW_HIDE)
-		Local $bLaunchError = @error
-		Local $aAfter = DirGetSize($sDestination, 1)
-		Local $bIncreased = IsArray($aAfter) And ($aAfter[1] > $nBeforeFiles Or $aAfter[0] > $nBeforeBytes)
-		$bSucceeded = (Not $bLaunchError And $iExitCode = 0 And $bIncreased)
-		_PipelineStep("OUTPUT", "External FreeArc unpack.exe", ($bSucceeded ? "OK" : "FAIL"), _
-			"exit = " & $iExitCode & "; new or enlarged output = " & $bIncreased)
-		Cout("User-supplied FreeArc result: exit code " & $iExitCode & "; valid new output = " & $bIncreased)
+		_PipelineStep("COMMAND", "External FreeArc unpack.exe", "RUN", "User-configured backend; output suppressed to protect credentials")
+		Local $iExit = _ExternalFreeArcRun($sStage, $iTimeout)
+		Local $iFiles = _ExternalFreeArcFileCount($sOutput)
+		If $iExit = 0 And $iFiles > 0 And _ExternalFreeArcDestinationEmpty($sDestination) Then
+			; Only remove an empty directory. Same-volume rename with NO overwrite.
+			If Not FileExists($sDestination) Or DirRemove($sDestination, 0) Then
+				Local $aMove = DllCall("kernel32.dll", "bool", "MoveFileW", "wstr", $sOutput, "wstr", $sDestination)
+				If Not @error Then $bSucceeded = $aMove[0]
+			EndIf
+		EndIf
+		_PipelineStep("OUTPUT", "External FreeArc unpack.exe", ($bSucceeded ? "OK" : "FAIL"), "exit = " & $iExit & "; staged files = " & $iFiles & "; output committed = " & $bSucceeded)
+	Else
+		Cout("Cannot stage external FreeArc configuration; check required keys and text encoding")
 	EndIf
-
-	; Best effort removal of temporary configuration/password and staged DLL.
-	; Never modify the original user-supplied unpacker or its config template.
-	If FileExists($sStage & "\config.ini") Then FileDelete($sStage & "\config.ini")
-	DirRemove($sStage, 1)
+	_ExternalFreeArcCleanup()
+	OnAutoItExitUnRegister("_ExternalFreeArcCleanup")
 	If $bSucceeded Then LogExtractorWinner("External FreeArc unpack.exe (user-supplied)")
 	Return $bSucceeded
 EndFunc
+
 
 ; Extract known archive formats
 Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess = False, $returnFail = False)

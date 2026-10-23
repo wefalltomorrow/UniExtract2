@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([string]$AutoItExe)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -26,9 +26,10 @@ foreach ($Expected in @(
 }
 
 $AutoItExe = @(
+    $AutoItExe,
     'C:\Program Files (x86)\AutoIt3\AutoIt3.exe',
     (Join-Path $env:ProgramFiles 'AutoIt3\AutoIt3.exe')
-) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 if (-not $AutoItExe) { throw 'AutoIt3 interpreter not installed.' }
 
 $Dir = Join-Path $Repo '.build\freearc-backend-regression'
@@ -46,16 +47,16 @@ Func Check($sName, $bResult)
 EndFunc
 
 Global $sTemplate = "InputFile=.\setup-1.bin" & @CRLF & _
-    "OutputPath=.\CODEX-DATA" & @CRLF & "Password=ABC" & @CRLF & _
+    "OutputPath=.\CODEX-DATA" & @CRLF & "Password=SYNTHETIC-Secret-Only" & @CRLF & _
     "CfgFile=.\arc.ini" & @CRLF & "WorkPath=.\temp"
 Global $sCfg = _PrepareExternalFreeArcConfig($sTemplate, "D:\Some Folder\setup-1.bin", "D:\Extracted Game")
 Check("input path", StringInStr($sCfg, "InputFile=D:\Some Folder\setup-1.bin", 1) > 0)
 Check("destination path", StringInStr($sCfg, "OutputPath=D:\Extracted Game", 1) > 0)
-Check("supplied password unchanged", StringInStr($sCfg, "Password=ABC", 1) > 0)
+Check("supplied password unchanged", StringInStr($sCfg, "Password=SYNTHETIC-Secret-Only", 1) > 0)
 Check("extra fields unchanged", StringInStr($sCfg, "CfgFile=.\arc.ini", 1) > 0)
 Check("isolated temporary work directory", StringInStr($sCfg, "WorkPath=.\temp", 1) > 0)
 Check("no duplicate original input assignment", StringInStr($sCfg, "InputFile=.\setup-1.bin", 1) = 0)
-Check("reject incomplete template", _PrepareExternalFreeArcConfig("Password=ABC", "a", "b") = "")
+Check("reject incomplete template", _PrepareExternalFreeArcConfig("Password=SYNTHETIC-Secret-Only", "a", "b") = "")
 
 $g_iPipelineWarn = 1
 Check("unsupported never reported as success", _PipelineFinalBadgeText("notsupported") = "UNSUPPORTED / NOT EXTRACTED")

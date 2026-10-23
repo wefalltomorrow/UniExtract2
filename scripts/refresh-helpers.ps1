@@ -336,8 +336,8 @@ Assert-CommandContains (Join-Path $BinRoot 'msgunfmt.exe') @('--version') '(GNU 
 Add-RefreshLog 'GNU gettext msgunfmt: 1.0 (static x86)'
 
 # Inno Setup Unpacker 2.71.1.
-# The upstream URL is rolling, so verify the downloaded executable before accepting it.
-$InnoZip = Get-Download 'https://raw.githubusercontent.com/jrathlev/InnoUnpacker-Windows-GUI/refs/heads/master/innounp-2/bin/innounp-2.zip' 'innounp-2.zip' 'f2f037fdbc63de31248efae9ccb294398d160dc0cbad5f36d14c2f159e17bbf5'
+# Pin the upstream 2.71.1 commit; the rolling master ZIP changed after release.
+$InnoZip = Get-Download 'https://raw.githubusercontent.com/jrathlev/InnoUnpacker-Windows-GUI/6fb49264aacf512a093e7b4fc6fb3dd266dad31a/innounp-2/bin/innounp-2.zip' 'innounp-2.zip' 'f2f037fdbc63de31248efae9ccb294398d160dc0cbad5f36d14c2f159e17bbf5'
 $InnoExtract = Join-Path $WorkRoot 'innounp'
 Expand-ZipPackage $InnoZip $InnoExtract
 $InnoExe = Find-RequiredFile $InnoExtract 'innounp.exe'

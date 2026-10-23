@@ -155,6 +155,25 @@ function Invoke-AcefileSmokeTest {
 }
 Invoke-AcefileSmokeTest
 
+function Invoke-NormalFreeArcSmokeTest {
+    $Fixture = Join-Path $RepoRoot 'tests\fixtures\freearc-normal.arc'
+    $Case = Join-Path $SmokeRoot 'freearc-normal'
+    $Output = Join-Path $Case 'output'
+    New-Item -ItemType Directory -Path $Output -Force | Out-Null
+    $Process = Start-Process -FilePath $Exe -ArgumentList ('"' + $Fixture + '" "' + $Output + '" /silent') -PassThru
+    if (-not $Process.WaitForExit(60000)) {
+        & taskkill.exe /PID $Process.Id /T /F | Out-Null
+        throw 'Normal FreeArc extraction timed out.'
+    }
+    $Payload = Join-Path $Output 'hello.txt'
+    if (-not (Test-Path -LiteralPath $Payload) -or [IO.File]::ReadAllText($Payload) -cne $Expected) {
+        throw 'Normal FreeArc extraction did not reproduce the exact fixture payload.'
+    }
+    if ($null -ne $Process.ExitCode -and $Process.ExitCode -ne 0) { throw 'Normal FreeArc extraction returned failure.' }
+    Write-Host 'Normal FreeArc extraction passed with the external backend disabled.'
+}
+Invoke-NormalFreeArcSmokeTest
+
 # Full-pipeline regression: an ArC\x01 header must never be accepted as GARbro
 # PD/KAAS, even if a numbered installer sidecar and setup.exe are adjacent.
 # A tiny intentionally invalid FreeArc stub is used so this test does not ship

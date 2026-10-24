@@ -50,7 +50,9 @@ try {
         $Text = ($Reports | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join "`n"
         if ($Text.Contains('SYNTHETIC-Secret-Only')) { throw 'Credential found in packaged reports.' }
         if ($Mode -eq 'success' -and -not $Text.Contains('External FreeArc unpack.exe (user-supplied)')) { throw 'External winner missing from packaged reports.' }
-        if ($Mode -ne 'success' -and $Text -match '(?i)>\s*(FULL SUCCESS|SUCCESS WITH WARNINGS)\s*<') { throw 'Failure report has a success badge.' }
+        if ($Mode -eq 'success' -and $HtmlText -notmatch '<b>Final status:</b> success<br>') { throw 'Successful extraction has the wrong final report status.' }
+        if ($Mode -eq 'success' -and $HtmlText -notmatch 'class="finalbadge (ok|warn)">\s*(FULL SUCCESS|SUCCESS WITH WARNINGS|SUCCESS WITH ERRORS)\s*<') { throw 'Successful extraction has no success badge.' }
+        if ($Mode -ne 'success' -and $Text -match '(?i)>\s*(FULL SUCCESS|SUCCESS WITH WARNINGS|SUCCESS WITH ERRORS)\s*<') { throw 'Failure report has a success badge.' }
         if ($Mode -ne 'success' -and $HtmlText -notmatch '(UNSUPPORTED / NOT EXTRACTED|EXTRACTION FAILED)') { throw 'Failure report has no final failure badge.' }
         if (@(Get-ChildItem -LiteralPath $Case -Directory -Filter '.UniExtract2-FreeArc-*').Count) { throw 'Packaged attempt left a staging directory.' }
         Write-Host "Packaged external FreeArc [$Mode] passed (output, reports, credentials and cleanup)."

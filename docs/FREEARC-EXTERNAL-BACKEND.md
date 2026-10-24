@@ -8,12 +8,23 @@ unarc.exe packaged with UniExtract2 can reject these with
 "descriptor failed CRC check" although the payload is readable with the
 original installer's FreeArcExtract-compatible DLL and wrapper.
 
-An actual user-supplied, 59.9 GB setup-1.bin (Forza Horizon 3 RUNE release)
-was confirmed to extract using an external CODEX-style wrapper, while both
-Universal Extractor 2.0 RC3 and our v3.1.6 reported a stock unarc failure.
-This is a user-reported result with the standalone wrapper. The integrated
-fallback has not yet been verified against that archive, and the roles of
+An actual user-supplied, 64,383,144,758-byte setup-1.bin (approximately 59.9 GiB)
+failed with the stock decoder in Universal Extractor 2.0 RC3 and v3.1.6.
+On October 24, 2026 (UTC), the integrated fallback in candidate 62976e0
+completed extraction of that input using the explicitly authorized external
+wrapper: exit zero, 3,108 files and 67,082,381,180 output bytes. Output was
+committed to the destination and the staging directory was removed. The
+source backend and input metadata were unchanged, application preferences
+were restored, and neither diagnostic report contained the supplied password.
+This establishes compatibility with that input and decoder, not independent
+content authenticity or support for other custom archives. The roles of
 password, codec support and decoder modifications remain unresolved.
+
+The real run also exposed a reporting defect: the successful archive format
+was passed as the final outcome, producing a NOT EXTRACTED HTML badge.
+The logging call now keeps the filename label separate from the actual
+outcome. Packaged tests check successful final status and badges for both
+the built-in decoder and the external fallback, as well as failed attempts.
 
 ## Opt-in use
 

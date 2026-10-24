@@ -7151,7 +7151,7 @@ Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 	; Unknown / unsupported / not-packed files must also get logs so they are visible in single and batch runs.
 	If $bOptCreateLog And Not $bLogSaved And Not ($status = $STATUS_SILENT Or $status = $STATUS_SYNTAX Or $status = $STATUS_FILEINFO Or _
 	   $status = $STATUS_BATCH) Or ($status = $STATUS_FILEINFO And $silentmode) Then _
-		SaveLog($shortStatus)
+		SaveLog($status, $shortStatus)
 
 	If __IsBatchModeActive() And $status <> $STATUS_SILENT Then ; Continue queued batch items even if this child loaded a stale batchenabled=0
 		; Start next extraction
@@ -8110,9 +8110,11 @@ Func _ComErrorHandler($oError)
 EndFunc
 
 ; Write full debug output to log file
-Func SaveLog($status)
+Func SaveLog($status, $sLogLabel = "")
+	; The filename may name the archive format; report status must remain the outcome.
+	If $sLogLabel = "" Then $sLogLabel = $status
 	Local $sName = $logdir & @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "-" & @MIN & "-" & @SEC & "_"
-	If $status <> $STATUS_SUCCESS Then $sName &= StringUpper($status)
+	If $sLogLabel <> $STATUS_SUCCESS Then $sName &= StringUpper($sLogLabel)
 	If $file <> "" Then $sName &= "_" & GetFileName() & "." & $fileext
 	$sName &= ".log"
 

@@ -66,18 +66,13 @@ jobs:
         shell: powershell
         run: .\tests\installer-bin-guard.ps1
 
-      - name: Install pinned libmagic 5.48 dependencies
-        id: msys2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          pacboy: file:p
+      - name: Test libmagic fallback and failed detection handling
+        shell: powershell
+        run: .\tests\libmagic-fallback.ps1
 
       - name: Package release
         shell: powershell
         env:
-          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
           REQUIRE_LIBMAGIC_548: '1'
         run: .\scripts\package-release.ps1
 

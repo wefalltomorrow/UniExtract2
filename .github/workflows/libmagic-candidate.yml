@@ -15,13 +15,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - name: Install MSYS2 and file/libmagic 5.48
-        id: msys2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          pacboy: file:p
       - name: Set up Python for PE import closure
         uses: actions/setup-python@v6
         with:
@@ -29,8 +22,6 @@ jobs:
           architecture: 'x64'
       - name: Stage isolated candidate and run format detection tests
         shell: powershell
-        env:
-          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
         run: .\scripts\test-libmagic-548.ps1
       - name: Upload candidate runtime bundle and audit
         uses: actions/upload-artifact@v7

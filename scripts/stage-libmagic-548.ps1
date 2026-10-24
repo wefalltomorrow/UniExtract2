@@ -2,28 +2,21 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$StageRoot,
-    [string]$Msys2Location = $env:MSYS2_LOCATION
+    [string]$PackageRoot,
+    [string]$SevenZip
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-if (-not $Msys2Location -or -not (Test-Path -LiteralPath $Msys2Location -PathType Container)) {
-    throw 'A populated MSYS2_LOCATION is required to stage file/libmagic 5.48.'
-}
+if (-not $PackageRoot) { $PackageRoot = Join-Path (Split-Path -Parent $StageRoot) 'libmagic548-packages' }
+if (-not $SevenZip) { $SevenZip = Join-Path $StageRoot 'bin\x64\7z.exe' }
+$Msys2Location = & (Join-Path $PSScriptRoot 'get-libmagic-548.ps1') -WorkRoot $PackageRoot -SevenZip $SevenZip
 
 $PackageName = 'mingw-w64-x86_64-file-5.48-1-any.pkg.tar.zst'
 $PackageSha256 = '844a8e6451f51aa9bfcbbdf92248b0e406891a51738ad2d8161835d7100d4f3f'
 $Cache = Join-Path $Msys2Location 'var\cache\pacman\pkg'
 $Cached = @(Get-ChildItem -LiteralPath $Cache -File -Filter $PackageName -ErrorAction SilentlyContinue)
-if ($Cached.Count -eq 0) {
-    # setup-msys2 can clean the pacman cache after installation. Ask pacman
-    # to cache the installed package again; the digest check below is mandatory.
-    $Pacman = Join-Path $Msys2Location 'usr\bin\pacman.exe'
-    & $Pacman --noconfirm -Sw mingw-w64-x86_64-file
-    if ($LASTEXITCODE -ne 0) { throw "pacman could not cache pinned file/libmagic 5.48 ($LASTEXITCODE)" }
-    $Cached = @(Get-ChildItem -LiteralPath $Cache -File -Filter $PackageName -ErrorAction SilentlyContinue)
-}
 if ($Cached.Count -ne 1) {
     throw "Exactly one cached official $PackageName is required. Found $($Cached.Count)."
 }
@@ -71,9 +64,15 @@ $RequiredFileLicense = Join-Path $LicenseRoot 'file\COPYING'
 if (-not (Test-Path -LiteralPath $RequiredFileLicense -PathType Leaf)) {
     throw 'Missing upstream file/libmagic license.'
 }
+foreach ($Required in @('libsystre\LICENSE', 'libtre\LICENSE', 'gettext-runtime\intl\COPYING.LIB', 'libiconv\COPYING.LIB')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $LicenseRoot $Required) -PathType Leaf)) {
+        throw "Missing dependency license: $Required"
+    }
+}
 $LicenseTarget = Join-Path $StageRoot 'docs\third-party\libmagic548'
 New-Item -ItemType Directory -Force -Path $LicenseTarget | Out-Null
 Copy-Item -LiteralPath $LicenseRoot -Destination $LicenseTarget -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $Msys2Location 'PACKAGES.csv') -Destination $LicenseTarget -Force
 
 $Exe = Join-Path $Target 'file.exe'
 $Magic = Join-Path $Target 'magic.mgc'

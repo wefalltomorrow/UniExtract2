@@ -1433,20 +1433,33 @@ Func _UnixFileToolCommand()
 	Return $filetool
 EndFunc
 
+; Normalize before deciding whether to retry. file.exe normally prefixes even
+; an unknown "data" result with the input filename. Launch failures and tool
+; diagnostics are not file identifications.
+Func _UnixFileType($sCommand)
+	Local $sResult = FetchStdout($sCommand & ' -b "' & $file & '"', $filedir, @SW_HIDE)
+	If @error Or $sResult == -1 Then Return ""
+	Local $sPrefix = $file & ": "
+	If StringLeft($sResult, StringLen($sPrefix)) == $sPrefix Then $sResult = StringTrimLeft($sResult, StringLen($sPrefix))
+	$sResult = StringStripWS($sResult, 3)
+	If StringLower($sResult) = "data" Then Return ""
+	If StringRegExp($sResult, "(?i)^(?:ERROR:|cannot open\b|cannot read\b|file(?:\.exe)?:)") Then Return ""
+	Return $sResult
+EndFunc
+
 ; Scan file with unix file tool
 Func FileScan_UnixFile()
 	_CreateTrayMessageBox(t('SCANNING_FILE', "Unix File Tool"))
 
 	Cout("Start file scan using unix file tool")
 	Local $sCommand = _UnixFileToolCommand()
-	Local $sFileType = FetchStdout($sCommand & ' "' & $file & '"', $filedir, @SW_HIDE)
+	Local $sFileType = _UnixFileType($sCommand)
 	; A missing/broken x64 runtime must not remove file-type detection entirely.
 	; Retry with the legacy helper if 5.48 failed to identify the input.
-	If $sCommand <> $filetool And (StringStripWS($sFileType, 3) = "" Or StringLower(StringStripWS($sFileType, 3)) = "data") Then
+	If $sCommand <> $filetool And $sFileType = "" Then
 		Cout("libmagic 5.48 x64 returned no useful result; retrying bundled legacy file.exe")
-		$sFileType = FetchStdout($filetool & ' "' & $file & '"', $filedir, @SW_HIDE)
+		$sFileType = _UnixFileType($filetool)
 	EndIf
-	$sFileType = StringReplace(StringReplace($sFileType, $file & ": ", ""), @CRLF, "")
 
 	If $sFileType And $sFileType <> "data" Then
 		_FiletypeAdd("Unix File Tool", $sFileType)

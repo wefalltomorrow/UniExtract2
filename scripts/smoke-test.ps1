@@ -218,7 +218,7 @@ function Invoke-Libmagic548PackagedSmokeTest {
             throw "Packaged libmagic version test failed: $Version"
         }
         $Samples = @(
-            @{Name='pe';Path=(Join-Path $env:windir 'System32\notepad.exe');Pattern='PE32|Windows executable|executable'},
+            @{Name='pe';Path=(Join-Path $StageRoot 'UniExtract.exe');Pattern='PE32'},
             @{Name='zip';Path=(Join-Path $SmokeRoot 'basic\smoke-test.zip');Pattern='Zip archive data|ZIP archive data'}
         )
         foreach ($Case in $Samples) {

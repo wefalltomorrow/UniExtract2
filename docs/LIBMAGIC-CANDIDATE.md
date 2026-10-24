@@ -1,46 +1,64 @@
 # file/libmagic 5.48 Windows candidate
 
-## Integrated draft branch (12 October 2026)
+PR #13 remains a separate draft. It is not part of the FreeArc v3.1.7 candidate.
+The x64 file.exe/magic.mgc pair is preferred on 64-bit Windows; the existing
+x86 pair remains available for 32-bit Windows and unsuccessful x64 detection.
 
-The isolated candidate is now wired into UniExtract's **draft PR #13**, rebased by a merge commit onto the v3.1.5 FreeArc hotfix. The published v3.1.5 release is unchanged.
+## Corrections and validation (October 24, 2026 UTC)
 
-- On 64-bit Windows, `UniExtract.au3` selects `bin\\x64\\libmagic548\\file.exe` with its matching `magic.mgc` when the pair is present.
-- The existing `bin\\file.exe` and `bin\\magic.mgc` remain the baseline on x86 Windows and fallback when the x64 candidate is absent or returns no usable result.
-- The Windows package workflow installs the authentic MSYS2 5.48 candidate, checks the exact official package digest **and** all seven staged binary/database hashes, and copies the transitive runtime DLLs into an isolated directory.
-- The standalone bundle is tested with a clean `PATH` so system MSYS2 dependencies cannot hide missing DLLs. Packaged smoke tests check the x64 tool on Windows PE and ZIP fixtures while retaining the old helper pair.
-- Shipping is **not approved** until the merged Windows build and regression suites pass and the broader detector/extractor compatibility review is completed.
+- Normalize detector output before deciding whether to retry the legacy tool.
+  The old check missed filename-prefixed "data" output. Tool errors, missing
+  databases and launch failures are now rejected as identifications. Brief
+  output avoids depending on filename rendering in the helper's code page.
+- Removed the duplicate helper-refresh invocation during packaging.
+- Replaced rolling MSYS2 installation with five exact official package
+  downloads. Each package is SHA-256 checked before extraction; all seven
+  existing runtime/database hashes are retained and checked before execution.
+  The matching dependency license notices and package inventory are included.
+- Local Windows PowerShell 5.1 checks verify DLL import closure, isolated
+  version/text/PE/ZIP recognition, and the production AutoIt fallback path.
+  The new fallback regression fails against the original implementation.
 
+The supplied MSYS2 build and the existing legacy helper both failed a Japanese
+input path on the validation machine's active code page, returning "cannot
+open" with exit code zero. This is a known helper limitation, not successful
+Unicode recognition. The application rejects that diagnostic and retains
+other detection routes. The isolated test records this limitation explicitly;
+Unicode extraction smoke tests must still pass for the application package.
 
-This is a **standalone validation experiment**, not a replacement for the current `bin/file.exe` and `bin/magic.mgc`. The bundled 32-bit legacy helper stays untouched.
+## Reproducible input packages
 
-Upstream MSYS2 `mingw-w64-x86_64-file` version 5.48-1 publishes:
-- `file.exe`
-- `libmagic-1.dll`
-- the matching compiled `magic.mgc` database
-- the file/libmagic redistribution license
+Official downloads use https://mirror.msys2.org/mingw/mingw64/ and the filename
+prefix mingw-w64-x86_64- with suffix -any.pkg.tar.zst. No Pacman installation
+or global MSYS2 runtime is needed. scripts/get-libmagic-548.ps1 records the full
+URLs and pinned SHA-256 values in the shipped PACKAGES.csv.
 
-Official package checksum (SHA-256): `844a8e6451f51aa9bfcbbdf92248b0e406891a51738ad2d8161835d7100d4f3f`.
+| Package/version | SHA-256 |
+| --- | --- |
+| file-5.48-1 | 844a8e6451f51aa9bfcbbdf92248b0e406891a51738ad2d8161835d7100d4f3f |
+| gettext-runtime-1.0-1 | be68d7f260633284b910c588c6d82ee304a81c8817a686d2cd9df83f872c27af |
+| libiconv-1.19-1 | 21e334d0911f25de75d3e18e0697648bcecfa9658256d600cad0827d719c2f35 |
+| libsystre-1.0.2-3 | ea20a54127fe2a606ef0f2bef62b1abef77710840b661b832a933b4020bfe316 |
+| libtre-0.9.0-2 | c4051508d063258e1e02dd29615edb7d73c5c5f582ae42795fdd92e7ddce506b |
 
-The upstream package depends on `libsystre`, which itself depends on `libtre` and further runtime libraries. The Windows workflow installs the upstream package under MSYS2, downloads and validates the pinned archive digest, recursively copies its non-OS PE dependencies into a clean staging directory, and runs `file --version` plus PE, text and ZIP recognition **without MSYS2 on PATH**. A checksum manifest and candidate ZIP are uploaded only as CI artifacts.
-
-**Next requirements before integrating:** investigate x86 5.48 builds or retain x86 5.46; choose an isolated x64 fallback and update AutoIt's `file.exe -m magic.mgc` invocation only with platform checking; compare detection behavior and downstream extractor selection for representative archives; confirm the licensing and all transitive DLL hashes are pinned in the production packaging script.
-
-The current published release remains untouched by this test.
-
-## Verified Windows candidate (CI passed)
-
-Run: https://github.com/wefalltomorrow/UniExtract2/actions/runs/38019487289
-
-Official 5.48-1 MSYS2 package SHA-256 matched the pinned checksum, the isolated import closure contained six binaries, and PE32+, ASCII text, and ZIP identification succeeded without MSYS2 on PATH. The matching `magic.mgc` was copied and used in every scan.
+The dependency versions were recovered from the earlier successful candidate
+workflow 38238569207. Newly downloaded official packages reproduce every
+previously recorded binary/database hash. These are deliberate pins, not
+claims that these package versions are the newest available.
 
 | Runtime file | SHA-256 |
-|---|---|
-| `file.exe` | `0d7d9d14f2cbbf3e941219ec819cd450a851d06ab9104ef20f7b0f22b7f97f84` |
-| `libmagic-1.dll` | `73e9ab47916462ca1631cf165385eeb8664333cf7740c54ed6f9e2e2d8f6c798` |
-| `libsystre-0.dll` | `4bc4dae17267afec9f9812e88167980808848c10a255ccbda9ef4fd758897938` |
-| `libtre-5.dll` | `5833b2b1f62b67d8b4b3881f1bc05f42b0dee1a9f10cef897cdf44d74d094fdf` |
-| `libintl-8.dll` | `0537c3dd2378218508ebe3cc416d72a99ee2d24ae1c5525e23458f32544ef861` |
-| `libiconv-2.dll` | `7a282a854e01be726c6cccfe46f548c716aa45b3014818468253aaa4efbcd067` |
-| `magic.mgc` | `1a98967ddb2a9ef80f9dd1a3f1fa3bebc4991741878a512310f0d434428de85e` |
+| --- | --- |
+| file.exe | 0d7d9d14f2cbbf3e941219ec819cd450a851d06ab9104ef20f7b0f22b7f97f84 |
+| libmagic-1.dll | 73e9ab47916462ca1631cf165385eeb8664333cf7740c54ed6f9e2e2d8f6c798 |
+| libsystre-0.dll | 4bc4dae17267afec9f9812e88167980808848c10a255ccbda9ef4fd758897938 |
+| libtre-5.dll | 5833b2b1f62b67d8b4b3881f1bc05f42b0dee1a9f10cef897cdf44d74d094fdf |
+| libintl-8.dll | 0537c3dd2378218508ebe3cc416d72a99ee2d24ae1c5525e23458f32544ef861 |
+| libiconv-2.dll | 7a282a854e01be726c6cccfe46f548c716aa45b3014818468253aaa4efbcd067 |
+| magic.mgc | 1a98967ddb2a9ef80f9dd1a3f1fa3bebc4991741878a512310f0d434428de85e |
 
-These are **candidate audit values**, not evidence of full UniExtract integration. All original x86 files are still untouched, and no 5.48 file/libmagic binary has been added to the published release package.
+## Remaining release gates
+
+Update the branch with the stable FreeArc changes after their independent
+validation; resolve conflicts without losing either suite. Run the complete
+Windows build and packaged tests, verify downloaded artifacts and detector
+behavior, and complete the redistribution audit before marking PR #13 ready.

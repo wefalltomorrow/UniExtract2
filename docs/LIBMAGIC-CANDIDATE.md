@@ -15,16 +15,25 @@ x86 pair remains available for 32-bit Windows and unsuccessful x64 detection.
   downloads. Each package is SHA-256 checked before extraction; all seven
   existing runtime/database hashes are retained and checked before execution.
   The matching dependency license notices and package inventory are included.
+- Include the five matching official source packages, patches and build
+  recipes alongside the license notices. Their checksums are pinned, and
+  every recipe checksum must match the corresponding binary `.BUILDINFO`.
+  See [source and rebuild information](LIBMAGIC-SOURCES.md).
 - Local Windows PowerShell 5.1 checks verify DLL import closure, isolated
   version/text/PE/ZIP recognition, and the production AutoIt fallback path.
   The new fallback regression fails against the original implementation.
+- Isolated Windows CI run 40099053972 passed at commit 0442f6b. A local
+  application overlay also passed ZIP, Unicode ZIP, ADX, ACE (247 files),
+  malformed FreeArc routing and packaged libmagic checks. This overlay uses
+  the earlier verified helper package and is not a release artifact.
 
 The supplied MSYS2 build and the existing legacy helper both failed a Japanese
 input path on the validation machine's active code page, returning "cannot
 open" with exit code zero. This is a known helper limitation, not successful
 Unicode recognition. The application rejects that diagnostic and retains
 other detection routes. The isolated test records this limitation explicitly;
-Unicode extraction smoke tests must still pass for the application package.
+The local application overlay passed Unicode ZIP extraction through the
+remaining detection routes; the final CI package must pass the same check.
 
 ## Reproducible input packages
 

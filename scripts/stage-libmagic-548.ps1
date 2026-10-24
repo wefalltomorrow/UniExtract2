@@ -73,6 +73,8 @@ $LicenseTarget = Join-Path $StageRoot 'docs\third-party\libmagic548'
 New-Item -ItemType Directory -Force -Path $LicenseTarget | Out-Null
 Copy-Item -LiteralPath $LicenseRoot -Destination $LicenseTarget -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $Msys2Location 'PACKAGES.csv') -Destination $LicenseTarget -Force
+& (Join-Path $PSScriptRoot 'stage-libmagic-sources.ps1') -PackageRoot $Msys2Location -Destination (Join-Path $LicenseTarget 'sources') -SevenZip $SevenZip
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\docs\LIBMAGIC-SOURCES.md') -Destination (Join-Path $LicenseTarget 'README.md') -Force
 
 $Exe = Join-Path $Target 'file.exe'
 $Magic = Join-Path $Target 'magic.mgc'

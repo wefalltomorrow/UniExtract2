@@ -1,9 +1,9 @@
-#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=.\Support\Icons\uniextract_exe.ico
 #AutoIt3Wrapper_Outfile=.\UniExtract.exe
 #AutoIt3Wrapper_Res_Description=Universal Extractor
 #AutoIt3Wrapper_Res_ProductName=Universal Extractor
-#AutoIt3Wrapper_Res_Fileversion=3.1.5.0
+#AutoIt3Wrapper_Res_Fileversion=3.1.8.0
 #AutoIt3Wrapper_Res_ProductVersion=%fileversion%
 #AutoIt3Wrapper_Res_CompanyName=wefalltomorrow
 #AutoIt3Wrapper_Res_Language=1033
@@ -208,14 +208,15 @@ Global $g_bInnoExtractUsable = False
 Global $g_bSymlinkOnlyWarning = False
 Global $g_bArchiveIntegrityError = False
 Global $g_sPrimaryDetectRaw = "", $g_sPrimaryDetectMatch = "", $g_sPrimaryDetectScanner = "", $g_bPrimaryStrongHit = False
-Global $g_sDetectionWinner = "", $g_sExtractorWinner = "", $g_sDetectedTypeForSummary = ""
+Global $g_sDetectionWinner = "", $g_sExtractorWinner = "", $g_sDetectedTypeForSummary = "", $g_sLastExtractorAttempt = ""
 Global $g_sPipelineRows = "", $g_iPipelineSeq = 0
 Global $g_sPipelineTimeline = "", $g_sPipelineLine = "", $g_sPipelineToolVersions = ""
 Global $g_iPipelineWarn = 0, $g_iPipelineFail = 0, $g_iPipelineOk = 0, $g_iPipelineRun = 0
-Global $g_bStrictPipeline = True, $g_sStoredTridType = "", $g_sStoredUnixType = "", $g_sDieDetectionHint = ""
+Global $g_bStrictPipeline = True, $g_sStoredTridType = "", $g_sStoredUnixType = "", $g_sDieDetectionHint = "", $g_sVerifiedFileSignature = ""
 Global $oldpath, $oldoutdir, $sUnicodeName, $createdir
 Global $g_aUnicodeSidecarCopies[0]
 Global $guiprefs, $TBgui = 0, $exStyle = -1, $idTrayStatusExt, $BatchBut, $idProgress, $sComError = 0
+Global $g_sExternalFreeArcStage = "", $g_iExternalFreeArcPid = 0, $g_hExternalFreeArcJob = 0
 Global $Tray_Statusbox, $isexe = False, $Message, $run = 0, $runtitle, $idOptDeleteSourceFile[3]
 Global $gaDropFiles[1], $aFiletype[0][2], $queueArray[0], $aTridDefinitions[0][0], $aFileDefinitions[0][0], $aExeinfoDefinitions[0][0], $aGUIs[0], $aWarnings[0]
 Global $guimain = False, $keepopenitem, $topmostitem, $showitem, $clearitem, $logitem, $silentitem, $GUI_Main_Extract, $GUI_Main_Scan, $filecont
@@ -500,6 +501,7 @@ Func StartExtraction()
 	$g_bPrimaryStrongHit = False
 	$g_sDetectionWinner = ""
 	$g_sExtractorWinner = ""
+	$g_sLastExtractorAttempt = ""
 	$g_sDetectedTypeForSummary = ""
 	$g_sPipelineRows = ""
 	$g_sPipelineTimeline = ""
@@ -515,6 +517,8 @@ Func StartExtraction()
 	$g_sStoredTridType = ""
 	$g_sStoredUnixType = ""
 	$g_sDieDetectionHint = ""
+	$g_sVerifiedFileSignature = _GetVerifiedFileSignature($file)
+	If $g_sVerifiedFileSignature <> "" Then Cout("Verified file-header format: " & $g_sVerifiedFileSignature & " (not inferred from filename)")
 
 	; If an extractor is specified via command line parameter, we simply use that without scanning
 	If $sArcTypeOverride Then Return extract($sArcTypeOverride, $sArcTypeOverride & " " & t('TERM_FILE'))
@@ -547,46 +551,68 @@ Func StartExtraction()
 		terminate($STATUS_FILEINFO, $filenamefull, $fileext)
 	EndIf
 
-	; File signatures override broad heuristic detectors. A verified FreeArc
-	; header on a .bin must never be sent to GARbro's signatureless PD/KAAS
-	; recognizer. The bundled unarc may not support repack-specific codecs,
-	; in which case report unsupported rather than trying an unrelated format.
-	If _HasFreeArcMagic($file) Then
-		LogDetectionWinner("FreeArc header (ArC 01)", "FreeArc archive")
-		Cout("Verified FreeArc magic bytes; using FreeArc extractor before broad game probes")
+	; Exact file headers are stronger evidence than file extensions, scanner
+	; heuristics or speculative game extractors. The format is read once from
+	; the input header, independently of the chosen extension.
+	If $g_sVerifiedFileSignature = "freearc" Then
+		LogDetectionWinner("Verified file header", "FreeArc archive")
+		Cout("Verified FreeArc magic bytes; using FreeArc extractor before any speculative probes")
 		If extract($TYPE_FREEARC, "FreeArc archive", "", True, True) Then _
 			terminate($STATUS_SUCCESS, $filenamefull, $TYPE_FREEARC, "FreeArc archive")
 		If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_FREEARC, "FreeArc archive")
-		Cout("FreeArc was identified conclusively, but the bundled unarc helper could not extract it; refusing unrelated GARbro/ZIP fallbacks")
-		terminate($STATUS_NOTSUPPORTED, $file, $TYPE_FREEARC, "FreeArc archive (unsupported extraction method or installer compression)")
+		If $g_bArchiveIntegrityError Then terminate($STATUS_FAILED, $file, $TYPE_FREEARC, "Corrupt FreeArc archive")
+		Cout("FreeArc signature verified; bundled unarc cannot extract it. Refusing unrelated format fallbacks.")
+		terminate($STATUS_NOTSUPPORTED, $file, $TYPE_FREEARC, "FreeArc archive (unsupported extractor or compression)")
 	EndIf
 
-	; Else perform additional extraction methods
-	; Do not skip game probing when BMS.db has a format-specific script for this extension.
-	; This preserves the strict media fast-path while preventing false-positive media detection
-	; from bypassing a known game/archive extractor (for example Descent 3 .mn3/.hog).
-	If _ShouldAvoidBroadGameProbeForBin() Then
-		Cout("Skipping broad ISO/game probes for installer sidecar or corroborated FreeARC .bin; deferring to specific detector routes")
-	ElseIf _ShouldSkipNonFatalProbesForPrimaryMatch() And Not _HasGameBmsForExtension($fileext) Then
-		Cout("Skipping non-fatal ISO/game probes because primary detector already identified media")
+	If _IsVerified7ZipFormat($g_sVerifiedFileSignature) Then
+		; A failed 7-Zip extraction cannot reclassify a verified ZIP/RAR/7z/etc.
+		; as a game archive just because another tool produced pseudo-files.
+		LogDetectionWinner("Verified file header", $g_sVerifiedFileSignature & " archive/compressed data")
+		If check7z(0, False, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_7Z, $g_sVerifiedFileSignature & " archive")
+		If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_7Z, $g_sVerifiedFileSignature & " archive")
+		If $g_bArchiveIntegrityError Then terminate($STATUS_FAILED, $file, $TYPE_7Z, "Corrupt " & $g_sVerifiedFileSignature & " archive")
+		Cout("Verified archive header but 7-Zip cannot extract it; refusing speculative ISO/game probes")
+		terminate($STATUS_NOTSUPPORTED, $file, $TYPE_7Z, $g_sVerifiedFileSignature & " archive (unsupported extractor)")
+	EndIf
+
+	If _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Then
+		LogDetectionWinner("Verified file header", $g_sVerifiedFileSignature & " file")
+	EndIf
+
+	; Keep specifically matched QuickBMS scripts before the generic 7-Zip
+	; probe (e.g. Descent 3 .mn3/.hog). Never let a broad script guess beat
+	; an exact, non-game file header.
+	If $g_sVerifiedFileSignature = "" And _HasGameBmsForExtension($fileext) Then
+		Cout("Game-specific extension present in BMS.db; trying its script before generic archive probing")
+		CheckGame(False, False)
+	EndIf
+
+	If Not _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Then
+		; User definitions and 7-Zip run before broad game/ISO probes. A weak
+		; QuickBMS/GARbro hit must never preempt a genuine readable archive.
+		CheckExt()
+		If check7z(0, False, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
+		If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
+		If $g_bArchiveIntegrityError Then
+			Cout("Definitive archive corruption/broken-volume failure detected; refusing speculative extractor fallback")
+			terminate($STATUS_FAILED, $file, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
+		EndIf
+	EndIf
+
+	; A known image/document/media header is not a game archive simply
+	; because a permissive extractor lists plausible-looking entries.
+	Local $bSkipGameProbes = _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Or _
+		_ShouldAvoidBroadGameProbeForBin() Or _ShouldSkipNonFatalProbesForPrimaryMatch()
+	If $bSkipGameProbes Then
+		Cout("Skipping speculative ISO/GARbro/QuickBMS/TotalObserver probes: trusted header or protected detector context")
 	Else
 		CheckIso()
 		CheckGame()
 		CheckTotalObserver()
 	EndIf
 
-	; Use file extension if signature not recognized
-	CheckExt()
-
-	If check7z(0, False, True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
-	If $g_bArchiveIntegrityError Then
-		Cout("Definitive archive corruption/broken-volume failure detected after general 7-Zip probe; aborting further fallback scans")
-		terminate($STATUS_FAILED, $file, $TYPE_7Z, "7-Zip " & t('TERM_ARCHIVE'))
-	EndIf
-
-	; Optional broad game-archive fallback. Keep this after all native/specific handlers and 7-Zip
-	; so installing Game Extractor does not slow down or override normal UniExtract routes.
-	If Not _ShouldAvoidBroadGameProbeForBin() Then
+	If Not $bSkipGameProbes Then
 		If CheckGameExtractor() Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_GAMEEXTRACTOR, "Game Extractor " & t('TERM_GAME') & t('TERM_ARCHIVE'))
 	EndIf
 
@@ -2839,8 +2865,7 @@ Func CheckGame($bUseGaup = True, $bUseGarbro = True)
 		; Check GAUP first
 		Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $gaup & '" "' & $file & '"', $filedir, @SW_HIDE, -1)
 
-		If @error Or StringInStr($return, "Target directory:", 0) Or StringInStr($return, "0 files found", 0) Or StringInStr($return, "Error", 0) _
-		Or StringInStr($return, "exception occured", 0) Or StringInStr($return, "not supported", 0) Or $return == "" Then
+		If Not _IsPositiveQuickBmsListing($return) Then
 
 		Else
 			_DeleteTrayMessageBox()
@@ -2913,14 +2938,104 @@ Func CheckVgmstream()
 	Return extract($TYPE_VGMSTREAM, "vgmstream game audio", "", True, True)
 EndFunc
 
-; Read only four bytes regardless of input size. The FreeArc format is
-; identified by the exact "ArC" + 0x01 signature at offset zero.
+; Centralised signature evidence, independent of extension or tool guesses.
+; Only include unambiguous signatures at offset zero (or fixed offsets).
+; Avoid treating a generic MZ/SFX header as an archive: installers are handled
+; separately by IsExe and the primary detector routing.
+Func _GetVerifiedFileSignature($sPath)
+	Local $hInput = FileOpen($sPath, $FO_BINARY)
+	If $hInput = -1 Then Return ""
+	Local $bHeader = FileRead($hInput, 16)
+	FileClose($hInput)
+	Local $n = BinaryLen($bHeader)
+	If $n < 4 Then Return ""
+	If BinaryMid($bHeader, 1, 4) = Binary("0x41724301") Then Return "freearc"
+	If $n >= 6 And BinaryMid($bHeader, 1, 6) = Binary("0x377ABCAF271C") Then Return "7z"
+	If BinaryMid($bHeader, 1, 4) = Binary("0x504B0304") Or _
+		BinaryMid($bHeader, 1, 4) = Binary("0x504B0506") Then Return "zip"
+	If $n >= 7 And BinaryMid($bHeader, 1, 7) = Binary("0x526172211A0700") Then Return "rar"
+	If $n >= 8 And BinaryMid($bHeader, 1, 8) = Binary("0x526172211A070100") Then Return "rar"
+	If BinaryMid($bHeader, 1, 3) = Binary("0x1F8B08") Then Return "gzip"
+	If $n >= 4 And BinaryMid($bHeader, 1, 3) = Binary("0x425A68") And _
+		Dec(StringTrimLeft(String(BinaryMid($bHeader, 4, 1)), 2)) >= 0x31 And _
+		Dec(StringTrimLeft(String(BinaryMid($bHeader, 4, 1)), 2)) <= 0x39 Then Return "bzip2"
+	If $n >= 6 And BinaryMid($bHeader, 1, 6) = Binary("0xFD377A585A00") Then Return "xz"
+	If $n >= 8 And BinaryMid($bHeader, 1, 8) = Binary("0x89504E470D0A1A0A") Then Return "png"
+	If BinaryMid($bHeader, 1, 3) = Binary("0xFFD8FF") Then Return "jpeg"
+	If $n >= 6 And (BinaryMid($bHeader, 1, 6) = Binary("0x474946383761") Or _
+		BinaryMid($bHeader, 1, 6) = Binary("0x474946383961")) Then Return "gif"
+	If BinaryMid($bHeader, 1, 5) = Binary("0x255044462D") Then Return "pdf"
+	If BinaryMid($bHeader, 1, 4) = Binary("0x4F676753") Then Return "ogg"
+	If BinaryMid($bHeader, 1, 4) = Binary("0x664C6143") Then Return "flac"
+	If BinaryMid($bHeader, 1, 4) = Binary("0x1A45DFA3") Then Return "ebml"
+	If $n >= 12 And BinaryMid($bHeader, 5, 4) = Binary("0x66747970") Then Return "mp4"
+	If $n >= 12 And BinaryMid($bHeader, 1, 4) = Binary("0x52494646") Then
+		Switch BinaryMid($bHeader, 9, 4)
+			Case Binary("0x57415645")
+				Return "wav"
+			Case Binary("0x41564920")
+				Return "avi"
+			Case Binary("0x57454250")
+				Return "webp"
+		EndSwitch
+	EndIf
+	Return ""
+EndFunc
+
+Func _IsVerified7ZipFormat($sFormat)
+	Switch $sFormat
+		Case "7z", "zip", "rar", "gzip", "bzip2", "xz"
+			Return True
+	EndSwitch
+	Return False
+EndFunc
+
+Func _IsVerifiedNonArchiveFormat($sFormat)
+	Return $sFormat <> "" And $sFormat <> "freearc" And Not _IsVerified7ZipFormat($sFormat)
+EndFunc
+
+; Verified headers should NOT disable a specialised, matching extension
+; handler (e.g. UnRAR or password-aware PDF extraction). A mismatched
+; extension must never override stronger binary format evidence.
+Func _VerifiedHeaderMatchesExtension($sFormat, $sExt)
+	$sExt = StringLower($sExt)
+	Switch $sFormat
+		Case "freearc"
+			Return $sExt = "arc" Or $sExt = "farc"
+		Case "7z"
+			Return $sExt = "7z"
+		Case "zip"
+			Return $sExt = "zip" Or $sExt = "apk"
+		Case "rar"
+			Return $sExt = "rar"
+		Case "gzip"
+			Return $sExt = "gz" Or $sExt = "gzip"
+		Case "bzip2"
+			Return $sExt = "bz2"
+		Case "xz"
+			Return $sExt = "xz"
+		Case "pdf"
+			Return $sExt = "pdf"
+	EndSwitch
+	Return False
+EndFunc
+
+; Retain the original helper name for existing BIN guard tests and callers.
 Func _HasFreeArcMagic($sPath)
 	Local $hInput = FileOpen($sPath, $FO_BINARY)
 	If $hInput = -1 Then Return False
 	Local $bHeader = FileRead($hInput, 4)
 	FileClose($hInput)
 	Return BinaryLen($bHeader) = 4 And $bHeader = Binary("0x41724301")
+EndFunc
+
+; Broad QuickBMS scripts can claim arbitrary data based on weak guesses.
+; Require an actual positive file count, not merely an absence of errors.
+Func _IsPositiveQuickBmsListing($sListing)
+	If StringStripWS($sListing, 3) = "" Then Return False
+	If StringRegExp($sListing, "(?i)\b(error|exception|not supported|failed|unsupported)\b") Then Return False
+	If StringInStr($sListing, "Target directory:", 0) Then Return False
+	Return StringRegExp($sListing, "(?i)\b[1-9][0-9]*\s+files?\s+found\b") = 1
 EndFunc
 
 ; Broad game-archive scanners can misrecognise multi-GB installer data
@@ -2944,9 +3059,11 @@ EndFunc
 
 ; PD/KAAS has no fixed signature (GARbro's PdOpener declares Signature=0).
 ; Its normal extension is .pd, and it synthesises basename#NNNN filenames.
-; On unrelated .bin files this can create huge, misleading pseudo-extractions.
+; On unrelated file types this can create huge, misleading pseudo-extractions.
+; Only the native .pd extension is sufficient evidence for this signatureless
+; opener; all other extensions require actual format evidence rather than guesses.
 Func _ShouldRejectWeakGarbroClaim($sClaim)
-	Return StringLower($fileext) = "bin" And StringUpper(StringStripWS($sClaim, 3)) = "PD/KAAS"
+	Return StringLower($fileext) <> "pd" And StringUpper(StringStripWS($sClaim, 3)) = "PD/KAAS"
 EndFunc
 
 ; Determine if file can be extracted with GARbro
@@ -2960,9 +3077,14 @@ Func CheckGarbro($arcdisp = 0)
 	_CreateTrayMessageBox(t('TERM_TESTING') & ' GARbro ' & t('TERM_ARCHIVE'))
 	Local $sGarbroListCmd = Quote($garbro, True) & ' l "' & $file & '" || ' & Quote($garbro, True) & ' list "' & $file & '"'
 	Local $return = FetchStdout(@ComSpec & ' /d /c ' & $sGarbroListCmd, $filedir, @SW_HIDE)
-	If Not @error And Not StringInStr($return, "Error: Input file has an unknown format") And Not StringInStr($return, "Error: Archive is empty") Then
+	If Not @error And Not StringIsSpace($return) And Not StringInStr($return, "Error: Input file has an unknown format") And Not StringInStr($return, "Error: Archive is empty") Then
 		Local $sGarbroInfoCmd = Quote($garbro, True) & ' i "' & $file & '" || ' & Quote($garbro, True) & ' info "' & $file & '"'
 		$return = StringStripWS(StringStripCR(FetchStdout(@ComSpec & ' /d /c ' & $sGarbroInfoCmd, $filedir, @SW_HIDE, -1)), 8)
+		If $return = "" Or StringInStr($return, "unknown", 0) Or StringInStr($return, "Error", 0) Then
+			Cout("Ignoring GARbro result without a credible archive format")
+			_DeleteTrayMessageBox()
+			Return False
+		EndIf
 		If _ShouldRejectWeakGarbroClaim($return) Then
 			Cout("Ignoring weak GARbro PD/KAAS claim on .bin: signatureless .pd image format; not sufficient evidence to extract installer data")
 			_DeleteTrayMessageBox()
@@ -3286,8 +3408,7 @@ Func CheckIso($returnSuccess = False, $returnFail = False)
 
 	Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $iso & '" "' & $file & '"', $filedir, @SW_HIDE)
 	_DeleteTrayMessageBox()
-	If StringInStr($return, "Target directory:") Or StringInStr($return, "0 files found")  Or $return == "" _
-	Or StringInStr($return, "exception occured") Or StringInStr($return, "not supported by this WCX plugin") Then
+	If Not _IsPositiveQuickBmsListing($return) Then
 		$isofailed = True
 		Return False
 	EndIf
@@ -3329,8 +3450,7 @@ Func CheckTotalObserver($arcdisp = 0)
 	Local $return = FetchStdout($quickbms & ' -Y -l "' & $bindir & $observer & '" "' & $file & '"', $filedir, @SW_HIDE)
 
 	_DeleteTrayMessageBox()
-	If StringInStr($return, "not supported by this WCX plugin") Or StringInStr($return, "0 files found") Or _
-	   StringInStr($return, "exception occured") Or StringInStr($return, "EXCEPTION HANDLER") Then
+	If Not _IsPositiveQuickBmsListing($return) Then
 	   $observerfailed = True
 	   Return False
 	EndIf
@@ -3634,6 +3754,23 @@ Func ResolveStrictPipeline($bApplyPrimaryAndTrid = True, $bApplyUnix = True)
 		Return False
 	EndIf
 
+	; Never let a weaker DiE/TrID/unix guess reclassify a file whose exact
+	; header proved it is ordinary media or a document. Legitimate format
+	; handlers remain available even when the user renamed the extension.
+	If _IsVerifiedNonArchiveFormat($g_sVerifiedFileSignature) Then
+		Cout("Verified non-archive header overrides speculative detector-based extractor routing")
+		Switch $g_sVerifiedFileSignature
+			Case "pdf"
+				If extract($TYPE_PDF, "PDF file", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_PDF, "PDF file")
+				If $g_bPasswordFailureAbort Then terminate($STATUS_PASSWORD, $file, $TYPE_PDF, "PDF file")
+			Case "ogg", "flac", "wav"
+				If extract($TYPE_AUDIO, "Audio file", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_AUDIO, "Audio file")
+			Case "mp4", "ebml", "avi"
+				If extract($TYPE_VIDEO, "Video file", "", True, True) Then terminate($STATUS_SUCCESS, $filenamefull, $TYPE_VIDEO, "Video file")
+		EndSwitch
+		terminate($STATUS_NOTPACKED, $file, $g_sVerifiedFileSignature, "Verified " & $g_sVerifiedFileSignature & " file (not a game archive)")
+	EndIf
+
 	Cout("Strict fallback: resolving stored detector hints")
 	$g_bStrictPipeline = False
 
@@ -3848,6 +3985,13 @@ EndFunc
 ; Perform special actions for some file types
 Func InitialCheckExt()
 	If Not $extract Then Return
+
+	; Never route a known archive/image/media signature using an unrelated extension.
+	; PDF retains its dedicated password-aware extractor when correctly named.
+	If $g_sVerifiedFileSignature <> "" And Not _VerifiedHeaderMatchesExtension($g_sVerifiedFileSignature, $fileext) Then
+		Cout("Deferring extension-first probes: a verified file header has higher priority")
+		Return
+	EndIf
 
 	Switch $fileext
 		; Split files have no additional file magic and will be misdetected
@@ -4099,6 +4243,199 @@ Func _CopyUnicodeSidecarFile($sSource, $sDest)
 	Cout("Failed to copy Unicode sidecar file: " & $sSource & " -> " & $sDest)
 	Return False
 EndFunc
+
+
+; Configs may contain credentials: never log their text or helper stdout/stderr.
+Func _PrepareExternalFreeArcConfig($sTemplate, $sArchive, $sDestination)
+	If StringRegExp($sArchive & $sDestination, '[\r\n\x00]') Then Return ""
+	Local $aLines = StringSplit(StringReplace(String($sTemplate), @CRLF, @LF), @LF, $STR_NOCOUNT)
+	Local $iInput = 0, $iOutput = 0, $iWork = 0, $iCfg = 0, $sResult = ""
+	For $i = 0 To UBound($aLines) - 1
+		Local $sLine = $aLines[$i]
+		If StringRegExp($sLine, '^\s*\[') Then Return ""
+		If StringRegExp($sLine, '(?i)^\s*InputFile\s*=') Then
+			$sLine = "InputFile=" & $sArchive
+			$iInput += 1
+		ElseIf StringRegExp($sLine, '(?i)^\s*OutputPath\s*=') Then
+			$sLine = "OutputPath=" & $sDestination
+			$iOutput += 1
+		ElseIf StringRegExp($sLine, '(?i)^\s*WorkPath\s*=') Then
+			$sLine = "WorkPath=.\temp"
+			$iWork += 1
+		ElseIf StringRegExp($sLine, '(?i)^\s*CfgFile\s*=') Then
+			$sLine = "CfgFile=.\arc.ini"
+			$iCfg += 1
+		EndIf
+		$sResult &= ($i > 0 ? @CRLF : "") & $sLine
+	Next
+	If $iInput <> 1 Or $iOutput <> 1 Or $iWork <> 1 Or $iCfg <> 1 Then Return ""
+	Return $sResult
+EndFunc
+
+; Returns -1 for inaccessible paths and reparse points, otherwise file count.
+Func _ExternalFreeArcFileCount($sPath)
+	Local $aAttr = DllCall("kernel32.dll", "dword", "GetFileAttributesW", "wstr", $sPath)
+	If @error Then Return -1
+	If $aAttr[0] = 0xFFFFFFFF Or BitAND($aAttr[0], 0x400) Then Return -1
+	If Not BitAND($aAttr[0], 0x10) Then Return 1
+	Local $hSearch = FileFindFirstFile($sPath & "\*"), $iCount = 0
+	If $hSearch = -1 Then Return 0
+	While True
+		Local $sName = FileFindNextFile($hSearch)
+		If @error Then ExitLoop
+		Local $iChild = _ExternalFreeArcFileCount($sPath & "\" & $sName)
+		If $iChild < 0 Then
+			$iCount = -1
+			ExitLoop
+		EndIf
+		$iCount += $iChild
+	WEnd
+	FileClose($hSearch)
+	Return $iCount
+EndFunc
+
+Func _ExternalFreeArcDestinationEmpty($sPath)
+	If Not FileExists($sPath) Then Return True
+	If _ExternalFreeArcFileCount($sPath) <> 0 Then Return False
+	Local $hSearch = FileFindFirstFile($sPath & "\*")
+	If $hSearch = -1 Then Return True
+	FileClose($hSearch)
+	Return False
+EndFunc
+
+Func _ExternalFreeArcCleanup()
+	If $g_hExternalFreeArcJob Then DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $g_hExternalFreeArcJob)
+	$g_hExternalFreeArcJob = 0
+	If $g_iExternalFreeArcPid Then _KillProcessTree($g_iExternalFreeArcPid)
+	If $g_iExternalFreeArcPid Then StdioClose($g_iExternalFreeArcPid)
+	$g_iExternalFreeArcPid = 0
+	$run = 0
+	If $g_sExternalFreeArcStage = "" Then Return
+	FileDelete($g_sExternalFreeArcStage & "\config.ini")
+	If Not DirRemove($g_sExternalFreeArcStage, 1) Then Cout("External FreeArc temporary files could not all be removed")
+	$g_sExternalFreeArcStage = ""
+EndFunc
+
+Func _ExternalFreeArcRun($sStage, $iTimeout)
+	; A kill-on-close job cleans up attached child processes even after the wrapper exits.
+	Local $aJob = DllCall("kernel32.dll", "handle", "CreateJobObjectW", "ptr", 0, "ptr", 0)
+	If @error Then Return -1
+	If Not $aJob[0] Then Return -1
+	$g_hExternalFreeArcJob = $aJob[0]
+	Local $tLimits = DllStructCreate("int64;int64;dword Flags;ulong_ptr;ulong_ptr;dword;ulong_ptr;dword;dword;uint64[6];ulong_ptr[4]")
+	DllStructSetData($tLimits, "Flags", 0x2000)
+	Local $aSet = DllCall("kernel32.dll", "bool", "SetInformationJobObject", "handle", $g_hExternalFreeArcJob, "int", 9, "struct*", $tLimits, "dword", DllStructGetSize($tLimits))
+	If @error Then Return -1
+	If Not $aSet[0] Then Return -1
+	; Discard both streams: wrappers may print the supplied password.
+	Local $iPid = Run('"' & $sStage & '\unpack.exe" "config.ini"', $sStage, @SW_HIDE, $STDOUT_CHILD + $STDERR_CHILD)
+	If @error Or Not $iPid Then Return -1
+	$g_iExternalFreeArcPid = $iPid
+	$run = $iPid ; Integrate with tray cancellation.
+	Local $aOpen = DllCall("kernel32.dll", "handle", "OpenProcess", "dword", 0x100501, "bool", False, "dword", $iPid)
+	If @error Then Return -1
+	If Not $aOpen[0] Then Return -1
+	Local $hProcess = $aOpen[0], $hTimer = TimerInit(), $iExit = -1
+	Local $aAssign = DllCall("kernel32.dll", "bool", "AssignProcessToJobObject", "handle", $g_hExternalFreeArcJob, "handle", $hProcess)
+	Local $bAssigned = Not @error
+	If $bAssigned Then $bAssigned = $aAssign[0]
+	If Not $bAssigned Then
+		DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hProcess)
+		Return -1
+	EndIf
+	While True
+		StdoutRead($iPid)
+		StderrRead($iPid)
+		If TimerDiff($hTimer) > $iTimeout * 1000 Or $run <> $iPid Then ExitLoop
+		Local $aWait = DllCall("kernel32.dll", "dword", "WaitForSingleObject", "handle", $hProcess, "dword", 20)
+		If @error Then ExitLoop
+		If $aWait[0] = 0 Then
+			Local $aExit = DllCall("kernel32.dll", "bool", "GetExitCodeProcess", "handle", $hProcess, "dword*", 0)
+			If Not @error And $aExit[0] Then $iExit = $aExit[2]
+			$g_iExternalFreeArcPid = 0
+			ExitLoop
+		EndIf
+		If $aWait[0] <> 258 Or TimerDiff($hTimer) > $iTimeout * 1000 Or $run <> $iPid Then ExitLoop
+	WEnd
+	DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hProcess)
+	DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $g_hExternalFreeArcJob)
+	$g_hExternalFreeArcJob = 0
+	If $g_iExternalFreeArcPid Then _KillProcessTree($g_iExternalFreeArcPid)
+	$g_iExternalFreeArcPid = 0
+	$run = 0
+	StdioClose($iPid)
+	Return $iExit
+EndFunc
+
+Func _TryUserExternalFreeArc($sArchive, $sDestination)
+	If StringStripWS(IniRead($prefs, "FreeArc", "ExternalUnpackerEnabled", "0"), 3) <> "1" Then Return False
+	Local $sSourceDir = StringStripWS(IniRead($prefs, "FreeArc", "ExternalUnpackerDir", ""), 3)
+	Local $aRequired[] = ["unpack.exe", "unarc.dll", "config.ini", "arc.ini"]
+	For $i = 0 To UBound($aRequired) - 1
+		If $sSourceDir = "" Or Not FileExists($sSourceDir & "\" & $aRequired[$i]) Then
+			Cout("External FreeArc backend is missing a required file")
+			Return False
+		EndIf
+	Next
+	$sArchive = _PathFull($sArchive)
+	$sDestination = StringRegExpReplace(_PathFull($sDestination), '\\+$', '')
+	If Not FileExists($sArchive) Or Not _ExternalFreeArcDestinationEmpty($sDestination) Then
+		Cout("External FreeArc requires an existing input and a new or empty output directory")
+		Return False
+	EndIf
+	Local $sParent = StringRegExpReplace($sDestination, '\\[^\\]+$', '')
+	If $sParent = $sDestination Or Not DirCreate($sParent) Then Return False
+	Local $sStage = _TempFile($sParent, ".UniExtract2-FreeArc-", "", 16)
+	Local $aCreate = DllCall("kernel32.dll", "bool", "CreateDirectoryW", "wstr", $sStage, "ptr", 0)
+	If @error Then Return False
+	If Not $aCreate[0] Then Return False
+	$g_sExternalFreeArcStage = $sStage
+	OnAutoItExitRegister("_ExternalFreeArcCleanup")
+	Local $sOutput = $sStage & "\output"
+	Local $sTemplate = FileRead($sSourceDir & "\config.ini")
+	Local $iEncoding = FileGetEncoding($sSourceDir & "\config.ini")
+	Local $sConfig = _PrepareExternalFreeArcConfig($sTemplate, $sArchive, $sOutput)
+	Local $bReady = ($sConfig <> "" And $iEncoding <> -1)
+	For $i = 0 To UBound($aRequired) - 1
+		If $aRequired[$i] = "config.ini" Then ContinueLoop
+		If Not FileCopy($sSourceDir & "\" & $aRequired[$i], $sStage & "\" & $aRequired[$i], 0) Then $bReady = False
+	Next
+	If $bReady Then
+		Local $hConfig = FileOpen($sStage & "\config.ini", BitOR($FO_OVERWRITE, $iEncoding))
+		If $hConfig = -1 Then
+			$bReady = False
+		Else
+			$bReady = FileWrite($hConfig, $sConfig)
+			FileClose($hConfig)
+			; Reject encoding loss rather than changing the password or paths.
+			If Not (FileRead($sStage & "\config.ini") == $sConfig) Then $bReady = False
+		EndIf
+	EndIf
+	Local $bSucceeded = False
+	If $bReady And DirCreate($sStage & "\temp") And DirCreate($sOutput) Then
+		Local $iTimeout = Number(IniRead($prefs, "FreeArc", "ExternalUnpackerTimeoutSeconds", "21600"))
+		If $iTimeout < 1 Or $iTimeout > 86400 Then $iTimeout = 21600
+		$g_sLastExtractorAttempt = "External FreeArc unpack.exe"
+		_PipelineStep("COMMAND", "External FreeArc unpack.exe", "RUN", "User-configured backend; output suppressed to protect credentials")
+		Local $iExit = _ExternalFreeArcRun($sStage, $iTimeout)
+		Local $iFiles = _ExternalFreeArcFileCount($sOutput)
+		If $iExit = 0 And $iFiles > 0 And _ExternalFreeArcDestinationEmpty($sDestination) Then
+			; Only remove an empty directory. Same-volume rename with NO overwrite.
+			If Not FileExists($sDestination) Or DirRemove($sDestination, 0) Then
+				Local $aMove = DllCall("kernel32.dll", "bool", "MoveFileW", "wstr", $sOutput, "wstr", $sDestination)
+				If Not @error Then $bSucceeded = $aMove[0]
+			EndIf
+		EndIf
+		_PipelineStep("OUTPUT", "External FreeArc unpack.exe", ($bSucceeded ? "OK" : "FAIL"), "exit = " & $iExit & "; staged files = " & $iFiles & "; output committed = " & $bSucceeded)
+	Else
+		Cout("Cannot stage external FreeArc configuration; check required keys and text encoding")
+	EndIf
+	_ExternalFreeArcCleanup()
+	OnAutoItExitUnRegister("_ExternalFreeArcCleanup")
+	If $bSucceeded Then LogExtractorWinner("External FreeArc unpack.exe (user-supplied)")
+	Return $bSucceeded
+EndFunc
+
 
 ; Extract known archive formats
 Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess = False, $returnFail = False)
@@ -4434,7 +4771,12 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			MoveFiles($tempoutdir, $outdir, False, "", True, True)
 
 		Case $TYPE_FREEARC
+			$g_sLastExtractorAttempt = "unarc.exe"
 			_Run($freearc & ' x -dp"' & $outdir & '" "' & $file & '"', $filedir, @SW_HIDE, True, True, False, False)
+			If $success <> $RESULT_SUCCESS And _TryUserExternalFreeArc($file, $outdir) Then
+				$g_bArchiveIntegrityError = False
+				$success = $RESULT_SUCCESS
+			EndIf
 
 		Case $TYPE_FSB
 			_Run($fsb & ' -o -1 -A -d "' & $outdir & '" "' & $file & '"', $filedir, @SW_MINIMIZE, True, True, False)
@@ -6334,25 +6676,47 @@ Func _PipelineToolVersionsHtml()
 EndFunc
 
 Func _PipelineFinalBadgeText($sFinalStatus)
-	If $g_iPipelineFail > 0 Then Return "FAILED"
-	If $g_iPipelineWarn > 0 Then Return "SUCCESS WITH WARNINGS"
-	If StringLower($sFinalStatus) = "unknown" Then Return "UNSUPPORTED / UNKNOWN"
-	Return "FULL SUCCESS"
+	Switch StringLower(String($sFinalStatus))
+		Case "success"
+			If $g_iPipelineFail > 0 Then Return "SUCCESS WITH ERRORS"
+			If $g_iPipelineWarn > 0 Then Return "SUCCESS WITH WARNINGS"
+			Return "FULL SUCCESS"
+		Case "notsupported", "unknown", "unknownext", "unknownexe", "notpacked"
+			Return "UNSUPPORTED / NOT EXTRACTED"
+		Case "password"
+			Return "PASSWORD REQUIRED"
+		Case "failed", "invalidfile", "missingpart", "canceled", "nofreespace"
+			Return "EXTRACTION FAILED"
+	EndSwitch
+	Return "NOT EXTRACTED"
+EndFunc
+
+Func _PipelineFinalBadgeClass($sFinalStatus)
+	Switch StringLower(String($sFinalStatus))
+		Case "success"
+			If $g_iPipelineFail > 0 Then Return "warn"
+			If $g_iPipelineWarn > 0 Then Return "warn"
+			Return "ok"
+		Case "notsupported", "unknown", "unknownext", "unknownexe", "notpacked"
+			Return "info"
+	EndSwitch
+	Return "fail"
 EndFunc
 
 Func _PipelineSummaryHtml($sLogPath, $sFinalStatus)
 	Local $sBadge = _PipelineFinalBadgeText($sFinalStatus)
-	Local $sBadgeClass = _PipelineStatusClass(($g_iPipelineFail > 0 ? "FAIL" : ($g_iPipelineWarn > 0 ? "WARN" : "OK")))
+	Local $sBadgeClass = _PipelineFinalBadgeClass($sFinalStatus)
 	Local $sOutputLink = ""
 	If $outdir <> "" Then $sOutputLink = '<a class="outputpath" href="' & _PipelineHtmlEscape(_PipelineFileUrl($outdir)) & '">' & _PipelineHtmlEscape($outdir) & '</a>'
 	If $sOutputLink = "" Then $sOutputLink = '<span class="muted">not available</span>'
 	Local $sDetect = ($g_sDetectionWinner <> "" ? $g_sDetectionWinner & ($g_sDetectedTypeForSummary <> "" ? " → " & $g_sDetectedTypeForSummary : "") : "not captured")
-	Local $sExtractor = ($g_sExtractorWinner <> "" ? $g_sExtractorWinner : $sFinalStatus)
+	Local $sExtractor = ($g_sExtractorWinner <> "" ? $g_sExtractorWinner : ($g_sLastExtractorAttempt <> "" ? $g_sLastExtractorAttempt & " (unsuccessful)" : "none"))
+	Local $sExtractorCaption = ($g_sExtractorWinner <> "" ? "Extractor winner" : "Extractor attempted")
 	Local $sLine = (StringStripWS($g_sPipelineLine, 3) <> "" ? StringTrimRight($g_sPipelineLine, 3) : "not captured")
 	Local $sHtml = '<div class="summary"><div class="finalbadge ' & $sBadgeClass & '">' & _PipelineHtmlEscape($sBadge) & '</div>'
 	$sHtml &= '<div class="summarygrid">'
 	$sHtml &= '<div><b>Detector winner</b><br>' & _PipelineHtmlEscape($sDetect) & '</div>'
-	$sHtml &= '<div><b>Extractor winner</b><br>' & _PipelineHtmlEscape($sExtractor) & '</div>'
+	$sHtml &= '<div><b>' & $sExtractorCaption & '</b><br>' & _PipelineHtmlEscape($sExtractor) & '</div>'
 	$sHtml &= '<div><b>Warnings</b><br>' & $g_iPipelineWarn & '</div>'
 	$sHtml &= '<div><b>Failures</b><br>' & $g_iPipelineFail & '</div>'
 	$sHtml &= '<div><b>Commands</b><br>' & $g_iPipelineRun & '</div>'
@@ -6435,6 +6799,12 @@ Func _PipelineWriteReport($sLogPath, $sFinalStatus)
 EndFunc
 
 Func LogDetectionWinner($sTool, $sType)
+	; Once an exact header has won, less reliable detector guesses can still
+	; appear in the timeline but cannot overwrite the format in the summary.
+	If $g_sDetectionWinner = "Verified file header" And $sTool <> "Verified file header" And $g_sVerifiedFileSignature <> "" Then
+		Cout("Ignoring lower-confidence format override from " & $sTool & ": " & $sType)
+		Return
+	EndIf
 	$g_sDetectionWinner = _NormalizeOneLine($sTool)
 	$g_sDetectedTypeForSummary = _NormalizeOneLine($sType)
 	Cout("DETECTION WINNER: " & $g_sDetectionWinner & " -> " & $g_sDetectedTypeForSummary)
@@ -6561,6 +6931,7 @@ Func LogPerFileSummary($sFinalStatus, $sArcDisp = "")
 	EndIf
 
 	Local $sExtractor = $g_sExtractorWinner
+	If $sExtractor = "" And $g_sLastExtractorAttempt <> "" Then $sExtractor = $g_sLastExtractorAttempt & " (unsuccessful)"
 	If $sExtractor = "" Then
 		Local $sDisp = StringLower(_NormalizeOneLine($sArcDisp))
 		Local $sTypeNorm = StringLower(_NormalizeOneLine($Type))
@@ -6813,7 +7184,7 @@ Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 	; Unknown / unsupported / not-packed files must also get logs so they are visible in single and batch runs.
 	If $bOptCreateLog And Not $bLogSaved And Not ($status = $STATUS_SILENT Or $status = $STATUS_SYNTAX Or $status = $STATUS_FILEINFO Or _
 	   $status = $STATUS_BATCH) Or ($status = $STATUS_FILEINFO And $silentmode) Then _
-		SaveLog($shortStatus)
+		SaveLog($status, $shortStatus)
 
 	If __IsBatchModeActive() And $status <> $STATUS_SILENT Then ; Continue queued batch items even if this child loaded a stale batchenabled=0
 		; Start next extraction
@@ -7772,9 +8143,11 @@ Func _ComErrorHandler($oError)
 EndFunc
 
 ; Write full debug output to log file
-Func SaveLog($status)
+Func SaveLog($status, $sLogLabel = "")
+	; The filename may name the archive format; report status must remain the outcome.
+	If $sLogLabel = "" Then $sLogLabel = $status
 	Local $sName = $logdir & @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "-" & @MIN & "-" & @SEC & "_"
-	If $status <> $STATUS_SUCCESS Then $sName &= StringUpper($status)
+	If $sLogLabel <> $STATUS_SUCCESS Then $sName &= StringUpper($sLogLabel)
 	If $file <> "" Then $sName &= "_" & GetFileName() & "." & $fileext
 	$sName &= ".log"
 
@@ -7827,6 +8200,7 @@ Func _PipelineOutputStatus($sLog)
 	If StringInStr($sLog, "Break signaled", 1) Or StringInStr($sLog, "Program aborted", 1) Or StringInStr($sLog, "User break", 1) Then Return "CANCELED"
 	If StringInStr($sLog, "There is not enough space on the disk", 1) Or StringInStr($sLog, "Not enough free space available", 1) Then Return "NOFREESPACE"
 
+	If StringInStr($sLog, "ERROR: archive structure corrupted", 1) Or StringInStr($sLog, "descriptor failed CRC check", 1) Then Return "FAIL"
 	If StringInStr($sLog, "Could not find a necessary file", 1) Or _
 		   StringInStr($sLog, "Error (Exception)", 1) Or _
 		   StringInStr($sLog, "Missing volume", 1) Or _

@@ -1,6 +1,7 @@
 # file/libmagic 5.48 Windows candidate
 
-PR #13 remains a separate draft. It is not part of the FreeArc v3.1.7 candidate.
+PR #13 targets v3.1.8 after the separate FreeArc v3.1.7 release.
+It retains the FreeArc integration and corrected extraction reports.
 The x64 file.exe/magic.mgc pair is preferred on 64-bit Windows; the existing
 x86 pair remains available for 32-bit Windows and unsuccessful x64 detection.
 
@@ -22,16 +23,17 @@ x86 pair remains available for 32-bit Windows and unsuccessful x64 detection.
 - Local Windows PowerShell 5.1 checks verify DLL import closure, isolated
   version/text/PE/ZIP recognition, and the production AutoIt fallback path.
   The new fallback regression fails against the original implementation.
-- Isolated Windows CI run 40099053972 passed at commit 0442f6b. A local
-  application overlay also passed ZIP, Unicode ZIP, ADX, ACE (247 files),
-  malformed FreeArc routing and packaged libmagic checks. This overlay uses
-  the earlier verified helper package and is not a release artifact.
+- Isolated Windows CI run 40099569774 passed at commit 942558b. Its
+  downloaded helper artifact passed independent runtime, source-package,
+  recipe-checksum and license-notice verification. Earlier local application
+  overlays passed ZIP, Unicode ZIP, ADX, ACE (247 files), malformed FreeArc
+  routing and packaged libmagic checks. Those overlays are not release artifacts.
 
 The supplied MSYS2 build and the existing legacy helper both failed a Japanese
 input path on the validation machine's active code page, returning "cannot
 open" with exit code zero. This is a known helper limitation, not successful
 Unicode recognition. The application rejects that diagnostic and retains
-other detection routes. The isolated test records this limitation explicitly;
+other detection routes. The isolated test records this limitation explicitly.
 The local application overlay passed Unicode ZIP extraction through the
 remaining detection routes; the final CI package must pass the same check.
 
@@ -67,7 +69,9 @@ claims that these package versions are the newest available.
 
 ## Remaining release gates
 
-Update the branch with the stable FreeArc changes after their independent
-validation; resolve conflicts without losing either suite. Run the complete
-Windows build and packaged tests, verify downloaded artifacts and detector
-behavior, and complete the redistribution audit before marking PR #13 ready.
+The integration preserves the FreeArc and detector regression suites together.
+After v3.1.7 is published, update PR #13 with the stable merge and v3.1.8
+version metadata. Run the complete Windows build and packaged tests and verify
+the downloaded final package before marking PR #13 ready. The matching binary
+and source packages, recipes and redistribution notices have been audited;
+the final package must preserve that verified set.

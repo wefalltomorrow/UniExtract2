@@ -336,8 +336,8 @@ Assert-CommandContains (Join-Path $BinRoot 'msgunfmt.exe') @('--version') '(GNU 
 Add-RefreshLog 'GNU gettext msgunfmt: 1.0 (static x86)'
 
 # Inno Setup Unpacker 2.71.1.
-# The upstream URL is rolling, so verify the downloaded executable before accepting it.
-$InnoZip = Get-Download 'https://raw.githubusercontent.com/jrathlev/InnoUnpacker-Windows-GUI/refs/heads/master/innounp-2/bin/innounp-2.zip' 'innounp-2.zip' 'f2f037fdbc63de31248efae9ccb294398d160dc0cbad5f36d14c2f159e17bbf5'
+# Pin the upstream 2.71.1 commit; the rolling master ZIP changed after release.
+$InnoZip = Get-Download 'https://raw.githubusercontent.com/jrathlev/InnoUnpacker-Windows-GUI/6fb49264aacf512a093e7b4fc6fb3dd266dad31a/innounp-2/bin/innounp-2.zip' 'innounp-2.zip' 'f2f037fdbc63de31248efae9ccb294398d160dc0cbad5f36d14c2f159e17bbf5'
 $InnoExtract = Join-Path $WorkRoot 'innounp'
 Expand-ZipPackage $InnoZip $InnoExtract
 $InnoExe = Find-RequiredFile $InnoExtract 'innounp.exe'
@@ -346,13 +346,21 @@ Assert-CommandContains (Join-Path $BinRoot 'innounp.exe') @() '2.71.1' 'innounp'
 Add-RefreshLog 'innounp: 2.71.1'
 
 # TrID definitions snapshot: 12/10/2026, 22456 definitions.
-# SHA-256 and count independently checked by 2 Windows CI jobs on 2026-10-12.
-# The upstream URL is rolling. Validate the definition count so a later upstream update
-# fails loudly instead of silently changing a historical release build.
-$TridDefsZip = Get-Download 'https://mark0.net/download/triddefs.zip' 'triddefs.zip' 'c49638a68a8091e7f05807c0ed166c9101808a861bcf12593aef6f8454d8b668'
+# Recover the already-tested snapshot from our published release: the upstream
+# triddefs.zip URL changes in place. Pin BOTH the containing release and the
+# extracted definitions; a versioned GitHub asset alone is not immutable.
+# See docs/TRID-SNAPSHOT.md for provenance, licensing and update procedure.
+$TridDefsZip = Get-Download 'https://github.com/wefalltomorrow/UniExtract2/releases/download/v3.1.6/UniExtract2-v3.1.6.zip' 'trid-snapshot-v3.1.6.zip' '3c66a8a976daea9f624c0b3fbb28e188a5326b1b3d9b80062a46d8d1c939171b'
 $TridDefsExtract = Join-Path $WorkRoot 'triddefs'
 Expand-ZipPackage $TridDefsZip $TridDefsExtract
-Copy-RequiredFile (Find-RequiredFile $TridDefsExtract 'TrIDDefs.TRD') (Join-Path $BinRoot 'TrIDDefs.TRD')
+$TridDefsFile = Join-Path $TridDefsExtract 'bin\triddefs.trd'
+$TridDefsHash = (Get-FileHash -LiteralPath $TridDefsFile -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($TridDefsHash -ne '25af67fd79238f715e149e57491efd2c18ff5d62ca33ae1f8845a5342352b727') {
+    throw "TrID definitions payload SHA-256 mismatch: $TridDefsHash"
+}
+Copy-RequiredFile $TridDefsFile (Join-Path $BinRoot 'TrIDDefs.TRD')
+# A cache belongs to the definitions that generated it, not the helper base.
+Remove-Item -LiteralPath (Join-Path $BinRoot '.triddefs.trd.cache') -Force -ErrorAction SilentlyContinue
 $TridProbe = Join-Path $WorkRoot 'trid-probe.bin'
 Set-Content -LiteralPath $TridProbe -Value 'UniExtract helper refresh probe' -Encoding ASCII
 $TridOutput = (& (Join-Path $BinRoot 'trid.exe') $TridProbe 2>&1 | Out-String)

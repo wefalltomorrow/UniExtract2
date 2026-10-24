@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([string]$AutoItExe)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $Repo = Split-Path -Parent $PSScriptRoot
@@ -8,8 +8,9 @@ $Match = [regex]::Match($Source, '(?ms)^Func _ShouldAvoidBroadGameProbeForBin\(\
 if (-not $Match.Success) { throw 'Installer sidecar detector missing from UniExtract.au3' }
 $MagicMatch = [regex]::Match($Source, '(?ms)^Func _HasFreeArcMagic\(\$sPath\)\r?\n.*?^EndFunc')
 if (-not $MagicMatch.Success) { throw 'FreeArc header check missing from UniExtract.au3.' }
-if (-not $Source.Contains('If _HasFreeArcMagic($file) Then')) {
-    throw 'The extraction pipeline must prioritize FreeArc magic before broad game probes.'
+if (-not $Source.Contains('If $g_sVerifiedFileSignature = "freearc" Then') -or
+    -not $Source.Contains('If _HasFreeArcMagic($file) Then')) {
+    throw 'Verified FreeArc magic must be prioritized both in the central pipeline and BIN extension guard.'
 }
 $InitialCheck = [regex]::Match($Source, '(?ms)^Func InitialCheckExt\(\)\r?\n.*?^EndFunc').Value
 $BinCase = [regex]::Match($InitialCheck, '(?ms)^\s*Case "bin"\r?\n(.*?)(?=^\s*Case |^\s*EndSwitch)', 'Multiline').Value
@@ -19,18 +20,20 @@ if (-not $BinCase.Contains('If _HasFreeArcMagic($file) Then') -or
 }
 $PdMatch = [regex]::Match($Source, '(?ms)^Func _ShouldRejectWeakGarbroClaim\(\$sClaim\)\r?\n.*?^EndFunc')
 if (-not $PdMatch.Success) { throw 'Signatureless PD/KAAS recognition guard missing from source.' }
-if (-not $Source.Contains('If _ShouldAvoidBroadGameProbeForBin() Then') -or
-    -not $Source.Contains('If Not _ShouldAvoidBroadGameProbeForBin() Then')) {
-    throw 'Both main and Game Extractor fallback must respect the BIN guard.'
+if (-not $Source.Contains('_ShouldAvoidBroadGameProbeForBin() Or _ShouldSkipNonFatalProbesForPrimaryMatch()') -or
+    -not $Source.Contains('If Not $bSkipGameProbes Then') -or
+    -not $Source.Contains('If _ShouldAvoidBroadGameProbeForBin() Then')) {
+    throw 'Both speculative game probes and Game Extractor must respect the installer BIN guard.'
 }
 if (-not $Source.Contains('LogExtractorWinner("GARbro")') -or
     -not $Source.Contains('LogExtractorWinner("unarc")')) {
     throw 'Summary must capture GARbro and unarc extractor results.'
 }
 $AutoItExe = @(
+    $AutoItExe,
     'C:\Program Files (x86)\AutoIt3\AutoIt3.exe',
     (Join-Path $env:ProgramFiles 'AutoIt3\AutoIt3.exe')
-) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 if (-not $AutoItExe) { throw 'AutoIt3 interpreter not installed.' }
 $TestRoot = Join-Path $Repo '.build\installer-bin-guard-test'
 New-Item -ItemType Directory -Path $TestRoot -Force | Out-Null
@@ -86,6 +89,10 @@ $file = @ScriptDir & "\not-arc.bin"
 TestGuard("similar but incorrect magic is not considered FreeArc", False)
 If Not _ShouldRejectWeakGarbroClaim("PD/KAAS") Then Exit 1
 If _ShouldRejectWeakGarbroClaim("ZIP") Then Exit 1
+$fileext = "dat"
+If Not _ShouldRejectWeakGarbroClaim("PD/KAAS") Then Exit 1
+$fileext = "zip"
+If Not _ShouldRejectWeakGarbroClaim("PD/KAAS") Then Exit 1
 $fileext = "pd"
 If _ShouldRejectWeakGarbroClaim("PD/KAAS") Then Exit 1
 ConsoleWrite("PASS: PD/KAAS BIN false positive rejected; other formats retained" & @CRLF)

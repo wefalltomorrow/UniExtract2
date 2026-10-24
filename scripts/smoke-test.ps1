@@ -1,11 +1,11 @@
 [CmdletBinding()]
-param()
+param([string]$StageRoot)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$StageRoot = Join-Path $RepoRoot '.build\release'
+if (-not $StageRoot) { $StageRoot = Join-Path $RepoRoot '.build\release' }
 $Exe = Join-Path $StageRoot 'UniExtract.exe'
 
 if (-not (Test-Path -LiteralPath $Exe)) {
@@ -155,6 +155,36 @@ function Invoke-AcefileSmokeTest {
 }
 Invoke-AcefileSmokeTest
 
+function Invoke-NormalFreeArcSmokeTest {
+    $Fixture = Join-Path $RepoRoot 'tests\fixtures\freearc-normal.arc'
+    $Case = Join-Path $SmokeRoot 'freearc-normal'
+    $Output = Join-Path $Case 'output'
+    New-Item -ItemType Directory -Path $Output -Force | Out-Null
+    $Started = Get-Date
+    $Process = Start-Process -FilePath $Exe -ArgumentList ('"' + $Fixture + '" "' + $Output + '" /silent') -PassThru
+    if (-not $Process.WaitForExit(60000)) {
+        & taskkill.exe /PID $Process.Id /T /F | Out-Null
+        throw 'Normal FreeArc extraction timed out.'
+    }
+    $Payload = Join-Path $Output 'hello.txt'
+    if (-not (Test-Path -LiteralPath $Payload) -or [IO.File]::ReadAllText($Payload) -cne $Expected) {
+        throw 'Normal FreeArc extraction did not reproduce the exact fixture payload.'
+    }
+    if ($null -ne $Process.ExitCode -and $Process.ExitCode -ne 0) { throw 'Normal FreeArc extraction returned failure.' }
+    $Logs = @(Get-ChildItem -LiteralPath (Join-Path $StageRoot 'log') -Filter '*_FREEARC_freearc-normal.arc.log' -File | Sort-Object LastWriteTime -Descending)
+    if ($Logs.Count -eq 0 -or -not ([IO.File]::ReadAllText($Logs[0].FullName).Contains('EXTRACTOR WINNER: unarc'))) {
+        throw 'Normal FreeArc did not report the bundled unarc decoder as its winner.'
+    }
+    if ($Logs[0].LastWriteTime -lt $Started.AddSeconds(-1)) { throw 'Normal FreeArc report is stale.' }
+    $HtmlPath = Join-Path $Logs[0].DirectoryName ([IO.Path]::GetFileNameWithoutExtension($Logs[0].Name) + '_pipeline.html')
+    $HtmlText = [IO.File]::ReadAllText($HtmlPath)
+    if ($HtmlText -notmatch '<b>Final status:</b> success<br>' -or $HtmlText -notmatch 'class="finalbadge (ok|warn)">\s*(FULL SUCCESS|SUCCESS WITH WARNINGS|SUCCESS WITH ERRORS)\s*<') {
+        throw 'Normal FreeArc success was not reported as successful.'
+    }
+    Write-Host 'Normal FreeArc extraction passed with the external backend disabled.'
+}
+Invoke-NormalFreeArcSmokeTest
+
 # Full-pipeline regression: an ArC\x01 header must never be accepted as GARbro
 # PD/KAAS, even if a numbered installer sidecar and setup.exe are adjacent.
 # A tiny intentionally invalid FreeArc stub is used so this test does not ship
@@ -233,5 +263,57 @@ function Invoke-Libmagic548PackagedSmokeTest {
     Write-Host 'Packaged libmagic 5.48 x64 version, PE and ZIP detection passed.'
 }
 Invoke-Libmagic548PackagedSmokeTest
+
+# Real packaged-app integration checks: filename suffixes must never override
+# verified header evidence or turn ordinary non-archives into game pseudo-files.
+function Invoke-VerifiedHeaderRoutingSmokeTest {
+    $CaseRoot = Join-Path $SmokeRoot 'verified-header-routing'
+    $PayloadRoot = Join-Path $CaseRoot 'payload'
+    $ExtractedRoot = Join-Path $CaseRoot 'extracted'
+    New-Item -ItemType Directory -Force -Path $PayloadRoot, $ExtractedRoot | Out-Null
+    $ExpectedText = 'Native ZIP content must win over game-archive guesses'
+    $Payload = Join-Path $PayloadRoot 'verified.txt'
+    Set-Content -LiteralPath $Payload -Value $ExpectedText -Encoding ASCII
+    $Zip = Join-Path $CaseRoot 'legitimate.zip'
+    Compress-Archive -LiteralPath $Payload -DestinationPath $Zip -CompressionLevel Optimal -Force
+    $Disguised = Join-Path $CaseRoot 'legitimate.bin'
+    Move-Item -LiteralPath $Zip -Destination $Disguised -Force
+
+    $Arguments = '"' + $Disguised + '" "' + $ExtractedRoot + '" /silent'
+    $Process = Start-Process -FilePath $Exe -ArgumentList $Arguments -PassThru
+    if (-not $Process.WaitForExit(60000)) {
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+        throw 'Header-based ZIP extraction timed out.'
+    }
+    $ActualFiles = @(Get-ChildItem -LiteralPath $ExtractedRoot -Recurse -File -ErrorAction SilentlyContinue)
+    $Found = @($ActualFiles | Where-Object { $_.Name -eq 'verified.txt' })
+    $PseudoFiles = @($ActualFiles | Where-Object { $_.Name -match 'legitimate#\d{4}' })
+    if ($Found.Count -ne 1 -or $PseudoFiles.Count -gt 0) {
+        throw "Valid ZIP renamed .bin was misidentified or failed extraction (exit $($Process.ExitCode))."
+    }
+    $ActualText = (Get-Content -LiteralPath $Found[0].FullName -Raw).Trim()
+    if ($ActualText -ne $ExpectedText) {
+        throw "Extracted ZIP data did not match expected payload: $ActualText"
+    }
+
+    # A PNG signature with a misleading .zip extension is NOT an archive.
+    # Never create GARbro/QuickBMS pseudo-output for an invalid image stub.
+    $Fake = Join-Path $CaseRoot 'fake.zip'
+    $FakeOutput = Join-Path $CaseRoot 'fake-output'
+    New-Item -ItemType Directory -Force -Path $FakeOutput | Out-Null
+    [IO.File]::WriteAllBytes($Fake, [byte[]]@(0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0,0,0,0))
+    $Arguments = '"' + $Fake + '" "' + $FakeOutput + '" /silent'
+    $Process = Start-Process -FilePath $Exe -ArgumentList $Arguments -PassThru
+    if (-not $Process.WaitForExit(60000)) {
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+        throw 'Misleading-extension PNG routing timed out.'
+    }
+    $FakeFiles = @(Get-ChildItem -LiteralPath $FakeOutput -Recurse -File -ErrorAction SilentlyContinue)
+    if ($FakeFiles.Count -gt 0) {
+        throw "Ordinary PNG header with misleading .zip extension was falsely extracted ($($FakeFiles.Count) files)."
+    }
+    Write-Host 'Verified-header routing smoke passed: ZIP renamed .bin extracted correctly, PNG renamed .zip did not produce pseudo-files.'
+}
+Invoke-VerifiedHeaderRoutingSmokeTest
 
 Write-Host 'All packaged extraction smoke tests passed.'

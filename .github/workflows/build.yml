@@ -70,6 +70,14 @@ jobs:
         shell: powershell
         run: .\tests\detection-confidence.ps1
 
+      - name: Test opt-in FreeArc backend and status reporting
+        shell: powershell
+        run: .\tests\external-freearc-reporting.ps1
+
+      - name: Test external FreeArc process and output handling with harmless fixtures
+        shell: powershell
+        run: .\tests\external-freearc-runtime.ps1
+
       - name: Package release
         shell: powershell
         run: .\scripts\package-release.ps1
@@ -87,6 +95,10 @@ jobs:
       - name: Smoke-test packaged build
         shell: powershell
         run: .\scripts\smoke-test.ps1
+
+      - name: Smoke-test packaged external FreeArc integration
+        shell: powershell
+        run: .\tests\external-freearc-packaged.ps1
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7

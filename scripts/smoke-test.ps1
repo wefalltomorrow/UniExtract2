@@ -1,11 +1,11 @@
 [CmdletBinding()]
-param()
+param([string]$StageRoot)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$StageRoot = Join-Path $RepoRoot '.build\release'
+if (-not $StageRoot) { $StageRoot = Join-Path $RepoRoot '.build\release' }
 $Exe = Join-Path $StageRoot 'UniExtract.exe'
 
 if (-not (Test-Path -LiteralPath $Exe)) {
@@ -154,6 +154,36 @@ function Invoke-AcefileSmokeTest {
     Write-Host ("Smoke test passed [acefile]: extracted {0} files" -f $Extracted.Count)
 }
 Invoke-AcefileSmokeTest
+
+function Invoke-NormalFreeArcSmokeTest {
+    $Fixture = Join-Path $RepoRoot 'tests\fixtures\freearc-normal.arc'
+    $Case = Join-Path $SmokeRoot 'freearc-normal'
+    $Output = Join-Path $Case 'output'
+    New-Item -ItemType Directory -Path $Output -Force | Out-Null
+    $Started = Get-Date
+    $Process = Start-Process -FilePath $Exe -ArgumentList ('"' + $Fixture + '" "' + $Output + '" /silent') -PassThru
+    if (-not $Process.WaitForExit(60000)) {
+        & taskkill.exe /PID $Process.Id /T /F | Out-Null
+        throw 'Normal FreeArc extraction timed out.'
+    }
+    $Payload = Join-Path $Output 'hello.txt'
+    if (-not (Test-Path -LiteralPath $Payload) -or [IO.File]::ReadAllText($Payload) -cne $Expected) {
+        throw 'Normal FreeArc extraction did not reproduce the exact fixture payload.'
+    }
+    if ($null -ne $Process.ExitCode -and $Process.ExitCode -ne 0) { throw 'Normal FreeArc extraction returned failure.' }
+    $Logs = @(Get-ChildItem -LiteralPath (Join-Path $StageRoot 'log') -Filter '*_FREEARC_freearc-normal.arc.log' -File | Sort-Object LastWriteTime -Descending)
+    if ($Logs.Count -eq 0 -or -not ([IO.File]::ReadAllText($Logs[0].FullName).Contains('EXTRACTOR WINNER: unarc'))) {
+        throw 'Normal FreeArc did not report the bundled unarc decoder as its winner.'
+    }
+    if ($Logs[0].LastWriteTime -lt $Started.AddSeconds(-1)) { throw 'Normal FreeArc report is stale.' }
+    $HtmlPath = Join-Path $Logs[0].DirectoryName ([IO.Path]::GetFileNameWithoutExtension($Logs[0].Name) + '_pipeline.html')
+    $HtmlText = [IO.File]::ReadAllText($HtmlPath)
+    if ($HtmlText -notmatch '<b>Final status:</b> success<br>' -or $HtmlText -notmatch 'class="finalbadge (ok|warn)">\s*(FULL SUCCESS|SUCCESS WITH WARNINGS|SUCCESS WITH ERRORS)\s*<') {
+        throw 'Normal FreeArc success was not reported as successful.'
+    }
+    Write-Host 'Normal FreeArc extraction passed with the external backend disabled.'
+}
+Invoke-NormalFreeArcSmokeTest
 
 # Full-pipeline regression: an ArC\x01 header must never be accepted as GARbro
 # PD/KAAS, even if a numbered installer sidecar and setup.exe are adjacent.

@@ -1,9 +1,9 @@
-#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=.\Support\Icons\uniextract_exe.ico
 #AutoIt3Wrapper_Outfile=.\UniExtract.exe
 #AutoIt3Wrapper_Res_Description=Universal Extractor
 #AutoIt3Wrapper_Res_ProductName=Universal Extractor
-#AutoIt3Wrapper_Res_Fileversion=3.1.6.0
+#AutoIt3Wrapper_Res_Fileversion=3.1.7.0
 #AutoIt3Wrapper_Res_ProductVersion=%fileversion%
 #AutoIt3Wrapper_Res_CompanyName=wefalltomorrow
 #AutoIt3Wrapper_Res_Language=1033
@@ -208,7 +208,7 @@ Global $g_bInnoExtractUsable = False
 Global $g_bSymlinkOnlyWarning = False
 Global $g_bArchiveIntegrityError = False
 Global $g_sPrimaryDetectRaw = "", $g_sPrimaryDetectMatch = "", $g_sPrimaryDetectScanner = "", $g_bPrimaryStrongHit = False
-Global $g_sDetectionWinner = "", $g_sExtractorWinner = "", $g_sDetectedTypeForSummary = ""
+Global $g_sDetectionWinner = "", $g_sExtractorWinner = "", $g_sDetectedTypeForSummary = "", $g_sLastExtractorAttempt = ""
 Global $g_sPipelineRows = "", $g_iPipelineSeq = 0
 Global $g_sPipelineTimeline = "", $g_sPipelineLine = "", $g_sPipelineToolVersions = ""
 Global $g_iPipelineWarn = 0, $g_iPipelineFail = 0, $g_iPipelineOk = 0, $g_iPipelineRun = 0
@@ -216,6 +216,7 @@ Global $g_bStrictPipeline = True, $g_sStoredTridType = "", $g_sStoredUnixType = 
 Global $oldpath, $oldoutdir, $sUnicodeName, $createdir
 Global $g_aUnicodeSidecarCopies[0]
 Global $guiprefs, $TBgui = 0, $exStyle = -1, $idTrayStatusExt, $BatchBut, $idProgress, $sComError = 0
+Global $g_sExternalFreeArcStage = "", $g_iExternalFreeArcPid = 0, $g_hExternalFreeArcJob = 0
 Global $Tray_Statusbox, $isexe = False, $Message, $run = 0, $runtitle, $idOptDeleteSourceFile[3]
 Global $gaDropFiles[1], $aFiletype[0][2], $queueArray[0], $aTridDefinitions[0][0], $aFileDefinitions[0][0], $aExeinfoDefinitions[0][0], $aGUIs[0], $aWarnings[0]
 Global $guimain = False, $keepopenitem, $topmostitem, $showitem, $clearitem, $logitem, $silentitem, $GUI_Main_Extract, $GUI_Main_Scan, $filecont
@@ -500,6 +501,7 @@ Func StartExtraction()
 	$g_bPrimaryStrongHit = False
 	$g_sDetectionWinner = ""
 	$g_sExtractorWinner = ""
+	$g_sLastExtractorAttempt = ""
 	$g_sDetectedTypeForSummary = ""
 	$g_sPipelineRows = ""
 	$g_sPipelineTimeline = ""
@@ -4209,6 +4211,199 @@ Func _CopyUnicodeSidecarFile($sSource, $sDest)
 	Return False
 EndFunc
 
+
+; Configs may contain credentials: never log their text or helper stdout/stderr.
+Func _PrepareExternalFreeArcConfig($sTemplate, $sArchive, $sDestination)
+	If StringRegExp($sArchive & $sDestination, '[\r\n\x00]') Then Return ""
+	Local $aLines = StringSplit(StringReplace(String($sTemplate), @CRLF, @LF), @LF, $STR_NOCOUNT)
+	Local $iInput = 0, $iOutput = 0, $iWork = 0, $iCfg = 0, $sResult = ""
+	For $i = 0 To UBound($aLines) - 1
+		Local $sLine = $aLines[$i]
+		If StringRegExp($sLine, '^\s*\[') Then Return ""
+		If StringRegExp($sLine, '(?i)^\s*InputFile\s*=') Then
+			$sLine = "InputFile=" & $sArchive
+			$iInput += 1
+		ElseIf StringRegExp($sLine, '(?i)^\s*OutputPath\s*=') Then
+			$sLine = "OutputPath=" & $sDestination
+			$iOutput += 1
+		ElseIf StringRegExp($sLine, '(?i)^\s*WorkPath\s*=') Then
+			$sLine = "WorkPath=.\temp"
+			$iWork += 1
+		ElseIf StringRegExp($sLine, '(?i)^\s*CfgFile\s*=') Then
+			$sLine = "CfgFile=.\arc.ini"
+			$iCfg += 1
+		EndIf
+		$sResult &= ($i > 0 ? @CRLF : "") & $sLine
+	Next
+	If $iInput <> 1 Or $iOutput <> 1 Or $iWork <> 1 Or $iCfg <> 1 Then Return ""
+	Return $sResult
+EndFunc
+
+; Returns -1 for inaccessible paths and reparse points, otherwise file count.
+Func _ExternalFreeArcFileCount($sPath)
+	Local $aAttr = DllCall("kernel32.dll", "dword", "GetFileAttributesW", "wstr", $sPath)
+	If @error Then Return -1
+	If $aAttr[0] = 0xFFFFFFFF Or BitAND($aAttr[0], 0x400) Then Return -1
+	If Not BitAND($aAttr[0], 0x10) Then Return 1
+	Local $hSearch = FileFindFirstFile($sPath & "\*"), $iCount = 0
+	If $hSearch = -1 Then Return 0
+	While True
+		Local $sName = FileFindNextFile($hSearch)
+		If @error Then ExitLoop
+		Local $iChild = _ExternalFreeArcFileCount($sPath & "\" & $sName)
+		If $iChild < 0 Then
+			$iCount = -1
+			ExitLoop
+		EndIf
+		$iCount += $iChild
+	WEnd
+	FileClose($hSearch)
+	Return $iCount
+EndFunc
+
+Func _ExternalFreeArcDestinationEmpty($sPath)
+	If Not FileExists($sPath) Then Return True
+	If _ExternalFreeArcFileCount($sPath) <> 0 Then Return False
+	Local $hSearch = FileFindFirstFile($sPath & "\*")
+	If $hSearch = -1 Then Return True
+	FileClose($hSearch)
+	Return False
+EndFunc
+
+Func _ExternalFreeArcCleanup()
+	If $g_hExternalFreeArcJob Then DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $g_hExternalFreeArcJob)
+	$g_hExternalFreeArcJob = 0
+	If $g_iExternalFreeArcPid Then _KillProcessTree($g_iExternalFreeArcPid)
+	If $g_iExternalFreeArcPid Then StdioClose($g_iExternalFreeArcPid)
+	$g_iExternalFreeArcPid = 0
+	$run = 0
+	If $g_sExternalFreeArcStage = "" Then Return
+	FileDelete($g_sExternalFreeArcStage & "\config.ini")
+	If Not DirRemove($g_sExternalFreeArcStage, 1) Then Cout("External FreeArc temporary files could not all be removed")
+	$g_sExternalFreeArcStage = ""
+EndFunc
+
+Func _ExternalFreeArcRun($sStage, $iTimeout)
+	; A kill-on-close job cleans up attached child processes even after the wrapper exits.
+	Local $aJob = DllCall("kernel32.dll", "handle", "CreateJobObjectW", "ptr", 0, "ptr", 0)
+	If @error Then Return -1
+	If Not $aJob[0] Then Return -1
+	$g_hExternalFreeArcJob = $aJob[0]
+	Local $tLimits = DllStructCreate("int64;int64;dword Flags;ulong_ptr;ulong_ptr;dword;ulong_ptr;dword;dword;uint64[6];ulong_ptr[4]")
+	DllStructSetData($tLimits, "Flags", 0x2000)
+	Local $aSet = DllCall("kernel32.dll", "bool", "SetInformationJobObject", "handle", $g_hExternalFreeArcJob, "int", 9, "struct*", $tLimits, "dword", DllStructGetSize($tLimits))
+	If @error Then Return -1
+	If Not $aSet[0] Then Return -1
+	; Discard both streams: wrappers may print the supplied password.
+	Local $iPid = Run('"' & $sStage & '\unpack.exe" "config.ini"', $sStage, @SW_HIDE, $STDOUT_CHILD + $STDERR_CHILD)
+	If @error Or Not $iPid Then Return -1
+	$g_iExternalFreeArcPid = $iPid
+	$run = $iPid ; Integrate with tray cancellation.
+	Local $aOpen = DllCall("kernel32.dll", "handle", "OpenProcess", "dword", 0x100501, "bool", False, "dword", $iPid)
+	If @error Then Return -1
+	If Not $aOpen[0] Then Return -1
+	Local $hProcess = $aOpen[0], $hTimer = TimerInit(), $iExit = -1
+	Local $aAssign = DllCall("kernel32.dll", "bool", "AssignProcessToJobObject", "handle", $g_hExternalFreeArcJob, "handle", $hProcess)
+	Local $bAssigned = Not @error
+	If $bAssigned Then $bAssigned = $aAssign[0]
+	If Not $bAssigned Then
+		DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hProcess)
+		Return -1
+	EndIf
+	While True
+		StdoutRead($iPid)
+		StderrRead($iPid)
+		If TimerDiff($hTimer) > $iTimeout * 1000 Or $run <> $iPid Then ExitLoop
+		Local $aWait = DllCall("kernel32.dll", "dword", "WaitForSingleObject", "handle", $hProcess, "dword", 20)
+		If @error Then ExitLoop
+		If $aWait[0] = 0 Then
+			Local $aExit = DllCall("kernel32.dll", "bool", "GetExitCodeProcess", "handle", $hProcess, "dword*", 0)
+			If Not @error And $aExit[0] Then $iExit = $aExit[2]
+			$g_iExternalFreeArcPid = 0
+			ExitLoop
+		EndIf
+		If $aWait[0] <> 258 Or TimerDiff($hTimer) > $iTimeout * 1000 Or $run <> $iPid Then ExitLoop
+	WEnd
+	DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hProcess)
+	DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $g_hExternalFreeArcJob)
+	$g_hExternalFreeArcJob = 0
+	If $g_iExternalFreeArcPid Then _KillProcessTree($g_iExternalFreeArcPid)
+	$g_iExternalFreeArcPid = 0
+	$run = 0
+	StdioClose($iPid)
+	Return $iExit
+EndFunc
+
+Func _TryUserExternalFreeArc($sArchive, $sDestination)
+	If StringStripWS(IniRead($prefs, "FreeArc", "ExternalUnpackerEnabled", "0"), 3) <> "1" Then Return False
+	Local $sSourceDir = StringStripWS(IniRead($prefs, "FreeArc", "ExternalUnpackerDir", ""), 3)
+	Local $aRequired[] = ["unpack.exe", "unarc.dll", "config.ini", "arc.ini"]
+	For $i = 0 To UBound($aRequired) - 1
+		If $sSourceDir = "" Or Not FileExists($sSourceDir & "\" & $aRequired[$i]) Then
+			Cout("External FreeArc backend is missing a required file")
+			Return False
+		EndIf
+	Next
+	$sArchive = _PathFull($sArchive)
+	$sDestination = StringRegExpReplace(_PathFull($sDestination), '\\+$', '')
+	If Not FileExists($sArchive) Or Not _ExternalFreeArcDestinationEmpty($sDestination) Then
+		Cout("External FreeArc requires an existing input and a new or empty output directory")
+		Return False
+	EndIf
+	Local $sParent = StringRegExpReplace($sDestination, '\\[^\\]+$', '')
+	If $sParent = $sDestination Or Not DirCreate($sParent) Then Return False
+	Local $sStage = _TempFile($sParent, ".UniExtract2-FreeArc-", "", 16)
+	Local $aCreate = DllCall("kernel32.dll", "bool", "CreateDirectoryW", "wstr", $sStage, "ptr", 0)
+	If @error Then Return False
+	If Not $aCreate[0] Then Return False
+	$g_sExternalFreeArcStage = $sStage
+	OnAutoItExitRegister("_ExternalFreeArcCleanup")
+	Local $sOutput = $sStage & "\output"
+	Local $sTemplate = FileRead($sSourceDir & "\config.ini")
+	Local $iEncoding = FileGetEncoding($sSourceDir & "\config.ini")
+	Local $sConfig = _PrepareExternalFreeArcConfig($sTemplate, $sArchive, $sOutput)
+	Local $bReady = ($sConfig <> "" And $iEncoding <> -1)
+	For $i = 0 To UBound($aRequired) - 1
+		If $aRequired[$i] = "config.ini" Then ContinueLoop
+		If Not FileCopy($sSourceDir & "\" & $aRequired[$i], $sStage & "\" & $aRequired[$i], 0) Then $bReady = False
+	Next
+	If $bReady Then
+		Local $hConfig = FileOpen($sStage & "\config.ini", BitOR($FO_OVERWRITE, $iEncoding))
+		If $hConfig = -1 Then
+			$bReady = False
+		Else
+			$bReady = FileWrite($hConfig, $sConfig)
+			FileClose($hConfig)
+			; Reject encoding loss rather than changing the password or paths.
+			If Not (FileRead($sStage & "\config.ini") == $sConfig) Then $bReady = False
+		EndIf
+	EndIf
+	Local $bSucceeded = False
+	If $bReady And DirCreate($sStage & "\temp") And DirCreate($sOutput) Then
+		Local $iTimeout = Number(IniRead($prefs, "FreeArc", "ExternalUnpackerTimeoutSeconds", "21600"))
+		If $iTimeout < 1 Or $iTimeout > 86400 Then $iTimeout = 21600
+		$g_sLastExtractorAttempt = "External FreeArc unpack.exe"
+		_PipelineStep("COMMAND", "External FreeArc unpack.exe", "RUN", "User-configured backend; output suppressed to protect credentials")
+		Local $iExit = _ExternalFreeArcRun($sStage, $iTimeout)
+		Local $iFiles = _ExternalFreeArcFileCount($sOutput)
+		If $iExit = 0 And $iFiles > 0 And _ExternalFreeArcDestinationEmpty($sDestination) Then
+			; Only remove an empty directory. Same-volume rename with NO overwrite.
+			If Not FileExists($sDestination) Or DirRemove($sDestination, 0) Then
+				Local $aMove = DllCall("kernel32.dll", "bool", "MoveFileW", "wstr", $sOutput, "wstr", $sDestination)
+				If Not @error Then $bSucceeded = $aMove[0]
+			EndIf
+		EndIf
+		_PipelineStep("OUTPUT", "External FreeArc unpack.exe", ($bSucceeded ? "OK" : "FAIL"), "exit = " & $iExit & "; staged files = " & $iFiles & "; output committed = " & $bSucceeded)
+	Else
+		Cout("Cannot stage external FreeArc configuration; check required keys and text encoding")
+	EndIf
+	_ExternalFreeArcCleanup()
+	OnAutoItExitUnRegister("_ExternalFreeArcCleanup")
+	If $bSucceeded Then LogExtractorWinner("External FreeArc unpack.exe (user-supplied)")
+	Return $bSucceeded
+EndFunc
+
+
 ; Extract known archive formats
 Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess = False, $returnFail = False)
 	$g_bInnoExtractUsable = False
@@ -4543,7 +4738,12 @@ Func extract($arctype, $arcdisp = 0, $additionalParameters = "", $returnSuccess 
 			MoveFiles($tempoutdir, $outdir, False, "", True, True)
 
 		Case $TYPE_FREEARC
+			$g_sLastExtractorAttempt = "unarc.exe"
 			_Run($freearc & ' x -dp"' & $outdir & '" "' & $file & '"', $filedir, @SW_HIDE, True, True, False, False)
+			If $success <> $RESULT_SUCCESS And _TryUserExternalFreeArc($file, $outdir) Then
+				$g_bArchiveIntegrityError = False
+				$success = $RESULT_SUCCESS
+			EndIf
 
 		Case $TYPE_FSB
 			_Run($fsb & ' -o -1 -A -d "' & $outdir & '" "' & $file & '"', $filedir, @SW_MINIMIZE, True, True, False)
@@ -6443,25 +6643,47 @@ Func _PipelineToolVersionsHtml()
 EndFunc
 
 Func _PipelineFinalBadgeText($sFinalStatus)
-	If $g_iPipelineFail > 0 Then Return "FAILED"
-	If $g_iPipelineWarn > 0 Then Return "SUCCESS WITH WARNINGS"
-	If StringLower($sFinalStatus) = "unknown" Then Return "UNSUPPORTED / UNKNOWN"
-	Return "FULL SUCCESS"
+	Switch StringLower(String($sFinalStatus))
+		Case "success"
+			If $g_iPipelineFail > 0 Then Return "SUCCESS WITH ERRORS"
+			If $g_iPipelineWarn > 0 Then Return "SUCCESS WITH WARNINGS"
+			Return "FULL SUCCESS"
+		Case "notsupported", "unknown", "unknownext", "unknownexe", "notpacked"
+			Return "UNSUPPORTED / NOT EXTRACTED"
+		Case "password"
+			Return "PASSWORD REQUIRED"
+		Case "failed", "invalidfile", "missingpart", "canceled", "nofreespace"
+			Return "EXTRACTION FAILED"
+	EndSwitch
+	Return "NOT EXTRACTED"
+EndFunc
+
+Func _PipelineFinalBadgeClass($sFinalStatus)
+	Switch StringLower(String($sFinalStatus))
+		Case "success"
+			If $g_iPipelineFail > 0 Then Return "warn"
+			If $g_iPipelineWarn > 0 Then Return "warn"
+			Return "ok"
+		Case "notsupported", "unknown", "unknownext", "unknownexe", "notpacked"
+			Return "info"
+	EndSwitch
+	Return "fail"
 EndFunc
 
 Func _PipelineSummaryHtml($sLogPath, $sFinalStatus)
 	Local $sBadge = _PipelineFinalBadgeText($sFinalStatus)
-	Local $sBadgeClass = _PipelineStatusClass(($g_iPipelineFail > 0 ? "FAIL" : ($g_iPipelineWarn > 0 ? "WARN" : "OK")))
+	Local $sBadgeClass = _PipelineFinalBadgeClass($sFinalStatus)
 	Local $sOutputLink = ""
 	If $outdir <> "" Then $sOutputLink = '<a class="outputpath" href="' & _PipelineHtmlEscape(_PipelineFileUrl($outdir)) & '">' & _PipelineHtmlEscape($outdir) & '</a>'
 	If $sOutputLink = "" Then $sOutputLink = '<span class="muted">not available</span>'
 	Local $sDetect = ($g_sDetectionWinner <> "" ? $g_sDetectionWinner & ($g_sDetectedTypeForSummary <> "" ? " → " & $g_sDetectedTypeForSummary : "") : "not captured")
-	Local $sExtractor = ($g_sExtractorWinner <> "" ? $g_sExtractorWinner : $sFinalStatus)
+	Local $sExtractor = ($g_sExtractorWinner <> "" ? $g_sExtractorWinner : ($g_sLastExtractorAttempt <> "" ? $g_sLastExtractorAttempt & " (unsuccessful)" : "none"))
+	Local $sExtractorCaption = ($g_sExtractorWinner <> "" ? "Extractor winner" : "Extractor attempted")
 	Local $sLine = (StringStripWS($g_sPipelineLine, 3) <> "" ? StringTrimRight($g_sPipelineLine, 3) : "not captured")
 	Local $sHtml = '<div class="summary"><div class="finalbadge ' & $sBadgeClass & '">' & _PipelineHtmlEscape($sBadge) & '</div>'
 	$sHtml &= '<div class="summarygrid">'
 	$sHtml &= '<div><b>Detector winner</b><br>' & _PipelineHtmlEscape($sDetect) & '</div>'
-	$sHtml &= '<div><b>Extractor winner</b><br>' & _PipelineHtmlEscape($sExtractor) & '</div>'
+	$sHtml &= '<div><b>' & $sExtractorCaption & '</b><br>' & _PipelineHtmlEscape($sExtractor) & '</div>'
 	$sHtml &= '<div><b>Warnings</b><br>' & $g_iPipelineWarn & '</div>'
 	$sHtml &= '<div><b>Failures</b><br>' & $g_iPipelineFail & '</div>'
 	$sHtml &= '<div><b>Commands</b><br>' & $g_iPipelineRun & '</div>'
@@ -6676,6 +6898,7 @@ Func LogPerFileSummary($sFinalStatus, $sArcDisp = "")
 	EndIf
 
 	Local $sExtractor = $g_sExtractorWinner
+	If $sExtractor = "" And $g_sLastExtractorAttempt <> "" Then $sExtractor = $g_sLastExtractorAttempt & " (unsuccessful)"
 	If $sExtractor = "" Then
 		Local $sDisp = StringLower(_NormalizeOneLine($sArcDisp))
 		Local $sTypeNorm = StringLower(_NormalizeOneLine($Type))
@@ -6928,7 +7151,7 @@ Func terminate($status, $fname = '', $arctype = '', $arcdisp = '')
 	; Unknown / unsupported / not-packed files must also get logs so they are visible in single and batch runs.
 	If $bOptCreateLog And Not $bLogSaved And Not ($status = $STATUS_SILENT Or $status = $STATUS_SYNTAX Or $status = $STATUS_FILEINFO Or _
 	   $status = $STATUS_BATCH) Or ($status = $STATUS_FILEINFO And $silentmode) Then _
-		SaveLog($shortStatus)
+		SaveLog($status, $shortStatus)
 
 	If __IsBatchModeActive() And $status <> $STATUS_SILENT Then ; Continue queued batch items even if this child loaded a stale batchenabled=0
 		; Start next extraction
@@ -7887,9 +8110,11 @@ Func _ComErrorHandler($oError)
 EndFunc
 
 ; Write full debug output to log file
-Func SaveLog($status)
+Func SaveLog($status, $sLogLabel = "")
+	; The filename may name the archive format; report status must remain the outcome.
+	If $sLogLabel = "" Then $sLogLabel = $status
 	Local $sName = $logdir & @YEAR & "-" & @MON & "-" & @MDAY & "_" & @HOUR & "-" & @MIN & "-" & @SEC & "_"
-	If $status <> $STATUS_SUCCESS Then $sName &= StringUpper($status)
+	If $sLogLabel <> $STATUS_SUCCESS Then $sName &= StringUpper($sLogLabel)
 	If $file <> "" Then $sName &= "_" & GetFileName() & "." & $fileext
 	$sName &= ".log"
 
@@ -7942,6 +8167,7 @@ Func _PipelineOutputStatus($sLog)
 	If StringInStr($sLog, "Break signaled", 1) Or StringInStr($sLog, "Program aborted", 1) Or StringInStr($sLog, "User break", 1) Then Return "CANCELED"
 	If StringInStr($sLog, "There is not enough space on the disk", 1) Or StringInStr($sLog, "Not enough free space available", 1) Then Return "NOFREESPACE"
 
+	If StringInStr($sLog, "ERROR: archive structure corrupted", 1) Or StringInStr($sLog, "descriptor failed CRC check", 1) Then Return "FAIL"
 	If StringInStr($sLog, "Could not find a necessary file", 1) Or _
 		   StringInStr($sLog, "Error (Exception)", 1) Or _
 		   StringInStr($sLog, "Missing volume", 1) Or _

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([string]$AutoItExe)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $Repo = Split-Path -Parent $PSScriptRoot
@@ -30,9 +30,10 @@ if (-not $Source.Contains('LogExtractorWinner("GARbro")') -or
     throw 'Summary must capture GARbro and unarc extractor results.'
 }
 $AutoItExe = @(
+    $AutoItExe,
     'C:\Program Files (x86)\AutoIt3\AutoIt3.exe',
     (Join-Path $env:ProgramFiles 'AutoIt3\AutoIt3.exe')
-) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 if (-not $AutoItExe) { throw 'AutoIt3 interpreter not installed.' }
 $TestRoot = Join-Path $Repo '.build\installer-bin-guard-test'
 New-Item -ItemType Directory -Path $TestRoot -Force | Out-Null

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([string]$AutoItDir)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -20,6 +20,7 @@ function Find-FirstExistingPath {
 }
 
 $AutoItDir = Find-FirstExistingPath @(
+    $AutoItDir,
     "${env:ProgramFiles(x86)}\AutoIt3",
     "${env:ProgramFiles}\AutoIt3"
 )

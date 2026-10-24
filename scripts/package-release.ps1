@@ -68,6 +68,12 @@ if (-not (Test-Path -LiteralPath $HelperRefreshScript)) {
 }
 & $HelperRefreshScript -StageRoot $StageRoot -WorkRoot $HelperRefreshRoot
 
+# Prefer a self-contained, hash-pinned x64 file/libmagic 5.48 bundle while
+# retaining the legacy x86 file.exe and magic.mgc in the package root.
+# Exact official package versions replace the mutable MSYS2 installation.
+& (Join-Path $PSScriptRoot 'stage-libmagic-548.ps1') -StageRoot $StageRoot
+
+
 foreach ($File in @('UniExtract.exe', 'UniExtractUpdater.exe', 'UniExtractUpdater_NoAdmin.exe', 'English.ini', 'README.md', 'LICENSE', 'VERSION')) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot $File) -Destination (Join-Path $StageRoot $File) -Force
 }

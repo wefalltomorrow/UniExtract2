@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out source
@@ -66,6 +66,10 @@ jobs:
         shell: powershell
         run: .\tests\installer-bin-guard.ps1
 
+      - name: Test libmagic fallback and failed detection handling
+        shell: powershell
+        run: .\tests\libmagic-fallback.ps1
+
       - name: Verify detection confidence and header priority
         shell: powershell
         run: .\tests\detection-confidence.ps1
@@ -80,6 +84,8 @@ jobs:
 
       - name: Package release
         shell: powershell
+        env:
+          REQUIRE_LIBMAGIC_548: '1'
         run: .\scripts\package-release.ps1
 
       - name: Upload per-file bin audit
@@ -94,6 +100,8 @@ jobs:
 
       - name: Smoke-test packaged build
         shell: powershell
+        env:
+          REQUIRE_LIBMAGIC_548: '1'
         run: .\scripts\smoke-test.ps1
 
       - name: Smoke-test packaged external FreeArc integration

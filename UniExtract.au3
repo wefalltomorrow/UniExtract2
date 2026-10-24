@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_Outfile=.\UniExtract.exe
 #AutoIt3Wrapper_Res_Description=Universal Extractor
 #AutoIt3Wrapper_Res_ProductName=Universal Extractor
-#AutoIt3Wrapper_Res_Fileversion=3.1.7.0
+#AutoIt3Wrapper_Res_Fileversion=3.1.8.0
 #AutoIt3Wrapper_Res_ProductVersion=%fileversion%
 #AutoIt3Wrapper_Res_CompanyName=wefalltomorrow
 #AutoIt3Wrapper_Res_Language=1033
@@ -1446,13 +1446,46 @@ Func RenameWithTridExtension($sPath = $file, $bAnalyse = False)
 	Return True
 EndFunc
 
+; Prefer the pinned libmagic 5.48 candidate on x64 Windows when a complete
+; standalone bundle is present. Retain the existing bundled x86 file/magic pair
+; for 32-bit Windows and any machine without the x64 bundle.
+Func _UnixFileToolCommand()
+	If $iOsArch = 64 Then
+		Local $sCandidateExe = $archdir & "libmagic548\file.exe"
+		Local $sCandidateMagic = $archdir & "libmagic548\magic.mgc"
+		If FileExists($sCandidateExe) And FileExists($sCandidateMagic) Then _
+			Return Quote($sCandidateExe, True) & " -m " & Quote($sCandidateMagic)
+	EndIf
+	Return $filetool
+EndFunc
+
+; Normalize before deciding whether to retry. file.exe normally prefixes even
+; an unknown "data" result with the input filename. Launch failures and tool
+; diagnostics are not file identifications.
+Func _UnixFileType($sCommand)
+	Local $sResult = FetchStdout($sCommand & ' -b "' & $file & '"', $filedir, @SW_HIDE)
+	If @error Or $sResult == -1 Then Return ""
+	Local $sPrefix = $file & ": "
+	If StringLeft($sResult, StringLen($sPrefix)) == $sPrefix Then $sResult = StringTrimLeft($sResult, StringLen($sPrefix))
+	$sResult = StringStripWS($sResult, 3)
+	If StringLower($sResult) = "data" Then Return ""
+	If StringRegExp($sResult, "(?i)^(?:ERROR:|cannot open\b|cannot read\b|file(?:\.exe)?:)") Then Return ""
+	Return $sResult
+EndFunc
+
 ; Scan file with unix file tool
 Func FileScan_UnixFile()
 	_CreateTrayMessageBox(t('SCANNING_FILE', "Unix File Tool"))
 
 	Cout("Start file scan using unix file tool")
-	Local $sFileType = FetchStdout($filetool & ' "' & $file & '"', $filedir, @SW_HIDE)
-	$sFileType = StringReplace(StringReplace($sFileType, $file & ": ", ""), @CRLF, "")
+	Local $sCommand = _UnixFileToolCommand()
+	Local $sFileType = _UnixFileType($sCommand)
+	; A missing/broken x64 runtime must not remove file-type detection entirely.
+	; Retry with the legacy helper if 5.48 failed to identify the input.
+	If $sCommand <> $filetool And $sFileType = "" Then
+		Cout("libmagic 5.48 x64 returned no useful result; retrying bundled legacy file.exe")
+		$sFileType = _UnixFileType($filetool)
+	EndIf
 
 	If $sFileType And $sFileType <> "data" Then
 		_FiletypeAdd("Unix File Tool", $sFileType)

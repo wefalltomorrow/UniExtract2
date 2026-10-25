@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $Repo = Split-Path -Parent $PSScriptRoot
 $Source = Get-Content -LiteralPath (Join-Path $Repo 'UniExtract.au3') -Raw
-$Functions = foreach ($Name in @('_UnixFileToolCommand', '_UnixFileType', 'FileScan_UnixFile')) {
+$Functions = foreach ($Name in @('_UnixFileToolPath', '_UnixFileType', 'FileScan_UnixFile')) {
     $Match = [regex]::Match($Source, '(?ms)^Func ' + $Name + '\([^\r\n]*\)\r?\n.*?^EndFunc')
     if (-not $Match.Success) { throw "Missing production function: $Name" }
     $Match.Value
@@ -15,10 +15,13 @@ if (-not $AutoItExe) { throw 'AutoIt3 interpreter missing.' }
 $Root = Join-Path $Repo '.build\libmagic-fallback'
 New-Item -ItemType Directory -Path $Root -Force | Out-Null
 $Harness = @'
-Global $iOsArch = 64, $archdir = @ScriptDir & "\x64\", $filetool = "legacy"
+Global $iOsArch = 64, $bindir = @ScriptDir & "\", $archdir = $bindir & "x64\"
 Global $file = "C:\space path\" & ChrW(0x5165) & ChrW(0x529b) & ".bin", $filedir = "C:\space path"
 Global $extract = False, $appendext = False, $g_bStrictPipeline = False, $g_sStoredUnixType = ""
 Global $calls = 0, $candidate = "", $legacy = "", $result = "", $status = "", $launchError = False
+Global $completed = True
+EnvSet("UE_MAGIC_EXE_" & @AutoItPID, "original exe value")
+EnvSet("UE_MAGIC_INPUT_" & @AutoItPID, "original input value")
 DirCreate($archdir & "libmagic548")
 FileWrite($archdir & "libmagic548\file.exe", "fixture")
 FileWrite($archdir & "libmagic548\magic.mgc", "fixture")
@@ -33,6 +36,9 @@ Check("unreadable input", $file & ": cannot open (No such file or directory)", "
 $launchError = True
 Check("launch failure", -1, "ASCII text", "ASCII text", 2)
 $launchError = False
+$completed = False
+Check("partial output without completion", "PNG image data", "ASCII text", "", 2)
+$completed = True
 $iOsArch = 32
 Check("x86 uses legacy", "unused", "ASCII text", "ASCII text", 1)
 $iOsArch = 64
@@ -48,17 +54,19 @@ Func Check($label, $first, $second, $expected, $expectedCalls)
     $result = ""
     $status = ""
     FileScan_UnixFile()
+    If EnvGet("UE_MAGIC_EXE_" & @AutoItPID) <> "original exe value" Or EnvGet("UE_MAGIC_INPUT_" & @AutoItPID) <> "original input value" Then Exit 2
     If $calls <> $expectedCalls Or $result <> $expected Or ($expected = "" And $status <> "UNKNOWN") Then
         ConsoleWrite("FAIL: " & $label & "; calls=" & $calls & "; result=" & $result & "; status=" & $status & @CRLF)
         Exit 1
     EndIf
     ConsoleWrite("PASS: " & $label & @CRLF)
 EndFunc
-Func FetchStdout($command, $directory, $show)
+Func FetchStdout($command, $directory, $show, $line, $output, $useCmd, $makeCommand)
     $calls += 1
-    If StringLeft($command, 6) = "legacy" Then Return $legacy
+    Local $suffix = $completed ? @CRLF & "__UE_MAGIC_DONE_" & @AutoItPID & "__" & @CRLF : ""
+    If EnvGet("UE_MAGIC_EXE_" & @AutoItPID) = $bindir & "file.exe" Then Return $legacy & $suffix
     If $launchError Then Return SetError(1, 0, -1)
-    Return $candidate
+    Return $candidate & $suffix
 EndFunc
 Func Quote($value, $double = False)
     Return '"' & $value & '"'

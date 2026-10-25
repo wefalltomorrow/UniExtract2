@@ -108,6 +108,10 @@ jobs:
         shell: powershell
         run: .\tests\external-freearc-packaged.ps1
 
+      - name: Test Unicode detector input and installation paths
+        shell: powershell
+        run: .\tests\libmagic-unicode.ps1
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:

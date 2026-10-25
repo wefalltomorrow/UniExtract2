@@ -257,7 +257,6 @@ Const $diegui_path = $bindir & "die\die.exe"
 Const $diec = Quote($diec_path, True)
 Const $diegui = Quote($diegui_path, True)
 Const $expand = Quote(@SystemDir & "\expand.exe", True)
-Const $filetool = Quote($bindir & "file.exe", True) & " -m " & Quote($bindir & "magic.mgc")
 Const $freearc = "unarc.exe"
 Const $fsb = "fsbext.exe"
 Const $garbro = $bindir & "GARbro\GARbro.Console.exe"
@@ -1449,22 +1448,45 @@ EndFunc
 ; Prefer the pinned libmagic 5.48 candidate on x64 Windows when a complete
 ; standalone bundle is present. Retain the existing bundled x86 file/magic pair
 ; for 32-bit Windows and any machine without the x64 bundle.
-Func _UnixFileToolCommand()
+Func _UnixFileToolPath()
 	If $iOsArch = 64 Then
 		Local $sCandidateExe = $archdir & "libmagic548\file.exe"
 		Local $sCandidateMagic = $archdir & "libmagic548\magic.mgc"
 		If FileExists($sCandidateExe) And FileExists($sCandidateMagic) Then _
-			Return Quote($sCandidateExe, True) & " -m " & Quote($sCandidateMagic)
+			Return $sCandidateExe
 	EndIf
-	Return $filetool
+	Return $bindir & "file.exe"
 EndFunc
 
 ; Normalize before deciding whether to retry. file.exe normally prefixes even
 ; an unknown "data" result with the input filename. Launch failures and tool
 ; diagnostics are not file identifications.
-Func _UnixFileType($sCommand)
-	Local $sResult = FetchStdout($sCommand & ' -b "' & $file & '"', $filedir, @SW_HIDE)
-	If @error Or $sResult == -1 Then Return ""
+Func _UnixFileType($sExe)
+	; cmd opens the input with its Unicode Windows path and passes a seekable
+	; file handle as stdin. No pipe, temporary copy or short filename is needed.
+	; A relative database path also supports a Unicode installation directory.
+	Local $sDirectory = StringLeft($sExe, StringInStr($sExe, "\", 0, -1) - 1)
+	Local $sExeVar = "UE_MAGIC_EXE_" & @AutoItPID, $sInputVar = "UE_MAGIC_INPUT_" & @AutoItPID
+	Local $sOldExe = EnvGet($sExeVar), $sOldInput = EnvGet($sInputVar)
+	Local $bEnvReady = EnvSet($sExeVar, $sExe)
+	$bEnvReady = EnvSet($sInputVar, $file) And $bEnvReady
+	Local $sResult = "", $iError = 1
+	; Expand paths once from environment variables, inside quotes, with delayed
+	; expansion disabled. Literal %, !, &, ^ and parentheses stay filename data.
+	; Require successful completion, including input redirection; localized cmd
+	; diagnostics and partial output after timeout must never become detections.
+	Local $sDone = "__UE_MAGIC_DONE_" & @AutoItPID & "__"
+	If $bEnvReady Then
+		Local $sCommand = '"' & @ComSpec & '" /d /v:off /s /c ""%' & $sExeVar & '%" -b -m magic.mgc - < "%' & $sInputVar & '%" && echo ' & $sDone & '"'
+		$sResult = FetchStdout($sCommand, $sDirectory, @SW_HIDE, 0, True, False, False)
+		$iError = @error
+	EndIf
+	EnvSet($sExeVar, $sOldExe)
+	EnvSet($sInputVar, $sOldInput)
+	If $iError Or $sResult == -1 Then Return ""
+	$sResult = StringStripWS($sResult, 3)
+	If StringRight($sResult, StringLen($sDone)) <> $sDone Then Return ""
+	$sResult = StringTrimRight($sResult, StringLen($sDone))
 	Local $sPrefix = $file & ": "
 	If StringLeft($sResult, StringLen($sPrefix)) == $sPrefix Then $sResult = StringTrimLeft($sResult, StringLen($sPrefix))
 	$sResult = StringStripWS($sResult, 3)
@@ -1478,13 +1500,14 @@ Func FileScan_UnixFile()
 	_CreateTrayMessageBox(t('SCANNING_FILE', "Unix File Tool"))
 
 	Cout("Start file scan using unix file tool")
-	Local $sCommand = _UnixFileToolCommand()
-	Local $sFileType = _UnixFileType($sCommand)
+	Local $sExe = _UnixFileToolPath()
+	Local $sLegacyExe = $bindir & "file.exe"
+	Local $sFileType = _UnixFileType($sExe)
 	; A missing/broken x64 runtime must not remove file-type detection entirely.
 	; Retry with the legacy helper if 5.48 failed to identify the input.
-	If $sCommand <> $filetool And $sFileType = "" Then
+	If $sExe <> $sLegacyExe And $sFileType = "" Then
 		Cout("libmagic 5.48 x64 returned no useful result; retrying bundled legacy file.exe")
-		$sFileType = _UnixFileType($filetool)
+		$sFileType = _UnixFileType($sLegacyExe)
 	EndIf
 
 	If $sFileType And $sFileType <> "data" Then

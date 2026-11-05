@@ -49,11 +49,11 @@ The full inherited history is in [docs/changelog.txt](docs/changelog.txt). The f
 
 The source repository does not store the large third-party helper set directly.
 
-The release package still uses gvp9000 v3.0.6 as a compatibility base for legacy helpers, but actively maintained tools are now refreshed by this fork's own reproducible packaging overlay. Downloads are pinned to known upstream packages and SHA-256 values where possible, then validated during the Windows CI build.
+The release package still uses gvp9000 v3.0.12 as a compatibility base for legacy helpers, but actively maintained tools are now refreshed by this fork's own reproducible packaging overlay. Downloads are pinned to known upstream packages and SHA-256 values where possible, then validated during the Windows CI build.
 
 The old gvp9000 helper feed remains available only for helpers we have not moved into the overlay yet. Fork-managed helper paths are excluded from that feed so an older remote entry cannot downgrade them. See [docs/HELPER-AUDIT.md](docs/HELPER-AUDIT.md) for the current audit, refreshed tools and compatibility-pinned exceptions.
 
-The source remains synced through gvp9000's v3.0.6 extraction changes from October 2, 2026, while keeping this fork's additional path, silent-mode, MHTML, Game Extractor, game-audio decoding and updater fixes. Bio.cs 2.6.0 is under compatibility testing and is **not** substituted for the existing bundled runtime.
+The source incorporates gvp9000's v3.0.12 extraction changes with file-header and installer-sidecar safeguards, while keeping this fork's additional path, silent-mode, MHTML, Game Extractor, game-audio decoding and updater fixes. Bio.cs 2.6.0 is under compatibility testing and is **not** substituted for the existing bundled runtime.
 
 The standalone updater downloads the current `UniExtract.exe` from this repository's latest GitHub release. There is not yet a separate nightly executable channel, so the nightly updater target currently falls back to the latest stable build.
 
@@ -107,7 +107,7 @@ To create the full release package, run:
 .\scripts\package-release.ps1
 ```
 
-The packaging script starts from the gvp9000 v3.0.6 full bundle as a legacy compatibility base, applies `scripts/refresh-helpers.ps1` to replace maintained helpers with pinned current builds, then overlays this fork's executables, definitions, languages, documentation and metadata. GitHub Actions performs the same build on Windows Server 2022, validates helper versions/hashes, and runs normal and Unicode-filename ZIP tests, an ADX-to-WAV decode through vgmstream, and real ACE integrity/extraction tests. A full per-file SHA-256 inventory and separate executable audit are produced with each packaged build.
+The packaging script starts from the gvp9000 v3.0.12 full bundle as a legacy compatibility base, applies `scripts/refresh-helpers.ps1` to replace maintained helpers with pinned current builds, then overlays this fork's executables, definitions, languages, documentation and metadata. GitHub Actions performs the same build on Windows Server 2022, validates helper versions/hashes, and runs normal and Unicode-filename ZIP tests, an ADX-to-WAV decode through vgmstream, and real ACE integrity/extraction tests. A full per-file SHA-256 inventory and separate executable audit are produced with each packaged build.
 
 ## Contributing
 

@@ -183,9 +183,9 @@ function Assert-FileVersionContains {
 Write-Host ''
 Write-Host 'Refreshing maintained helper binaries from pinned upstream releases...'
 
-# 7-Zip 26.04 (x86 + x64)
-$SevenX86 = Get-Download 'https://www.7-zip.org/a/7z2604.exe' '7z2604-x86.exe' '39bf65045153fc26c42fa9fe47afd8cd1b11671c7f11d031e738c9a13960c009'
-$SevenX64 = Get-Download 'https://www.7-zip.org/a/7z2604-x64.exe' '7z2604-x64.exe' 'd54bf805f9f3704d1e8db2fa3498ae7ef2df0312b40b558e7c71c734430a665d'
+# 7-Zip 26.05 (x86 + x64)
+$SevenX86 = Get-Download 'https://www.7-zip.org/a/7z2605.exe' '7z2605-x86.exe' '6435a470fe7c4769962dbed8a60c641ee21401c833ced06077c80e33e7845a5e'
+$SevenX64 = Get-Download 'https://www.7-zip.org/a/7z2605-x64.exe' '7z2605-x64.exe' 'fd99e86f57d8f429ef5ed045bf98315af962e2309b0f1ba87a147a44c71647d0'
 $SevenX86Dir = Join-Path $WorkRoot '7zip-x86'
 $SevenX64Dir = Join-Path $WorkRoot '7zip-x64'
 Expand-With7Zip $SevenX86 $SevenX86Dir
@@ -194,9 +194,9 @@ Copy-RequiredFile (Find-RequiredFile $SevenX86Dir '7z.exe') (Join-Path $BinRoot 
 Copy-RequiredFile (Find-RequiredFile $SevenX86Dir '7z.dll') (Join-Path $BinRoot 'x86\7z.dll')
 Copy-RequiredFile (Find-RequiredFile $SevenX64Dir '7z.exe') (Join-Path $BinRoot 'x64\7z.exe')
 Copy-RequiredFile (Find-RequiredFile $SevenX64Dir '7z.dll') (Join-Path $BinRoot 'x64\7z.dll')
-Assert-CommandContains (Join-Path $BinRoot 'x86\7z.exe') @() '7-Zip 26.04' '7-Zip x86'
-Assert-CommandContains (Join-Path $BinRoot 'x64\7z.exe') @() '7-Zip 26.04' '7-Zip x64'
-Add-RefreshLog '7-Zip: 26.04 (x86/x64)'
+Assert-CommandContains (Join-Path $BinRoot 'x86\7z.exe') @() '7-Zip 26.05' '7-Zip x86'
+Assert-CommandContains (Join-Path $BinRoot 'x64\7z.exe') @() '7-Zip 26.05' '7-Zip x64'
+Add-RefreshLog '7-Zip: 26.05 (x86/x64)'
 
 # qpdf 12.4.2 (32-bit MinGW build keeps compatibility with 32-bit Windows)
 $QpdfZip = Get-Download 'https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-mingw32.zip' 'qpdf-12.4.2-mingw32.zip' '6af53218eec293debb21e8036a95dfda0d690eef09f2f9023a22db0e3ad061fa'
@@ -319,12 +319,13 @@ if ((Get-Item -LiteralPath (Join-Path $BinRoot 'Champollion.exe')).Length -lt 1)
 }
 Add-RefreshLog 'Champollion: 1.3.2'
 
-# PEA 1.33 from the current PeaZip portable release.
-$PeaZip = Get-Download 'https://github.com/peazip/PeaZip/releases/download/11.3.0/peazip_portable-11.3.0.WINDOWS.zip' 'peazip_portable-11.3.0.WINDOWS.zip' '76ab0961b184e60f3534e62ce91aaf25bcb7cd409a4a7680a33d22c77a10f9de'
+# PEA 1.34 from the current PeaZip portable release.
+$PeaZip = Get-Download 'https://github.com/peazip/PeaZip/releases/download/11.4.0/peazip_portable-11.4.0.WINDOWS.zip' 'peazip_portable-11.4.0.WINDOWS.zip' 'f1b5796e807b7e7aaeea61f3420ddee2b06e8169ace51d5ae4caf3f8b09ef00e'
 $PeaExtract = Join-Path $WorkRoot 'peazip'
 Expand-ZipPackage $PeaZip $PeaExtract
 Copy-RequiredFile (Find-RequiredFile $PeaExtract 'pea.exe') (Join-Path $BinRoot 'pea.exe')
-Add-RefreshLog 'PEA: 1.33 (from PeaZip 11.3.0)'
+Assert-FileVersionContains (Join-Path $BinRoot 'pea.exe') '1.3.4' 'PEA'
+Add-RefreshLog 'PEA: 1.34 (from PeaZip 11.4.0)'
 
 # GNU gettext 1.0. Use the static x86 package so msgunfmt.exe remains a single,
 # dependency-free helper on both 32-bit and 64-bit Windows.
@@ -335,39 +336,31 @@ Copy-RequiredFile (Find-RequiredFile $GettextExtract 'msgunfmt.exe') (Join-Path 
 Assert-CommandContains (Join-Path $BinRoot 'msgunfmt.exe') @('--version') '(GNU gettext-tools) 1.0' 'msgunfmt'
 Add-RefreshLog 'GNU gettext msgunfmt: 1.0 (static x86)'
 
-# Inno Setup Unpacker 2.71.1.
-# Pin the upstream 2.71.1 commit; the rolling master ZIP changed after release.
-$InnoZip = Get-Download 'https://raw.githubusercontent.com/jrathlev/InnoUnpacker-Windows-GUI/6fb49264aacf512a093e7b4fc6fb3dd266dad31a/innounp-2/bin/innounp-2.zip' 'innounp-2.zip' 'f2f037fdbc63de31248efae9ccb294398d160dc0cbad5f36d14c2f159e17bbf5'
+# Inno Setup Unpacker 2.71.2.
+# Pin the upstream 2.71.2 commit; the rolling master ZIP changed after release.
+$InnoZip = Get-Download 'https://raw.githubusercontent.com/jrathlev/InnoUnpacker-Windows-GUI/032d64c782efc6b36766d8f9c3b1b2f042144a58/innounp-2/bin/innounp-2.zip' 'innounp-2.zip' '10fce27b6344b7674d5625cc34afca1c88c12183d957c6d93e401097fa2556cd'
 $InnoExtract = Join-Path $WorkRoot 'innounp'
 Expand-ZipPackage $InnoZip $InnoExtract
 $InnoExe = Find-RequiredFile $InnoExtract 'innounp.exe'
 Copy-RequiredFile $InnoExe (Join-Path $BinRoot 'innounp.exe')
-Assert-CommandContains (Join-Path $BinRoot 'innounp.exe') @() '2.71.1' 'innounp'
-Add-RefreshLog 'innounp: 2.71.1'
+Assert-CommandContains (Join-Path $BinRoot 'innounp.exe') @() '2.71.2' 'innounp'
+Add-RefreshLog 'innounp: 2.71.2'
 
-# TrID definitions snapshot: 12/10/2026, 22456 definitions.
-# Recover the already-tested snapshot from our published release: the upstream
-# triddefs.zip URL changes in place. Pin BOTH the containing release and the
-# extracted definitions; a versioned GitHub asset alone is not immutable.
-# See docs/TRID-SNAPSHOT.md for provenance, licensing and update procedure.
-$TridDefsZip = Get-Download 'https://github.com/wefalltomorrow/UniExtract2/releases/download/v3.1.6/UniExtract2-v3.1.6.zip' 'trid-snapshot-v3.1.6.zip' '3c66a8a976daea9f624c0b3fbb28e188a5326b1b3d9b80062a46d8d1c939171b'
-$TridDefsExtract = Join-Path $WorkRoot 'triddefs'
-Expand-ZipPackage $TridDefsZip $TridDefsExtract
-$TridDefsFile = Join-Path $TridDefsExtract 'bin\triddefs.trd'
+# Retain the definitions from the SHA-pinned v3.0.12 helper base. Verify the
+# payload separately before loading it; never replace it with the older overlay.
+$TridDefsFile = Join-Path $BinRoot 'triddefs.trd'
 $TridDefsHash = (Get-FileHash -LiteralPath $TridDefsFile -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($TridDefsHash -ne '25af67fd79238f715e149e57491efd2c18ff5d62ca33ae1f8845a5342352b727') {
-    throw "TrID definitions payload SHA-256 mismatch: $TridDefsHash"
-}
-Copy-RequiredFile $TridDefsFile (Join-Path $BinRoot 'TrIDDefs.TRD')
-# A cache belongs to the definitions that generated it, not the helper base.
+if ($TridDefsHash -ne 'a092677e8ba257d2ea8942dfefdd25a89c4b748258c0b828ef17a0bd463edce7') { throw "TrID definitions payload SHA-256 mismatch: $TridDefsHash" }
 Remove-Item -LiteralPath (Join-Path $BinRoot '.triddefs.trd.cache') -Force -ErrorAction SilentlyContinue
 $TridProbe = Join-Path $WorkRoot 'trid-probe.bin'
 Set-Content -LiteralPath $TridProbe -Value 'UniExtract helper refresh probe' -Encoding ASCII
 $TridOutput = (& (Join-Path $BinRoot 'trid.exe') $TridProbe 2>&1 | Out-String)
-if ($TridOutput -notmatch 'Definitions found:\s*22456') {
-    throw ('TrID definitions validation failed. Expected 22456 definitions from the 12/10/2026 snapshot.' + [Environment]::NewLine + $TridOutput)
+if ($TridOutput -notmatch 'Definitions found:\s*22576') {
+    throw ('TrID definitions validation failed. Expected 22576 definitions from the gvp9000 v3.0.12 snapshot.' + [Environment]::NewLine + $TridOutput)
 }
-Add-RefreshLog 'TrID definitions: 12/10/2026 (22456 definitions)'
+Add-RefreshLog 'TrID definitions: gvp9000 v3.0.12 (22576 definitions)'
+Assert-FileVersionContains (Join-Path $BinRoot 'lconvert.exe') '5.15.19' 'Qt lconvert'
+Add-RefreshLog 'Qt lconvert: 5.15.19; DiE database: SHA-pinned v3.0.12 base'
 
 # UnRAR 7.23 x64. RARLAB no longer publishes a matching current Win32 UnRAR binary,
 # so retain the compatibility x86 copy from the helper base and refresh the x64 path.
@@ -389,13 +382,13 @@ Copy-RequiredFile $Chdman (Join-Path $BinRoot 'x64\chdman.exe')
 Assert-CommandContains (Join-Path $BinRoot 'x64\chdman.exe') @('-help') '0.289' 'chdman x64'
 Add-RefreshLog 'CHDMan: 0.289 x64 (legacy x86 helper retained)'
 
-# SQLite 3.53.4.
+# SQLite 3.54.1.
 # Official releases provide current x86/x64 DLLs but only an x64 command-line shell.
 # Build the tiny x86 shell from the official amalgamation so UniExtract does not lose
 # 32-bit Windows compatibility.
-$SqliteAmalgamation = Get-Download 'https://www.sqlite.org/2026/sqlite-amalgamation-3530400.zip' 'sqlite-amalgamation-3530400.zip' '1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d'
-$SqliteDllX86 = Get-Download 'https://www.sqlite.org/2026/sqlite-dll-win-x86-3530400.zip' 'sqlite-dll-win-x86-3530400.zip' '607673153c6d15f0465761a1a86413049d6ba5c897857da2dab24282faad0224'
-$SqliteDllX64 = Get-Download 'https://www.sqlite.org/2026/sqlite-dll-win-x64-3530400.zip' 'sqlite-dll-win-x64-3530400.zip' '8b959b7eff4a81f6a62fc3468f9273e5cfe78d4a927e62215aed231b654fb104'
+$SqliteAmalgamation = Get-Download 'https://www.sqlite.org/2026/sqlite-amalgamation-3540100.zip' 'sqlite-amalgamation-3540100.zip' '0a9c8e34352dad46006aa82836d5383bff9dc6bc9ce5a60553c05aa30e6ad1f9'
+$SqliteDllX86 = Get-Download 'https://www.sqlite.org/2026/sqlite-dll-win-x86-3540100.zip' 'sqlite-dll-win-x86-3540100.zip' '431cc1f1e1b8efffb2f99b534b89dcacb07416fc1bc9f1110c1a01e643632bed'
+$SqliteDllX64 = Get-Download 'https://www.sqlite.org/2026/sqlite-dll-win-x64-3540100.zip' 'sqlite-dll-win-x64-3540100.zip' 'f436f53ad8f965af43f3817b42c99c0689e6787f6b7ace208fe38dab7ffc4971'
 $SqliteSrc = Join-Path $WorkRoot 'sqlite-src'
 $SqliteX86 = Join-Path $WorkRoot 'sqlite-dll-x86'
 $SqliteX64 = Join-Path $WorkRoot 'sqlite-dll-x64'
@@ -427,14 +420,14 @@ $SqliteSourceDir = Split-Path -Parent $SqliteC
 $CompileCommand = 'call "' + $VcVars + '" >nul && cl /nologo /O2 /DSQLITE_THREADSAFE=1 /DSQLITE_ENABLE_COLUMN_METADATA /I"' + $SqliteSourceDir + '" /Fe:"' + $SqliteExe + '" "' + $ShellC + '" "' + $SqliteC + '"'
 & cmd.exe /d /c $CompileCommand
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $SqliteExe)) {
-    throw "Failed to build SQLite 3.53.4 x86 shell (exit code $LASTEXITCODE)."
+    throw "Failed to build SQLite 3.54.1 x86 shell (exit code $LASTEXITCODE)."
 }
 
 Copy-RequiredFile $SqliteExe (Join-Path $BinRoot 'sqlite3.exe')
 Copy-RequiredFile (Find-RequiredFile $SqliteX86 'sqlite3.dll') (Join-Path $BinRoot 'x86\sqlite3.dll')
 Copy-RequiredFile (Find-RequiredFile $SqliteX64 'sqlite3.dll') (Join-Path $BinRoot 'x64\sqlite3.dll')
-Assert-CommandContains (Join-Path $BinRoot 'sqlite3.exe') @('--version') '3.53.4' 'SQLite shell'
-Add-RefreshLog 'SQLite: 3.53.4 (x86 shell + x86/x64 DLLs)'
+Assert-CommandContains (Join-Path $BinRoot 'sqlite3.exe') @('--version') '3.54.1' 'SQLite shell'
+Add-RefreshLog 'SQLite: 3.54.1 (x86 shell + x86/x64 DLLs)'
 
 # acefile 0.6.14: upstream publishes Python source, not a standalone Windows EXE.
 # Build the pinned source using 32-bit Python for Win32 compatibility.

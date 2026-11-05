@@ -1,6 +1,21 @@
 # Reproducible TrID definitions
 
-Release builds retain the 12 October 2026 snapshot with 22,456 definitions.
+Release builds now retain the gvp9000 v3.0.12 snapshot with 22,576 definitions.
+The SHA-pinned helper base already contains this payload; the maintained overlay
+verifies it instead of downloading and restoring the older v3.1.6 snapshot.
+
+| Current item | SHA-256 |
+| --- | --- |
+| gvp9000 v3.0.12 ZIP | b37dd77c7b8ace7197655f04f50ef7049b54b311c37906c94cc65542d829f26b |
+| bin/triddefs.trd (9,876,520 bytes) | a092677e8ba257d2ea8942dfefdd25a89c4b748258c0b828ef17a0bd463edce7 |
+
+The snapshot loads 22,576 definitions with packaged TrID 2.48. A stale cache is
+removed before validation. The exact originating definition publication date is
+not inferred from the package timestamp.
+
+## Historical snapshot used through v3.1.9
+
+Earlier release builds retained the 12 October 2026 snapshot with 22,456 definitions.
 The original upstream `https://mark0.net/download/triddefs.zip` is a rolling
 download, so its checksum changed and blocked PR #16 packaging. Updating the
 hash on every build would silently change the intended detection baseline.

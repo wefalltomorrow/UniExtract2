@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Version,
-    [string]$HelperBaseUrl = 'https://github.com/gvp9000/UniExtract2/releases/download/v3.0.6/UniExtract2.zip',
-    [string]$HelperBaseSha256 = '507066eaf85ff5a60ca16b192f74fb79999b8cad134792214b94483bd0527c00'
+    [string]$HelperBaseUrl = 'https://github.com/gvp9000/UniExtract2/releases/download/v3.0.12/UniExtract2.zip',
+    [string]$HelperBaseSha256 = 'b37dd77c7b8ace7197655f04f50ef7049b54b311c37906c94cc65542d829f26b'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -104,7 +104,7 @@ Universal Extractor 2
 Version: $Version
 Source: https://github.com/wefalltomorrow/UniExtract2
 Commit: $Commit
-Helper package base: gvp9000 UniExtract2 v3.0.6
+Helper package base: gvp9000 UniExtract2 v3.0.12
 Maintained helper overlay: scripts\refresh-helpers.ps1
 
 Third-party helpers retain their own licenses. See docs and docs\third-party in this package.

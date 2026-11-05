@@ -1,6 +1,6 @@
 # Fork notes
 
-Last reviewed: 2026-10-10
+Last reviewed: 2026-11-05
 
 This file records where the current fork changes came from and what was deliberately left out. It is meant to stop fixes from getting lost in a long fork chain.
 
@@ -10,9 +10,29 @@ This file records where the current fork changes came from and what was delibera
 - Last upstream master commit reviewed: `9719ac988421e48276420e2f33e09087cfbacf8d` (2024-07-06)
 - Main active fork used as the newer source base: `gvp9000/UniExtract2`
 - gvp9000 head originally used as the starting point: `71f2efe262f19439cdc5ef2611b6ed7a742a5f64` (2026-09-04)
-- latest gvp9000 source reviewed and synced: `3372caa4ae88c183f413ad7d4faa7dbb8beb3c82` (2026-10-02, v3.0.6)
+- latest gvp9000 source reviewed and synced: `f15a1705ce4a41842ec15845a6781817649ab667` (v3.0.12)
 
-The latest reviewed gvp9000 fork is 98 commits ahead of the upstream master used here. Its commit messages are not always descriptive, so the source changes and changelog were reviewed rather than relying on commit titles.
+The reviewed v3.0.12 delta contains four commits since our previous v3.0.6 sync. Its commit messages are not always descriptive, so the source changes and changelog were reviewed rather than relying on commit titles.
+
+## v3.1.10: v3.0.12 integration
+
+Ported installer fallbacks, per-file probe resets, five millisecond timeout fixes,
+InstallShield CAB signatures, arc_convert plugin naming, CreateInstall import,
+and unlogged QuickBMS/WCX output reporting. Legacy TrID/Unix routing runs earlier
+only after verified headers, protected installer contexts, and bundled game-audio
+decoding are considered. ADX audio retains vgmstream priority over optional FFmpeg.
+Terminal corruption/password failures stop replaying further hints.
+
+CreateInstall import additionally rejects incomplete/ambiguous packages before
+copying files and fixes upstream's trailing-dot temporary directory name, which
+otherwise prevents Windows ZIP imports. Regression tests use inert runtime files
+and a ZIP named .exe; they never execute installer payloads.
+
+The helper base is now the SHA-256-pinned v3.0.12 ZIP. The maintained overlay pins
+7-Zip 26.05, innounp 2.71.2, PEA 1.34 from PeaZip 11.4.0 and SQLite 3.54.1
+(built x86 shell and official x86/x64 DLLs). It retains the base's lconvert
+5.15.19, updated DiE database and 22,576-entry TrID snapshot. Existing refreshed
+helpers and Unicode libmagic 5.48 remain intact. Bio.cs remains 2.5.0.
 
 ## v3.1.3 helper refresh
 

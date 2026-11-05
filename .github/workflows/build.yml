@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - master
+      - integrate-gvp3012
   workflow_dispatch:
 
 permissions:
@@ -103,6 +104,10 @@ jobs:
         env:
           REQUIRE_LIBMAGIC_548: '1'
         run: .\scripts\smoke-test.ps1
+
+      - name: Test upstream installer and plugin compatibility
+        shell: powershell
+        run: .\tests\upstream-compat.ps1
 
       - name: Smoke-test packaged external FreeArc integration
         shell: powershell

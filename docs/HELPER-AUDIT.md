@@ -1,8 +1,24 @@
 # Helper binary audit
 
-Last reviewed: 2026-10-10
+Last reviewed: 2026-11-05
 
 Universal Extractor relies on a large set of third-party command-line tools, libraries and format plugins. This fork does not treat "newest source commit" as automatically safer than the existing binary: helper replacements need a usable Windows build, compatible architecture, suitable redistribution terms and a repeatable validation path.
+
+## v3.1.10 updates
+
+The helper base is now gvp9000 v3.0.12, pinned to SHA-256
+b37dd77c7b8ace7197655f04f50ef7049b54b311c37906c94cc65542d829f26b.
+The maintained overlay advances 7-Zip to 26.05 (both architectures), innounp to
+2.71.2, PEA to 1.34 (PeaZip 11.4.0), and SQLite to 3.54.1 (x86 shell plus x86/x64
+DLLs). These replacements come from pinned original publisher packages.
+The base also supplies lconvert 5.15.19, 210 added and 552 changed DiE database
+files, and 22,576 TrID definitions. DiE executables and Exeinfo versions are unchanged.
+The base ZIP and TrID payload are hash checked; packaged TrID verifies its count.
+DiE and lconvert now join protected helper paths to avoid unreviewed feed replacements.
+
+The earlier review sections below record historical releases. In particular,
+libmagic 5.48 was already introduced before this update; the root x86 5.46 fallback
+remains intentionally, and the unvalidated Bio.cs candidate remains unshipped.
 
 ## Refreshed for v3.1.3
 

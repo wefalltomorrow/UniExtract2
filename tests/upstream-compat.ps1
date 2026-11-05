@@ -10,7 +10,7 @@ if (-not $AutoItExe) { throw 'AutoIt interpreter required.' }
 $Seven = Join-Path $StageRoot 'bin\x64\7z.exe'
 if (-not (Test-Path -LiteralPath $Seven)) { throw 'Packaged 7-Zip required.' }
 $Source = Get-Content -LiteralPath (Join-Path $Repo 'UniExtract.au3') -Raw
-$Fns = foreach ($Name in @('_ResetExtractionProbeState', '_HasInstallShieldCabMagic', '_IsInstallShieldCabCandidate', '_ResolveLegacyNonExeMatchesEarly', '_CheckBioruebeInnoThenIEFallback', 'GUI_Plugins_InstallCreateInstall', '_CopyCreateInstallPluginFiles', '_CreateInstallPluginComplete', '_CreateInstallPluginMissingMessage')) {
+$Fns = foreach ($Name in @('_ResetExtractionProbeState', '_HasInstallShieldCabMagic', '_IsInstallShieldCabCandidate', '_IsVgmstreamExtension', '_ResolveLegacyNonExeMatchesEarly', '_CheckBioruebeInnoThenIEFallback', 'GUI_Plugins_InstallCreateInstall', '_CopyCreateInstallPluginFiles', '_CreateInstallPluginComplete', '_CreateInstallPluginMissingMessage')) {
     $Match = [regex]::Match($Source, '(?ms)^Func ' + $Name + '\([^\r\n]*\)\r?\n.*?^EndFunc')
     if (-not $Match.Success) { throw "Production function missing: $Name" }
     $Match.Value
@@ -18,6 +18,7 @@ $Fns = foreach ($Name in @('_ResetExtractionProbeState', '_HasInstallShieldCabMa
 if ($Source.Contains('($Timeout * 1000)')) { throw 'Millisecond timeout was multiplied again.' }
 $Start = [regex]::Match($Source, '(?ms)^Func StartExtraction\(\).*?^EndFunc').Value
 if (-not $Start.Contains('_ResetExtractionProbeState()')) { throw 'Per-file reset not wired.' }
+if (-not $Start.Contains('And Not _IsVgmstreamExtension() Then')) { throw 'Early legacy hints bypass bundled game-audio decoding.' }
 if ($Start.IndexOf('_ResolveLegacyNonExeMatchesEarly()') -lt $Start.IndexOf('If _IsVerified7ZipFormat')) { throw 'Legacy route bypasses header guards.' }
 $Root = Join-Path $Repo ('.build\upstream-compat-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $Root -Force | Out-Null
@@ -73,6 +74,10 @@ Assert(Not _HasInstallShieldCabMagic(), "other extensions are not redirected")
 $fileext = "cab"
 FileWrite(@ScriptDir & "\data1.hdr", "fixture")
 Assert(_IsInstallShieldCabCandidate(), "later data volume preserves legacy set route")
+$fileext = "ADX"
+Assert(_IsVgmstreamExtension(), "ADX keeps bundled decoder priority")
+$fileext = "zip"
+Assert(Not _IsVgmstreamExtension(), "archive extensions keep archive routing")
 _ResolveLegacyNonExeMatchesEarly()
 Assert($calls = "first;second;unix;" And $g_bStrictPipeline And $g_sStoredTridType = "" And $g_sStoredUnixType = "", "legacy routes run in order and restore strict state")
 $extract = False

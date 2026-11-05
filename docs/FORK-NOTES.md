@@ -19,7 +19,8 @@ The reviewed v3.0.12 delta contains four commits since our previous v3.0.6 sync.
 Ported installer fallbacks, per-file probe resets, five millisecond timeout fixes,
 InstallShield CAB signatures, arc_convert plugin naming, CreateInstall import,
 and unlogged QuickBMS/WCX output reporting. Legacy TrID/Unix routing runs earlier
-only after verified headers and protected installer contexts are considered.
+only after verified headers, protected installer contexts, and bundled game-audio
+decoding are considered. ADX audio retains vgmstream priority over optional FFmpeg.
 Terminal corruption/password failures stop replaying further hints.
 
 CreateInstall import additionally rejects incomplete/ambiguous packages before

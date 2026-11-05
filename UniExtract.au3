@@ -582,9 +582,10 @@ Func StartExtraction()
 	EndIf
 
 	; Resolve legacy hints before speculative probes, but never ahead of verified
-	; headers or a protected installer context. Guarded files retain the late route.
+	; headers, a protected installer context, or the bundled game-audio decoder.
+	; Guarded files retain the late route.
 	Local $bLegacyMatchesApplied = False
-	If $g_sVerifiedFileSignature = "" And Not _ShouldAvoidBroadGameProbeForBin() And Not _ShouldSkipNonFatalProbesForPrimaryMatch() Then
+	If $g_sVerifiedFileSignature = "" And Not _ShouldAvoidBroadGameProbeForBin() And Not _ShouldSkipNonFatalProbesForPrimaryMatch() And Not _IsVgmstreamExtension() Then
 		_ResolveLegacyNonExeMatchesEarly()
 		$bLegacyMatchesApplied = True
 		If $g_bArchiveIntegrityError Then terminate($STATUS_FAILED, $file, $TYPE_7Z, "Corrupt archive")
@@ -2950,15 +2951,18 @@ EndFunc
 
 ; Try bundled vgmstream only for game-audio extensions after archive extraction failed.
 ; Keep this narrow: other formats (especially ordinary WAV/MP3) retain existing routing.
-Func CheckVgmstream()
-	If Not FileExists($vgmstream) Then Return False
-
+Func _IsVgmstreamExtension()
 	Switch StringLower($fileext)
 		Case "adx", "hca", "brstm", "bfstm", "bcstm", "bwav", "dsp", "wem", _
 			 "xwb", "xma", "fsb", "bnk", "awb", "nus3audio", "at3", "at9", "genh"
+			Return True
 		Case Else
 			Return False
 	EndSwitch
+EndFunc
+
+Func CheckVgmstream()
+	If Not FileExists($vgmstream) Or Not _IsVgmstreamExtension() Then Return False
 
 	Cout("Testing vgmstream game-audio fallback")
 	Return extract($TYPE_VGMSTREAM, "vgmstream game audio", "", True, True)

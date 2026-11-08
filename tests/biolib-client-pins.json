@@ -1,0 +1,14 @@
+{
+  "Bio.cs.dll": "d3fbaacc004b7f375f2dabe045c95c02799f72946f5f27f607b5c8953b5756f8",
+  "cicdec.exe": "2cb57d67a0a90c8ed36f7a8adcba2233e716fb2aeb7f0d9406a1020bc149943a",
+  "godotdec.exe": "207c35a70dfbe4137f1b0d69166e7dc6d5448aea587457e7e7f852a875965164",
+  "rmvdec.exe": "961d98959dadce5206f046f5b7aa2f4626b405cc23613e0d0bd6bd6150915a79",
+  "sgbdec.exe": "57b7a12ab68cf04c8a4ba2cf144c251515b57ecf88d3062db7311599749cb382",
+  "simdec.exe": "997f8b9a8399e77ff2c7de2f7e37de01eb8267d3cd98484ee052933880cc0564",
+  "spoondec.exe": "1f00e6369db62ae703402e91bd238542eacbea3548e2e1a36c6865cfe39a790b",
+  "ICSharpCode.SharpZipLib.dll": "c287e9b07a8251828f35914364c89a37db606b0c1d64457f9eb8fa2258f0dee3",
+  "Newtonsoft.Json.dll": "b896083feb2bdedc1568b62805dbd354c55e57f2d2469a52aec6c98f4ec2dedf",
+  "SevenZip.dll": "4516b79b72c21d886b47e1cea5260d3b473f30864983ae01699f766dffbca19d",
+  "Microsoft.Deployment.Compression.dll": "464809c9c13821f6c9bdaaf053a9ee0d44c149d044618d93f6322359ef778859",
+  "Microsoft.Deployment.Compression.Cab.dll": "57ba81c9f31fe162f4f69291f286c3c47bf508eb710895f1b872d0fb92b10b5c"
+}

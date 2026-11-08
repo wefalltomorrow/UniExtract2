@@ -1,9 +1,19 @@
-name: Bio.cs ABI candidate
+name: Bio.cs client compatibility
 
 on:
   push:
     branches:
       - biolib-2-6-compat
+      - biolib-public-api
+      - biolib-client-fixtures
+  pull_request:
+    paths:
+      - '.github/workflows/biolib.yml'
+      - 'scripts/build-biolib-compat.ps1'
+      - 'scripts/build-godotdec-compat.ps1'
+      - 'scripts/compat/**'
+      - 'tests/biolib-*'
+      - 'tests/fixtures/biolib-*'
   workflow_dispatch:
 
 permissions:
@@ -12,19 +22,50 @@ permissions:
 jobs:
   validate-biolib:
     runs-on: windows-2022
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Fetch exact published baseline clients
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force .build | Out-Null
+          Invoke-WebRequest 'https://github.com/wefalltomorrow/UniExtract2/releases/download/v3.1.10/UniExtract2-v3.1.10.zip' -OutFile .build/baseline.zip -UseBasicParsing
+          if ((Get-FileHash .build/baseline.zip).Hash -ne 'AEE84C26E5F6321E3FB5FED6722A183D7AD4F71A8BAE056144CD7B782084CF5D') { throw 'Published baseline checksum mismatch' }
+          Expand-Archive .build/baseline.zip .build/baseline
       - name: Build patched Bio.cs 2.6 and verify old CLR method signatures
         shell: powershell
         run: .\scripts\build-biolib-compat.ps1
+      - name: Run client compiled against Bio.cs 2.5
+        shell: powershell
+        run: .\tests\biolib-legacy-client.ps1 -BaselineDll .build/baseline/bin/Bio.cs.dll -CandidateDll .build/biolib-validation/bundle/bin/Bio.cs.dll
+      - name: Reproduce shipped Godot corruption and compare all six clients
+        run: python tests/biolib-extractors.py --bin .build/baseline/bin --candidate .build/biolib-validation/bundle/bin/Bio.cs.dll --expect-godot-corruption --output .build/extractor-negative
+      - name: Build isolated Godot stream-position repair
+        shell: powershell
+        run: .\scripts\build-godotdec-compat.ps1 -BaselineDll .build/baseline/bin/Bio.cs.dll
+      - name: Verify known outputs with repaired Godot and both library versions
+        run: python tests/biolib-extractors.py --bin .build/baseline/bin --candidate .build/biolib-validation/bundle/bin/Bio.cs.dll --godot-candidate .build/godotdec-validation/bundle/godotdec.exe --output .build/extractor-repaired
+      - name: Upload fixture evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: BioLib-client-evidence
+          path: |
+            .build/extractor-negative/**
+            .build/extractor-repaired/**
+          if-no-files-found: warn
       - name: Upload unshipped compatibility candidate
         uses: actions/upload-artifact@v7
         with:
           name: BioLib-2.6.0-candidate
           path: |
             .build/biolib-validation/bundle/**
+            .build/godotdec-validation/bundle/**
           if-no-files-found: error

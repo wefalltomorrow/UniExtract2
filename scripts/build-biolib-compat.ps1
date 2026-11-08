@@ -13,6 +13,9 @@ New-Item -ItemType Directory -Force -Path $DestinationRoot,$Work,$Output,$Bundle
 
 $Archive = Join-Path $DestinationRoot 'Bio.cs.zip'
 Invoke-WebRequest -Uri ('https://codeload.github.com/Bioruebe/Bio.cs/zip/' + $PinnedCommit) -OutFile $Archive -UseBasicParsing
+if ((Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash -ne 'A0FF4059260BD7CC967818FBEEB7E1E34DAB2CC888132DC96367E6CE381AC8E8') {
+    throw 'Bio.cs source archive checksum mismatch.'
+}
 Expand-Archive -LiteralPath $Archive -DestinationPath $Work -Force
 $Projects = @(Get-ChildItem -LiteralPath $Work -File -Recurse -Filter 'Bio.cs.csproj')
 if ($Projects.Count -ne 1) { throw "Expected one upstream library project, got $($Projects.Count)" }
@@ -39,7 +42,10 @@ function Add-LegacyOverload([string]$File,[string]$Signature,[string]$Overload) 
 Add-LegacyOverload (Join-Path $Dir 'Bio.cs') 'public static FileStream FileOpen(string path, FileMode fileMode, FileAccess fileAccess = FileAccess.ReadWrite) {' 'public static FileStream FileOpen(string path, FileMode fileMode) { return FileOpen(path, fileMode, FileAccess.ReadWrite); }'
 Add-LegacyOverload (Join-Path $Dir 'Extensions\BinaryReaderExtensions.cs') 'public static string Read8BitPrefixedString(this BinaryReader binaryReader, bool utf8 = true, bool ignoreTrailingNullBytes = false) {' 'public static string Read8BitPrefixedString(this BinaryReader binaryReader, bool utf8) { return Read8BitPrefixedString(binaryReader, utf8, false); }'
 
-& dotnet build $Project --configuration Release --framework net45 --output $Output '-p:GeneratePackageOnBuild=false' '-p:AutomaticallyUseReferenceAssemblyPackages=true'
+$LegacyOptions = Join-Path $Dir 'BioLegacyOptions.cs'
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'compat\BioLegacyOptions.cs') -Destination $LegacyOptions -Force
+
+& dotnet build $Project --configuration Release --framework net40 --output $Output '-p:GeneratePackageOnBuild=false' '-p:AutomaticallyUseReferenceAssemblyPackages=true'
 if ($LASTEXITCODE -ne 0) { throw "Bio.cs build failed: $LASTEXITCODE" }
 $DLL = Join-Path $Output 'Bio.cs.dll'
 if (-not (Test-Path -LiteralPath $DLL -PathType Leaf)) { throw 'Bio.cs.dll was not produced' }
@@ -64,6 +70,24 @@ foreach ($Check in $Checks) {
 # Exercise the actual old two-argument entrypoints, in addition to checking
 # their metadata; this catches accidental wrappers that compile but misbehave.
 $RuntimeAssembly = [Reflection.Assembly]::LoadFrom($DLL)
+$Framework = @($RuntimeAssembly.GetCustomAttributesData() | Where-Object { $_.AttributeType.FullName -eq 'System.Runtime.Versioning.TargetFrameworkAttribute' })
+if ($Framework.Count -ne 1 -or $Framework[0].ConstructorArguments[0].Value -cne '.NETFramework,Version=v4.0') {
+    throw 'Candidate must retain the bundled library target framework (.NET Framework 4.0).'
+}
+$OptionsType = $RuntimeAssembly.GetType('BioLib.CLI.DefaultOptions',$true)
+if (-not $OptionsType.IsPublic -or -not $OptionsType.GetConstructor([Type[]]@())) { throw 'Missing public DefaultOptions constructor/type' }
+$Help = $OptionsType.GetField('help')
+if (-not $Help -or $Help.IsStatic -or $Help.IsInitOnly -or $Help.FieldType -ne [bool]) { throw 'Missing writable Boolean help instance field' }
+$Options = [Activator]::CreateInstance($OptionsType)
+if ($Help.GetValue($Options) -ne $false) { throw 'DefaultOptions.help must initially be false' }
+$Help.SetValue($Options,$true)
+if ($Help.GetValue($Options) -ne $true) { throw 'DefaultOptions.help could not be updated' }
+$OptionMetadata = @($Help.GetCustomAttributesData() | Where-Object { $_.AttributeType.FullName -eq 'BioLib.CLI.OptionAttribute' })
+if ($OptionMetadata.Count -ne 1) { throw 'Missing legacy help option metadata' }
+$OptionValues = @{}
+foreach ($Argument in $OptionMetadata[0].NamedArguments) { $OptionValues[$Argument.MemberName] = $Argument.TypedValue.Value }
+if ($OptionValues['Name'] -cne 'h' -or $OptionValues['Description'] -cne 'Show help message') { throw 'Incorrect legacy help option metadata' }
+Write-Host 'DefaultOptions public API, field behavior, option metadata and net40 target verified.'
 $SamplePath = Join-Path $DestinationRoot 'biolib-test.bin'
 [IO.File]::WriteAllBytes($SamplePath,[byte[]]@(1,2,3))
 $Open = $RuntimeAssembly.GetType('BioLib.Bio',$true).GetMethod(
@@ -101,10 +125,11 @@ Copy-Item -LiteralPath $Lic[0].FullName -Destination (Join-Path $LicDir 'Bio.cs-
 @(
     'Bio.cs 2.6.0 compatibility candidate (not yet in public release)'
     "Upstream pinned commit: $PinnedCommit"
-    'Target framework: net45'
+    'Target framework: net40 (same target as bundled Bio.cs 2.5)'
+    'Legacy DefaultOptions type, help field and option metadata preserved'
     'Legacy FileOpen and Read8BitPrefixedString signatures preserved'
     'Both legacy overloads passed small runtime behavior checks'
-    'Dependent extractor behavioral tests remain outstanding'
+    'Run tests/biolib-extractors.py separately; see docs/BIOLIB-FIXTURES.md for coverage and promotion gates'
     "SHA-256: $((Get-FileHash -LiteralPath $DLL -Algorithm SHA256).Hash.ToLowerInvariant())"
 ) | Set-Content -LiteralPath (Join-Path $Bundle 'BIOLIB-ABI.txt') -Encoding UTF8
 Write-Host 'Bio.cs candidate build and ABI assertions passed.'
